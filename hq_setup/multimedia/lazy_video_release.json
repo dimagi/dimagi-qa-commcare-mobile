@@ -1,0 +1,17 @@
+{
+  "_comment": "Master Mobile Plan (2026) > Multimedia > 'Lazy Video 1' - install a low-media build, then release the actual lazy-video build. Run once via `python scripts/hq_client.py hq_setup/multimedia/lazy_video_release.json` before lazy_video_02/03/04/05's on-device flows. Two sequential mark_build_status calls, matching the sheet's two-step 'Install low-media build then release the lazy-video build' wording: (1) release the earlier, low-media-usage build first so the device's next sync/install pulls THAT one; (2) once it's confirmed installed, release the real lazy-video-enabled build so a SUBSEQUENT sync/update is what actually puts the device into the lazy-loading state the lazy_video_0X flows expect. app_id/both saved_app_ids are REPLACE_WITH placeholders - hq_client.py's mark_build_status()/create_new_build() (see its own source citations) require real saved-app ids from this app's HQ Releases page; confirm which two builds are the 'low-media' one and the 'lazy-video' one there before filling these in, and confirm app_id is still current (app ids get recreated between QA cycles).",
+  "actions": [
+    {
+      "type": "mark_build_status",
+      "app_id": "REPLACE_WITH_LAZY_VIDEO_APP_ID",
+      "saved_app_id": "REPLACE_WITH_LOW_MEDIA_BUILD_ID",
+      "is_released": true
+    },
+    {
+      "type": "mark_build_status",
+      "app_id": "REPLACE_WITH_LAZY_VIDEO_APP_ID",
+      "saved_app_id": "REPLACE_WITH_LAZY_VIDEO_BUILD_ID",
+      "is_released": true
+    }
+  ]
+}

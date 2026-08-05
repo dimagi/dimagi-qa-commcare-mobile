@@ -1,0 +1,88 @@
+appId: ${EXTAPP_APP_ID}
+tags:
+  - externalapp_tests
+  - partial
+env:
+  # UNVERIFIED PLACEHOLDER - see flows/externalapp_tests/README.md.
+  EXTAPP_APP_ID: "com.dimagi.mobileapitestingapp"
+  EXTAPP_BTN_VIEW_CASE_DATA: "View Case Data"
+  # Value typed into the update form's answer field - the sheet doesn't specify a concrete
+  # value, any accepted string/number satisfies "Enter Data".
+  EXTAPP_FORM_ANSWER_VALUE: "42"
+  # Same "sansar" domain login Setup 3 uses - see setup_03_login_and_background.yaml.
+  EXTAPP_QA_USERNAME: "qa_user"
+  EXTAPP_QA_PASSWORD: "123"
+---
+# Master Mobile Plan (2026) > ExternalApp Tests > "External App 4" (Launch Update Form):
+#   1. In the ExternalApp, select View Case Data
+#   2. Ensure a series of cases are visible
+#   3. Long press on a case (click and hold)
+#   4. Verify an update form is launched
+#   5. Enter Data and submit the update form
+#
+# Steps 1-2 are identical to External App 3 (view external_app_03_view_case_data.yaml's
+# comments for the CaseDataContentProvider citation and the case-list UI caveat) - this flow
+# re-establishes the same state itself per this repo's "each flow runnable in isolation"
+# convention rather than depending on External App 3 having run first.
+- runFlow:
+    file: ../common/login_and_background.yaml
+    env:
+      USERNAME: ${EXTAPP_QA_USERNAME}
+      PASSWORD: ${EXTAPP_QA_PASSWORD}
+- launchApp:
+    appId: ${EXTAPP_APP_ID}
+- tapOn: "${EXTAPP_BTN_VIEW_CASE_DATA}"
+- assertNotVisible: "${EXTAPP_BTN_VIEW_CASE_DATA}"
+
+# STEP 3, "long press on a case (click and hold)": Maestro's long-press command is
+# `longPressOn` (confirmed against Maestro's published command reference -
+# https://docs.maestro.dev/reference/commands-available/longpresson - "performs a long press
+# (3 seconds) gesture", accepting the same selector properties as `tapOn`). Same UNVERIFIED
+# point-based placeholder as external_app_03_view_case_data.yaml's tapOn - the companion
+# app's real case-row id/text is unknown (no source access). TODO(verify): replace with a
+# proper `longPressOn: {id: "<real case-row id>"}` once available.
+- longPressOn:
+    point: "50%, 45%"
+
+# STEP 4, "verify an update form is launched": same cross-app "auto-follow" reasoning as
+# external_app_02_start_commcare_submit_form.yaml (see that file's CROSS-APP CONTEXT SWITCH
+# comment for the full explanation of why no explicit `launchApp: appId: org.commcare.dalvik`
+# is used here). nav_btn_next/nav_btn_finish ids verified against
+# app/res/layout/screen_form_entry.xml + FormNavigationUI.java, matched via a regex `id`
+# selector since either being visible confirms an update form launched.
+- assertVisible:
+    id: "org.commcare.dalvik:id/nav_btn_(next|finish)"
+    timeout: 15000
+
+# STEP 5, "Enter Data and submit the update form": same auto-focus reasoning as
+# external_app_02_start_commcare_submit_form.yaml's "ENTER A VALUE" comment - the first
+# question widget on a freshly-navigated screen is auto-focused
+# (app/src/org/commcare/views/QuestionsView.java:setFocus()), so `inputText` types directly
+# into it with no preceding tapOn needed. An update form pre-fills existing answers, so this
+# assumes the field is still editable/clearable the same way a blank one is - UNVERIFIED
+# against the real fixture app's update-form field types.
+- inputText: "${EXTAPP_FORM_ANSWER_VALUE}"
+- hideKeyboard
+- repeat:
+    while:
+      visible:
+        id: "org.commcare.dalvik:id/nav_btn_next"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/nav_btn_next"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_finish"
+    timeout: 10000
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"
+
+# Same "no confirmed success string, assert absence of the generic error instead" reasoning
+# as external_app_02_start_commcare_submit_form.yaml (UnrecoverableErrorActivity.java +
+# android_translatable_strings.txt citation).
+- assertNotVisible:
+    text: "(?i).*unexpected error.*"
+- assertNotVisible:
+    text: "(?i).*commcare will now restart.*"
+- assertNotVisible:
+    id: "org.commcare.dalvik:id/nav_btn_finish"

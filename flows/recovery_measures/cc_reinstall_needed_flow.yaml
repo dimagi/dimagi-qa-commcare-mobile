@@ -1,0 +1,82 @@
+appId: org.commcare.dalvik
+tags:
+  - recovery_measures
+  - automatable
+---
+# Master Mobile Plan (2026) > Recovery Measures > CC Reinstall Needed
+# (Test Case IDs "CC Reinstall Needed 3", "CC Reinstall Needed 4",
+# "CC Reinstall Needed 5" - the Automatable rows). "CC Reinstall Needed 1"
+# and "2" are explicitly out of scope here per task instructions - they need
+# a specific historical CommCare APK plus an HQ mark-released call to get
+# the device into a below-minimum-CC-version state in the first place. This
+# flow assumes that precondition (device on an old CommCare/"CC" binary
+# version, with a MEASURE_TYPE_CC_REINSTALL recovery measure pending on the
+# currently-seated app) has already been established by that out-of-scope
+# setup before this flow runs.
+#
+# UNVERIFIED TEXT WARNING: per docs/FRAMEWORK.md's "Known gaps" item 4 and
+# reinstall_update_app_flow.yaml's header (this repo's convention for
+# Recovery Measures), assertions below use best-effort case-insensitive
+# regex rather than exact strings even though (see next paragraph) most of
+# this particular screen's text was actually found hardcoded - keep the
+# regex pattern for consistency with the rest of this workflow's flows.
+#
+# Verified against commcare-android source (read-only reference, never
+# modified by this repo) - this is a *different* code path from the
+# app-level "Reinstall and Update App" measure: RecoveryMeasure.
+# MEASURE_TYPE_CC_REINSTALL, handled in
+# ExecuteRecoveryMeasuresPresenter.executeMeasure(), launches
+# PromptCCReinstallActivity (app/src/org/commcare/activities/
+# PromptCCReinstallActivity.java) instead of ExecuteRecoveryMeasuresActivity:
+#   - title: R.string.reinstall_prompt_title = "Reinstall of %1$s is
+#     Required" (app/res/values/strings.xml:321; %1$s = app name, e.g.
+#     "CommCare")
+#   - action button: Localization.get("apk.reinstall.action") =
+#     "Go to this app on the Play Store" (android_translatable_strings.txt:38)
+#   - instructions: "apk.reinstall.instructions" = 'Follow the link to view
+#     this app on the Play Store, select "UNINSTALL", and then select
+#     "INSTALL"' (android_translatable_strings.txt:39)
+#   - help text: "reinstall.prompt.help.text" = "If you have issues
+#     reinstalling CommCare, please contact your Helpdesk"
+#     (android_translatable_strings.txt:32)
+# PromptActivity.inForceMode() makes back-press a no-op and hides the
+# "do later" button for this measure, so the prompt is expected to block
+# the home screen entirely.
+#
+# CAVEAT: the action button's tap handler (launchCurrentAppOnPlayStore())
+# fires an ACTION_VIEW intent at the Play Store app (or a market:// /
+# https://play.google.com fallback) - a real reinstall via "UNINSTALL" then
+# "INSTALL" happens *outside* CommCare and outside Maestro's appId-scoped
+# session, and BrowserStack App Automate devices are not guaranteed to have
+# a signed-in, functional Play Store. This flow only asserts that the tap
+# navigates away from the blocking prompt (i.e. the intent fired); it does
+# NOT attempt to drive the actual Play Store UI. In practice the negative
+# check below (CC Reinstall Needed 5) is only meaningful once a real
+# reinstall has happened by some out-of-band means (manual Play Store
+# reinstall, or adb install of a current APK) between the tap and the final
+# login - flag this as a manual/semi-automated step if wiring this into CI.
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+# CC Reinstall Needed 3 - the forced "CommCare needs reinstall" message.
+- assertVisible:
+    text: "(?i).*reinstall.*required.*"
+- assertVisible:
+    text: "(?i).*play store.*"
+# CC Reinstall Needed 4 - reinstall: tap the action button. See CAVEAT above
+# for what happens (and doesn't happen) after this tap.
+- tapOn:
+    text: "(?i).*go to this app.*play store.*"
+# CC Reinstall Needed 5 - negative check: once a real reinstall has
+# happened (see CAVEAT above), relaunch and confirm the prompt no longer
+# blocks login.
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- assertVisible: "Start"
+- assertNotVisible:
+    text: "(?i).*reinstall.*required.*"

@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Local secrets
+.env
+
+# Downloaded APKs and zipped flow bundles
+apks/
+*.apk
+*.aab
+flows.zip
+
+# BrowserStack / run artifacts
+artifacts/
+*.log

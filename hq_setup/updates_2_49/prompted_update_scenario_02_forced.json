@@ -1,0 +1,11 @@
+{
+  "_comment": "Master Mobile Plan (2026) > Updates (coverage_matrix.csv XLSX Tab 'Updates', 2.49 grab-bag section) > 'Prompted Update Scenario 2' - 'Forced CommCare update blocker'. This is the Updates(2.49)-tab's OWN Prompted Update Scenario 2, distinct from the Prompted Updates tab's 'Prompted Update Scenario 2' ('Forced CCZ update blocker screen' - an app-content/CCZ update, see hq_setup/prompted_updates/ for that one, handled separately). This row is about the CommCare BINARY (APK) forced-update blocker screen, so it toggles apk_prompt (not app_prompt) to 'forced' via HQ's update_prompts/<app_id>/ endpoint (PromptSettingsUpdateView). app_prompt is explicitly set to 'off' here so the (separate) optional/forced CCZ-content prompt doesn't also fire and confound the on-device flow's assertions - flows/updates_2_49/prompted_update_scenario_02_forced_commcare_update.yaml only asserts against the APK-update blocker screen. apk_version is left at the module default (LATEST_APK_VALUE = 'latest' per hq_client.py/corehq/apps/app_manager/const.py) since this row doesn't itself pin a specific 'test+1' version the way Setup 2 does - if this is run after hq_setup/updates_2_49/setup_02_commcare_version_plus_one.json without an intervening re-run of that setup, HQ should retain whatever apk_version Setup 2 last configured; otherwise pass an explicit apk_version here matching Setup 2's. app_id is a placeholder - fill in with this tab's test app's current app_id.\n\nRun via `python scripts/hq_client.py hq_setup/updates_2_49/prompted_update_scenario_02_forced.json` before flows/updates_2_49/prompted_update_scenario_02_forced_commcare_update.yaml.",
+  "actions": [
+    {
+      "type": "set_prompt_update_settings",
+      "app_id": "REPLACE_WITH_UPDATES_2_49_APP_ID",
+      "apk_prompt": "forced",
+      "app_prompt": "off"
+    }
+  ]
+}

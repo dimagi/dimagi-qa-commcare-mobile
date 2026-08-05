@@ -1,0 +1,26 @@
+appId: org.commcare.dalvik
+---
+# Reusable: from the home screen, use the options menu's "Change My PIN" to
+# change from CURRENT_PIN to NEW_PIN. Since a PIN already exists,
+# PinAuthenticationActivity prompts for the current PIN (not password) - see
+# PinAuthenticationActivity.java authMode == LoginMode.PIN branch.
+- tapOn: "More options"
+- tapOn: "Change My PIN"
+- assertVisible: "Enter your current PIN"
+- tapOn:
+    id: "org.commcare.dalvik:id/pin_entry"
+- inputText: "${CURRENT_PIN}"
+- tapOn:
+    id: "org.commcare.dalvik:id/pin_confirm_button"
+- assertVisible: "Enter a new 4-digit PIN"
+- tapOn:
+    id: "org.commcare.dalvik:id/pin_entry"
+- inputText: "${NEW_PIN}"
+- tapOn:
+    id: "org.commcare.dalvik:id/pin_confirm_button"
+- assertVisible: "Re-Enter the PIN you chose"
+- tapOn:
+    id: "org.commcare.dalvik:id/pin_entry"
+- inputText: "${NEW_PIN}"
+- tapOn:
+    id: "org.commcare.dalvik:id/pin_confirm_button"

@@ -1,0 +1,79 @@
+appId: org.commcare.dalvik
+tags:
+  - right_to_left_text
+  - partial
+---
+# Master Mobile Plan (2026) > Right to Left Text > "Setup 2" - Change device
+# SYSTEM language to Arabic (distinct from "Setup 3"'s pure IN-APP language
+# switch in flows/right_to_left_text/setup_03_change_language_to_arabic.yaml).
+#
+# coverage_matrix.csv's existing Dependency/Reason text for this row
+# ("Scriptable via adb (settings put system system_locales ar) instead of
+# manual navigation") describes a real adb capability, but that's NOT how a
+# BrowserStack App Automate Maestro session actually exposes this - adb
+# access isn't available in that hosted environment, and BrowserStack has its
+# OWN build-trigger-time capability for this instead. Researched via web
+# search + fetching BrowserStack's own docs (since browserstack.com wasn't
+# directly reachable earlier in this repo per docs/FRAMEWORK.md's own
+# provenance notes, but was reachable here, 2026-08-05):
+#   https://www.browserstack.com/docs/app-automate/maestro/set-up-test-env/localization
+#   For Android, BrowserStack's Maestro build-trigger endpoint
+#   (POST https://api-cloud.browserstack.com/app-automate/maestro/v2/android/build
+#   - the same endpoint scripts/browserstack_client.py:BrowserStackClient.trigger_build()
+#   already calls) accepts top-level JSON body params:
+#     "language": "ar"   -> sets the device UI language (ISO 639-1 code)
+#     "locale": "<CC>"   -> sets region/formatting (ISO 3166-1 alpha-2 code)
+#   This is a SESSION/BUILD-LEVEL property applied by BrowserStack before the
+#   app under test even launches - it is NOT something expressible as a step
+#   inside a Maestro flow's own YAML body (there is no `setLocale`/`setLanguage`
+#   Maestro command for it), which is why this flow's own steps below can only
+#   confirm CommCare still functions normally under it, not actively change it.
+#
+# WIRING GAP (documented per this task's scope, NOT implemented here):
+#   scripts/browserstack_client.py:trigger_build() already accepts an
+#   `extra_params: dict` argument that gets merged directly into the request
+#   payload via `payload.update(extra_params)` (see that function, ~line 45-75)
+#   - so the HTTP-client layer needs NO code change to support this.
+#   scripts/run_suite.py's CLI, however, does NOT currently expose any flag
+#   for this, and its own trigger_build(...) call (~line 161-170) does not
+#   pass extra_params= at all. A caller wanting this capability would need
+#   run_suite.py to add something like:
+#     parser.add_argument("--device-language", default=None,
+#                          help="BrowserStack Maestro build 'language' param, e.g. 'ar'.")
+#     parser.add_argument("--device-locale", default=None,
+#                          help="BrowserStack Maestro build 'locale' param, e.g. 'SA'.")
+#   and thread `extra_params={"language": args.device_language, "locale": args.device_locale}`
+#   (dropping unset keys) into the existing trigger_build(...) call. Left
+#   unimplemented here per this task's explicit scope ("don't necessarily
+#   implement the CLI plumbing yourself").
+#   Until that's wired up, a run targeting this flow would need
+#   `python scripts/run_suite.py --flow flows/right_to_left_text/setup_02_change_device_language_to_arabic.yaml ...`
+#   to be invoked with that CLI flag added, or the BrowserStack build payload
+#   patched by hand for this one run.
+#
+# Because the actual capability is confirmed to exist, this row does NOT need
+# to fall back to "Not automatable" - but it still requires an external,
+# non-Maestro parameter to be set at build-trigger time, same category as an
+# HQ pre-step (see docs/FRAMEWORK.md's definition of "Partial": "an HQ API
+# call ... a locale/network toggle, etc."), so it stays tagged `partial` here
+# rather than `automatable`.
+#
+# ON-DEVICE PORTION (what this flow actually asserts): with the BrowserStack
+# build's "language": "ar" param already in effect for this session by the
+# time Maestro's steps start, simply confirm CommCare still launches and logs
+# in normally - it deliberately does NOT assert any Arabic-rendered text
+# (CommCare's OWN UI language is controlled separately by "Setup 3"'s in-app
+# switch, not the Android system language - see that flow's header comment),
+# and it does NOT judge RTL mirroring/alignment (that's covered by this same
+# tab's several explicitly "Not automatable" rows - Login 1-3, Home Screen
+# 1-8, etc.).
+- launchApp
+- assertVisible:
+    id: "org.commcare.dalvik:id/edit_username"
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- assertVisible:
+    id: "org.commcare.dalvik:id/home_gridview_buttons"

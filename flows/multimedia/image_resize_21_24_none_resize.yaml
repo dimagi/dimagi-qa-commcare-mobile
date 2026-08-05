@@ -1,0 +1,52 @@
+appId: org.commcare.dalvik
+tags:
+  - multimedia
+  - partial
+---
+# Master Mobile Plan (2026) > Multimedia > "Image Resize 21", "Image Resize
+# 22", "Image Resize 23", "Image Resize 24" - repeat of Image Resize 1-4
+# (View Large/Small/Wide/Tall image form) after the app's Auto-Resize Images
+# setting has been restored to "None" on HQ.
+#
+# SEQUENCING DEPENDENCY: assumes "Image Resize 20" (the HQ-side setting
+# restore + new build) has already been run - see
+# hq_setup/multimedia/image_resize_none_resize.json.
+#
+# Everything else (menu/form structure assumption, navigation pattern,
+# selector citations) is identical to
+# flows/multimedia/image_resize_01_04_default_setting.yaml - see that file's
+# header for the full citation and caveats, not repeated here to avoid
+# drift between the two copies.
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- tapOn: "Start"
+- tapOn: "Multimedia"
+- tapOn: "Image Resize"
+# Image Resize 21 - Large Image
+- runFlow:
+    file: ../common/view_form_no_errors_from_menu.yaml
+    env:
+      FORM_NAME: "Large Image"
+# Image Resize 22 - Small Image
+- runFlow:
+    file: ../common/view_form_no_errors_from_menu.yaml
+    env:
+      FORM_NAME: "Small Image"
+# Image Resize 23 - Wide Image
+- runFlow:
+    file: ../common/view_form_no_errors_from_menu.yaml
+    env:
+      FORM_NAME: "Wide Image"
+# Image Resize 24 - Tall Image
+- runFlow:
+    file: ../common/view_form_no_errors_from_menu.yaml
+    env:
+      FORM_NAME: "Tall Image"
+- back
+- back
+- assertVisible:
+    text: "Start"
+    timeout: 5000

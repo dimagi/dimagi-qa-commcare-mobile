@@ -1,0 +1,43 @@
+appId: org.commcare.dalvik
+tags:
+  - mobile_pins
+  - automatable
+---
+# Master Mobile Plan (2026) > Mobile Pins > "Pin 12" - Reset Your PIN.
+# Continuation of the pin_11 "Forgot PIN" scenario: logging in with the
+# password (instead of the PIN) surfaces a "Reset your PIN?" prompt
+# (pin.dialog.prompt.reset) using the same PaneledChoiceDialog as the initial
+# "Create a PIN?" prompt, with the same three choice strings.
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- runFlow:
+    file: ../common/set_pin_via_dialog.yaml
+    env:
+      PIN: "1234"
+- runFlow: ../common/logout.yaml
+- tapOn: "More options"
+- tapOn: "Forgot PIN?"
+- tapOn:
+    id: "org.commcare.dalvik:id/edit_password"
+- inputText: "${CC_TEST_PASSWORD}"
+- hideKeyboard
+- tapOn:
+    id: "org.commcare.dalvik:id/login_button"
+- assertVisible: "Reset your PIN?"
+- tapOn: "Yes, set my PIN now"
+- assertVisible: "Enter a new 4-digit PIN"
+- tapOn:
+    id: "org.commcare.dalvik:id/pin_entry"
+- inputText: "9999"
+- tapOn:
+    id: "org.commcare.dalvik:id/pin_confirm_button"
+- assertVisible: "Re-Enter the PIN you chose"
+- tapOn:
+    id: "org.commcare.dalvik:id/pin_entry"
+- inputText: "9999"
+- tapOn:
+    id: "org.commcare.dalvik:id/pin_confirm_button"
+- runFlow: ../common/logout.yaml

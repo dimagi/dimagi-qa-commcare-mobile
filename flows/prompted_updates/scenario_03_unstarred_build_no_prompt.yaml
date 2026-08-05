@@ -1,0 +1,41 @@
+appId: org.commcare.dalvik
+tags:
+  - prompted_updates
+  - partial
+---
+# Master Mobile Plan (2026) > Prompted Updates > "Prompted Update Scenario 3" -
+# No prompt for an un-starred (created but never Released) build.
+#
+# PARTIAL: requires an HQ pre-step (create a new build, but do NOT release
+# it) between this flow's logout and relogin - see
+# hq_setup/prompted_updates/scenario_03_unreleased_build.json. ASSUMES
+# Setup 2/3 have already run (latest build In Test + prior build Released,
+# Prompt Updates to CommCare/App = On), so the device is currently on the
+# prior released version with no prompt pending.
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- assertVisible: "Start"
+# Logout keeping the current (prior released) version installed - no update
+# is taken here.
+- runFlow: ../common/logout.yaml
+
+# === HQ pre-step runs here in a real execution: create a new build, leave it un-released ===
+# (hq_setup/prompted_updates/scenario_03_unreleased_build.json)
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- assertNotVisible: "New version of the application is available"
+- assertNotVisible: "New version of the application is required"
+
+# Tap into the app and back out - confirm the un-starred build still doesn't
+# surface a prompt after further on-device navigation.
+- tapOn: "Start"
+- pressKey: Back
+- assertVisible: "Start"
+- assertNotVisible: "New version of the application is available"
+- assertNotVisible: "New version of the application is required"

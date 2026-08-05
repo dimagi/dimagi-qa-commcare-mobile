@@ -1,0 +1,160 @@
+appId: org.commcare.dalvik
+tags:
+  - multimedia
+  - partial
+---
+# Master Mobile Plan (2026) > Multimedia > "Media 2" - Media Capture and
+# Select: submit the "Media Capture" form attaching media to its questions
+# via BOTH the record/take path and the choose-existing path, then sync.
+#
+# OUT OF SCOPE, NOT ATTEMPTED HERE (per coverage_matrix.csv: "the 'no custom
+# properties present' check is an HQ inspection step"): the sheet's "go to
+# app's Advanced Settings > Custom Properties, ensure none are set" step is
+# an HQ App Builder Advanced-Settings-tab inspection (see
+# scripts/hq_client.py's set_custom_properties()/edit_commcare_profile()
+# citation for where that setting actually lives), not an on-device action -
+# there is nothing for Maestro to do for that part of the sheet, so this flow
+# starts directly at the on-device capture/select/submit/sync portion.
+#
+# CAMERA-CAPTURE FLAKINESS CAVEAT for the "record/take" half (same caveat as
+# photo_01_can_remove_taken_photo.yaml / capture_03_04_take_and_remove_photo.yaml):
+# real camera/mic capture is flaky/unsupported on most cloud emulators. The
+# shutter/confirm selectors reused below from photo_01 are GUESSES, not
+# verified against any real device/emulator camera or audio-recorder app in
+# this environment.
+#
+# The "choose existing" half uses addMedia + ../common/pick_first_gallery_image.yaml,
+# the same verified mechanism as photo_02_can_remove_chosen_photo.yaml /
+# image_resize_26_photo_chosen.yaml.
+#
+# PARTIAL DEPENDENCY: assumes the Multimedia QA test app has a "Media
+# Capture" form (name taken from the task/sheet wording - unverified against
+# any source, since it's a QA-only app) reachable via Start > Multimedia >
+# Media Capture, with multiple media questions. The exact number/order/types
+# of its questions is unverified, so this flow does NOT assume a fixed
+# layout: app/src/org/commcare/views/widgets/MediaWidget.java adds BOTH a
+# capture button (mCaptureButton - "Take Picture"/"Record Video"/"Record
+# Sound") and a choose button (mChooseButton - "Choose Image"/"Choose
+# Video"/"Choose Sound") to every media question simultaneously, so on each
+# question screen this flow alternates which button it uses (choose on the
+# 1st/3rd questions it encounters, record/take on the 2nd/4th) to exercise
+# both codepaths across the form per the sheet's "via BOTH ... paths"
+# wording, then falls back to the choose-path (the reliable one) for any
+# further questions beyond that. Uses Maestro's `when: visible:` conditional
+# (same pattern as flows/common/submit_only_form.yaml) to pick whichever of
+# Image/Video/Sound button text is actually present on a given screen.
+#
+# addMedia pushes the same local placeholder PNG used elsewhere in this repo
+# (assets/sample_image.png) - fine for a "Choose Image" question, but note it
+# is NOT a valid video/audio file, so it will only satisfy an image-type
+# choose-question; video/audio choose-questions in the real form would need
+# their own placeholder assets (not added here, since the exact question
+# types in "Media Capture" are unverified).
+#
+# nav_btn_next / nav_btn_finish and "Sync with Server" verified against the
+# same citations as photo_02_can_remove_chosen_photo.yaml and
+# flows/updates_2_49/auto_cc_update_03_relogin_sync_latest_version.yaml.
+- addMedia:
+    - "./assets/sample_image.png"
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- tapOn: "Start"
+- tapOn: "Multimedia"
+- tapOn: "Media Capture"
+# Question 1 (best-effort): prefer the "choose existing" path.
+- runFlow:
+    when:
+      visible: "Choose Image"
+    commands:
+      - tapOn: "Choose Image"
+      - runFlow: ../common/pick_first_gallery_image.yaml
+- runFlow:
+    when:
+      visible:
+        id: "org.commcare.dalvik:id/nav_btn_next"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/nav_btn_next"
+# Question 2 (best-effort): prefer the "record/take" path - see camera
+# caveat above, these shutter selectors are unverified guesses.
+- runFlow:
+    when:
+      visible: "Take Picture"
+    commands:
+      - tapOn: "Take Picture"
+      - tapOn:
+          id: "com.android.camera2:id/shutter_button"
+          optional: true
+      - tapOn:
+          id: "com.google.android.GoogleCamera:id/shutter_button"
+          optional: true
+      - tapOn:
+          text: "(?i)^(done|ok|confirm|save)$"
+          optional: true
+- runFlow:
+    when:
+      visible: "Record Video"
+    commands:
+      - tapOn: "Record Video"
+      - tapOn:
+          text: "(?i)^(stop|done|ok|confirm|save)$"
+          optional: true
+- runFlow:
+    when:
+      visible: "Record Sound"
+    commands:
+      - tapOn: "Record Sound"
+      - tapOn:
+          text: "(?i)^(stop|done|ok|confirm|save)$"
+          optional: true
+- runFlow:
+    when:
+      visible:
+        id: "org.commcare.dalvik:id/nav_btn_next"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/nav_btn_next"
+# Any remaining questions beyond the two above: fall back to whichever
+# choose-button is present (the reliable path), then advance.
+- repeat:
+    times: 6
+    while:
+      visible:
+        id: "org.commcare.dalvik:id/nav_btn_next"
+    commands:
+      - runFlow:
+          when:
+            visible: "Choose Image"
+          commands:
+            - tapOn: "Choose Image"
+            - runFlow: ../common/pick_first_gallery_image.yaml
+      - runFlow:
+          when:
+            visible: "Choose Video"
+          commands:
+            - tapOn: "Choose Video"
+            - runFlow: ../common/pick_first_gallery_image.yaml
+      - runFlow:
+          when:
+            visible: "Choose Sound"
+          commands:
+            - tapOn: "Choose Sound"
+            - runFlow: ../common/pick_first_gallery_image.yaml
+      - tapOn:
+          id: "org.commcare.dalvik:id/nav_btn_next"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_finish"
+    timeout: 10000
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"
+- tapOn: "Sync with Server"
+- extendedWaitUntil:
+    visible:
+      text: "(?i)Sync Successful"
+    timeout: 30000
+- assertNotVisible:
+    text: "(?i)sync.*(fail|error|unavailable)"

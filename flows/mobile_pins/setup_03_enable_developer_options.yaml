@@ -1,0 +1,61 @@
+appId: org.commcare.dalvik
+tags:
+  - mobile_pins
+  - automatable
+---
+# Master Mobile Plan (2026) > Mobile Pins > "Setup 3" - Enable Developer
+# Options (tap About CommCare 4x from the home screen).
+# No reusable dev-options-enable subflow exists yet in flows/common/ (checked
+# first, per this task's instructions) - the only other place this exact tap
+# sequence appears is inlined at the top of
+# flows/update/update_target_developer_options_flow.yaml, which isn't a
+# common/ helper and covers five different Update test cases beyond just this
+# one step. Reusing its verified sequence here rather than duplicating a new
+# flows/common/ file for a single other caller.
+#
+# Selectors verified against commcare-android source (read-only reference,
+# never modified by this repo):
+#   app/instrumentation-tests/src/org/commcare/utils/InstrumentationUtility.kt
+#     -> enableDeveloperMode(): openOptionsMenu() -> click "About CommCare" ->
+#     click OK (R.string.ok), repeated 4 times.
+#   app/src/org/commcare/activities/HomeScreenBaseActivity.java
+#     showAboutCommCareDialog()/handleDeveloperModeClicks(): the 4th dismissal
+#     of the About CommCare dialog from the HOME SCREEN (not App Manager,
+#     which has its own separate 4-tap counter/toast) calls
+#     DeveloperPreferences.setSuperuserEnabled(true) and shows a toast with
+#     Localization.get("home.developer.options.enabled").
+#   app/assets/locales/android_translatable_strings.txt:
+#     home.menu.about=About CommCare (line 86)
+#     home.developer.options.enabled=Developer Mode Enabled (line 100)
+#     settings.developer.options=Developer Options (line 903) - the Settings
+#       menu item title, only shown once DeveloperPreferences.isSuperuserEnabled()
+#       is true (app/src/org/commcare/preferences/MainConfigurablePreferences.java
+#       findPreference(DEVELOPER_SETTINGS)).
+#     dialog.ok=OK (About CommCare dialog's positive button).
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- assertVisible: "Start"
+
+# About CommCare x4, dismissing with OK each time, unlocks developer mode.
+- repeat:
+    times: 4
+    commands:
+      - tapOn: "More options"
+      - tapOn: "About CommCare"
+      - tapOn: "OK"
+- assertVisible:
+    text: "Developer Mode Enabled"
+    timeout: 3000
+    optional: true # toast may dismiss before Maestro's screenshot poll catches it
+
+# Confirm the Settings menu now exposes "Developer Options" (only visible
+# once superuser/developer mode is enabled - see header comment).
+- tapOn: "More options"
+- tapOn: "Settings"
+- assertVisible: "Developer Options"
+- back
+- back
+- assertVisible: "Start"

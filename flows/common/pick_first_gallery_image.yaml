@@ -1,0 +1,27 @@
+appId: org.commcare.dalvik
+---
+# Reusable subflow: run this right after tapping a "Choose Image"/"Choose
+# Video"/"Choose Sound" button (which launches Android's system media-picker
+# intent - see views/widgets/ImageWidget.java's mChooseButton ->
+# WidgetUtils.createPickMediaIntent(getContext(), "image/*") /
+# FormEntryConstants.IMAGE_CHOOSER). Taps the first thumbnail in whichever
+# picker UI the device/OS shows, so it should pick up whatever addMedia
+# pushed into the gallery beforehand.
+#
+# Selectors verified against Maestro's own published recipe for this exact
+# problem (docs.maestro.dev/examples/recipes/choose-images-from-the-gallery),
+# not guessed from training-data memory:
+#   - Android 13/14 system Photo Picker:
+#     com.google.android.providers.media.module:id/icon_thumbnail
+#   - Older Android (DocumentsUI-based chooser, e.g. "Downloads"/"Files"):
+#     com.google.android.documentsui:id/thumbnail
+# Both are marked optional since only one will exist on a given OS
+# version/device image. This subflow itself has NOT been run against a live
+# BrowserStack device - if the picker UI a given device image shows differs
+# from both of these, this will need an extra fallback selector added.
+- tapOn:
+    id: "com.google.android.providers.media.module:id/icon_thumbnail"
+    optional: true
+- tapOn:
+    id: "com.google.android.documentsui:id/thumbnail"
+    optional: true

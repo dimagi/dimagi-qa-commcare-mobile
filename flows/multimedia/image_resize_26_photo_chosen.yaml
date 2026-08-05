@@ -1,0 +1,60 @@
+appId: org.commcare.dalvik
+tags:
+  - multimedia
+  - automatable
+---
+# Master Mobile Plan (2026) > Multimedia > "Image Resize 26" - Photo chosen
+# (from gallery) per question + submit.
+#
+# PARTIAL DEPENDENCY (kept tagged `automatable` to match
+# coverage_matrix.csv, but flagging this in the header comment per the
+# task): assumes the Multimedia QA test app is installed with a
+# "Multimedia" menu containing an "Image Resize" form with four image
+# questions (per the sheet), each offering a "Choose Image" button.
+# Navigation is tapOn-by-visible-text so it matches regardless of list
+# position, but the exact four-question structure can't be verified without
+# that specific CCZ.
+#
+# addMedia pushes a small local placeholder PNG (assets/sample_image.png)
+# into the device's gallery so "Choose Image" - a real Android
+# photo-picker intent, see views/widgets/ImageWidget.java's mChooseButton ->
+# WidgetUtils.createPickMediaIntent(getContext(), "image/*") /
+# FormEntryConstants.IMAGE_CHOOSER - has something to select. "Choose
+# Image" button text verified against res/values/strings.xml:223
+# (choose_image = "Choose Image"). Picking the pushed image out of
+# whichever picker UI the OS shows is delegated to
+# ../common/pick_first_gallery_image.yaml (see that file for the
+# addMedia-picker selector citation); reusing the exact same picked image
+# for all four questions satisfies the sheet's "select the same image for
+# all four questions".
+#
+# nav_btn_next / nav_btn_finish ids verified against
+# res/layout/screen_form_entry.xml and FormAttachmentUploadTest.java's use
+# of R.id.nav_btn_next/nav_btn_finish to advance/submit a form.
+- addMedia:
+    - "./assets/sample_image.png"
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- tapOn: "Start"
+- tapOn: "Multimedia"
+- tapOn: "Image Resize"
+# Questions 1-3: choose the image, then advance.
+- repeat:
+    times: 3
+    commands:
+      - tapOn: "Choose Image"
+      - runFlow: ../common/pick_first_gallery_image.yaml
+      - tapOn:
+          id: "org.commcare.dalvik:id/nav_btn_next"
+# Question 4 (last): choose the image, then finish instead of advancing.
+- tapOn: "Choose Image"
+- runFlow: ../common/pick_first_gallery_image.yaml
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_finish"
+    timeout: 10000
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"

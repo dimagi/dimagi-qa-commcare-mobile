@@ -1,0 +1,58 @@
+appId: org.commcare.dalvik
+tags:
+  - multimedia
+  - automatable
+---
+# Master Mobile Plan (2026) > Multimedia > "Photo 2" - Can remove chosen
+# photo.
+#
+# PARTIAL DEPENDENCY (kept tagged `automatable` to match
+# coverage_matrix.csv, but flagging this in the header comment per the
+# task): assumes the Multimedia QA test app is installed with a
+# "Multimedia" menu containing a "Gif/Remove Image" form whose "Choose
+# Image" question is reachable directly (the sheet doesn't mention any
+# required questions before it). Navigation is tapOn-by-visible-text so it
+# matches regardless of list position, but hasn't been verified against
+# that specific CCZ's structure.
+#
+# addMedia pushes the same local placeholder PNG used by
+# image_resize_26 (assets/sample_image.png) into the device's gallery; see
+# ../common/pick_first_gallery_image.yaml for how the pushed image gets
+# picked out of the system photo-picker UI after tapping "Choose Image".
+#
+# Button text verified against res/values/strings.xml:
+#   choose_image (line 223) = "Choose Image"
+#   discard_image (line 182) = "Remove Image"
+# views/widgets/ImageWidget.java: mDiscardButton (wired to discard_image /
+# "Remove Image") starts View.GONE and is only set VISIBLE once a binary
+# attachment is registered (~line 220); tapping it calls
+# clearBinaryAttachment(), which sets it back to View.GONE (~line 304) - so
+# assertVisible then assertNotVisible on that exact button text is a direct
+# match for the sheet's "button disappears" check.
+#
+# nav_btn_finish id verified against res/layout/screen_form_entry.xml and
+# FormAttachmentUploadTest.java's use of R.id.nav_btn_finish to submit a
+# form. Whether the form allows submitting with the image question left
+# blank after removal (vs. a required-field validation prompt) depends on
+# the specific CCZ's form definition and couldn't be verified here.
+- addMedia:
+    - "./assets/sample_image.png"
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- tapOn: "Start"
+- tapOn: "Multimedia"
+- tapOn: "Gif/Remove Image"
+- tapOn: "Choose Image"
+- runFlow: ../common/pick_first_gallery_image.yaml
+- assertVisible: "Remove Image"
+- tapOn: "Remove Image"
+- assertNotVisible: "Remove Image"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_finish"
+    timeout: 10000
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"

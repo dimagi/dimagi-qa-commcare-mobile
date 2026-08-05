@@ -1,0 +1,16 @@
+{
+  "_comment": "Master Mobile Plan (2026) > ExternalApp Tests > 'Setup 3' (Deploy Basic Tests), steps 1-2: 'Navigate to External App Fixture Tests' / 'Deploy External App Fixture Tests'. app_id is read directly from the ExternalApp Tests tab's own 'Domain:' row (https://www.commcarehq.org/a/sansar/apps/view/e45245362793f25c9692791c58d10b15/) and 'Application:' row ('External App Fixture Tests\\nExternal app from Jenkins') - it is a real value from the sheet, NOT a placeholder guess, but app ids get recreated between QA cycles like every other hq_setup/*.json in this repo, so confirm it's still current before relying on it. 'Deploy' is modeled the same way hq_client.py's other release-management pre-steps are: create_new_build ('Make New Version') followed by mark_build_status(is_released=true) ('Release' it) on the resulting build, chained via the $LAST_BUILD_ID convention documented in hq_client.py's run_pre_step() docstring (see hq_setup/prompted_updates/varying_prompt_setup.json for the same pattern). IMPORTANT DOMAIN CAVEAT: this app lives on the 'sansar' domain, NOT the 'qateam' domain most other hq_setup/*.json files in this repo target - HQClient defaults to HQ_DOMAIN env var or 'qateam' (see scripts/hq_client.py), so run this either as `python scripts/hq_client.py hq_setup/externalapp_tests/setup_03_deploy_fixture_app.json --domain sansar` directly, or with HQ_DOMAIN=sansar exported before calling `run_suite.py --hq-setup ...` (run_suite.py itself has no --domain flag, it only reads the env var). The sheet's own Notes column on this row explicitly warns 'Apps on qadomain will crash since it contains fixtures > 1MB' - that is exactly why this fixture app is deployed on sansar instead of qateam, don't 'fix' this to qateam.",
+  "actions": [
+    {
+      "type": "create_new_build",
+      "app_id": "e45245362793f25c9692791c58d10b15",
+      "comment": "QA automated build - ExternalApp Tests Setup 3 (Deploy External App Fixture Tests)"
+    },
+    {
+      "type": "mark_build_status",
+      "app_id": "e45245362793f25c9692791c58d10b15",
+      "saved_app_id": "$LAST_BUILD_ID",
+      "is_released": true
+    }
+  ]
+}

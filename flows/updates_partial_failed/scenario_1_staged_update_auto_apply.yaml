@@ -1,0 +1,54 @@
+appId: org.commcare.dalvik
+tags:
+  - updates_partial_failed
+  - automatable
+---
+# Master Mobile Plan (2026) > Updates (partial and failed) > Test Case ID: 1.
+# App under test: "Mobile Updates - Test 1_2" (per the tab's own "Apps" note).
+#
+# The preceding Setup row is deliberately OUT of scope (Not automatable, per
+# coverage_matrix.csv): "Stage CCZ update, interrupt with CommCare update
+# mid-stream" requires precisely-timed interleaving of a real binary update
+# mid-download - that must be arranged by hand/harness before this flow runs,
+# ending with the device logged out and the CCZ update staged-but-unapplied.
+#
+# This flow covers the three "Automatable" verification steps that follow:
+#   - Update 1: log in and confirm the staged update auto-applied (app
+#     version should now read "Version 2").
+#   - Update 2: Form 1 opens/navigates without error (should reflect
+#     Version 2's content).
+#   - Update 3: Form 2 (unchanged) opens/navigates without error.
+#
+# GENERIC/BEST-EFFORT: "Mobile Updates - Test 1_2" is a pre-provisioned QA
+# app whose exact menu/form structure isn't available in this repo or
+# commcare-android - "Form 1" and "Form 2" below are tapped by the literal
+# names the sheet itself uses, which is assumed (not verified) to match the
+# on-screen labels.
+#
+# Selector citations live in the reused subflows - see
+# flows/common/login.yaml, flows/common/check_app_version_via_about.yaml and
+# flows/common/navigate_form_no_errors.yaml.
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- assertVisible: "Start"
+
+# --- Update 1: staged update auto-applied on login -> now on Version 2. ---
+- runFlow:
+    file: ../common/check_app_version_via_about.yaml
+    env:
+      EXPECTED_VERSION: "2"
+
+# --- Update 2: updated Form 1 verification. ---
+- runFlow:
+    file: ../common/navigate_form_no_errors.yaml
+    env:
+      FORM_NAME: "Form 1"
+
+# --- Update 3: unchanged Form 2 verification. ---
+- runFlow:
+    file: ../common/navigate_form_no_errors.yaml
+    env:
+      FORM_NAME: "Form 2"

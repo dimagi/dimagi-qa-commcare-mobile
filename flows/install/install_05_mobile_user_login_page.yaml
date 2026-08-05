@@ -1,0 +1,24 @@
+appId: org.commcare.dalvik
+tags:
+  - install
+  - automatable
+---
+# Master Mobile Plan (2026) > Install > "Install 5" - Verifying mobile user page.
+# ids verified against InstallFromListTest.kt (edit_username / edit_domain /
+# edit_password / get_apps_button / switch_button).
+- launchApp
+- tapOn: "More options"
+- tapOn: "See Apps for My User"
+- assertVisible:
+    id: "org.commcare.dalvik:id/edit_username"
+- assertVisible:
+    id: "org.commcare.dalvik:id/edit_domain"
+- assertVisible:
+    id: "org.commcare.dalvik:id/edit_password"
+- assertVisible:
+    id: "org.commcare.dalvik:id/get_apps_button"
+- tapOn:
+    id: "org.commcare.dalvik:id/get_apps_button"
+# TODO(verify): the sheet expects a "please enter all required fields" style
+# error here; the exact string wasn't confirmed against app source (no
+# matching localization key found), so it isn't asserted yet.

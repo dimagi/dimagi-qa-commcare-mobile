@@ -1,0 +1,11 @@
+{
+  "_comment": "Master Mobile Plan (2026) > Updates (coverage_matrix.csv XLSX Tab 'Updates', 2.49 grab-bag section) > 'Setup 2' - 'Set CommCare Version = test+1'. This is the Updates(2.49)-tab's OWN Setup 2 row, distinct from the Prompted Updates tab's 'Setup 2' ('Mark latest build In Test + install prior released build + login', see hq_setup/prompted_updates/ for that one - handled separately). This row configures HQ's 'Manage Update Settings' tab (PromptSettingsUpdateView / update_prompts/<app_id>/) so the CommCare (APK) version being prompted-to is exactly one version ahead of whatever version is currently under test ('test+1'), which is a precondition for the 'Prompted Update Scenario 1/2' rows on this same tab (optional/forced CommCare update prompts) to have a real target version to prompt toward.\n\napk_version below is a placeholder ('test+1' is a relative description from the sheet, not an actual version string/build number hq_client.py can send as-is) - fill in with the concrete APK version number that is exactly one release ahead of the version currently installed on the test device before running. apk_prompt is left 'on' (optional prompt) here since Setup 2 itself is just about pinning the target version; 'Prompted Update Scenario 2' (hq_setup/updates_2_49/prompted_update_scenario_02_forced.json) is the row that separately flips apk_prompt to 'forced'. app_id is a placeholder - fill in with this tab's test app's current app_id.",
+  "actions": [
+    {
+      "type": "set_prompt_update_settings",
+      "app_id": "REPLACE_WITH_UPDATES_2_49_APP_ID",
+      "apk_prompt": "on",
+      "apk_version": "REPLACE_WITH_TEST_VERSION_PLUS_ONE"
+    }
+  ]
+}

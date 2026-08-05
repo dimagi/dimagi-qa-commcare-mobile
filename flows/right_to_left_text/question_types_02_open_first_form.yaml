@@ -1,0 +1,48 @@
+appId: org.commcare.dalvik
+tags:
+  - right_to_left_text
+  - automatable
+---
+# Master Mobile Plan (2026) > Right to Left Text > "Question Types 2" - From
+# the home screen, select the green start button; select the first entry
+# (this is a form and should open immediately).
+# Pure navigation check: the actual RTL swipe-direction/progress-bar/mirroring
+# judgment for this screen lives in "Question Types 1/3-7" in
+# coverage_matrix.csv (all Not automatable - visual/gesture-direction
+# judgment), so this flow only proves the navigation itself still works and
+# deliberately does not switch to Arabic first (that's "Setup 3"'s job as a
+# real-sheet prerequisite; per this framework's self-contained-flow
+# convention a pure-navigation check doesn't need it).
+# Selectors:
+#  - "Start" button text: app/assets/locales/android_translatable_strings.txt
+#    home.start=Start (org/commcare/activities/HomeButtons.java
+#    homeMessageKey = "home.start"); also the literal string
+#    InstrumentationUtility.kt openModule() taps via onView(withText("Start")).
+#  - list rows: InstrumentationUtility.kt openModule()/openForm() ->
+#    clickListItem(R.id.screen_suite_menu_list, position). Maestro has no
+#    adapter-position API, so we index into the row title view instead - each
+#    row is app/res/layout/menu_list_item_modern.xml, whose title TextView id
+#    is row_txt (org/commcare/adapters/MenuAdapter.java ~line 341); index 0 =
+#    first entry.
+#  - confirming a form opened: nav_btn_next lives on
+#    app/res/layout/screen_form_entry.xml (InstrumentationUtility.kt
+#    nextPage() taps the same id).
+#  - exit-without-saving dialog: FormEntryDialogs.createQuitDialog() (invoked
+#    from FormEntryActivity's back-press handler) ->
+#    quit_form_title="Exit Form?", do_not_save="EXIT WITHOUT SAVING"
+#    (app/res/values/strings.xml).
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- tapOn: "Start"
+- tapOn:
+    id: "org.commcare.dalvik:id/row_txt"
+    index: 0
+- assertVisible:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+- hideKeyboard
+- back
+- assertVisible: "Exit Form?"
+- tapOn: "EXIT WITHOUT SAVING"

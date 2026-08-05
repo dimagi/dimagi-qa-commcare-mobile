@@ -1,0 +1,37 @@
+appId: org.commcare.dalvik
+tags:
+  - multimedia
+  - automatable
+---
+# Master Mobile Plan (2026) > Multimedia > "Logo 1" - Dimagi logo visible on
+# the login screen.
+#
+# Logo chain verified in commcare-android source (read-only reference):
+#   res/layout/screen_login.xml -> <include layout="@layout/appbar_layout"/>
+#     is the FIRST child of the screen's outer LinearLayout, i.e. at the top.
+#   res/layout/appbar_layout.xml -> androidx.appcompat.widget.Toolbar
+#     android:id="@+id/toolbar".
+#   app/src/org/commcare/activities/CommonBaseActivity.java ->
+#     findViewById(R.id.toolbar); setSupportActionBar(toolbar).
+#   app/src/org/commcare/activities/CommCareActivity.java:165 (onCreate) ->
+#     getSupportActionBar().setLogo(R.drawable.commcare_actionbar_logo_spacing)
+#     (a layer-list wrapping drawable/commcare_actionbar_logo, the
+#     CommCare/Dimagi wordmark).
+#   LoginActivity extends BaseDrawerActivity extends CommCareActivity, so
+#     this logo is set on the login screen's own toolbar.
+#
+# CAVEAT: AppCompat's ActionBar/Toolbar "logo" ImageView is created
+# internally (Toolbar.ensureLogoView(), in the androidx.appcompat library,
+# not in this app's source) and is never assigned its own android:id, nor
+# does it carry any text/content-description to match on - so it cannot be
+# targeted directly by a Maestro selector. As a best-effort proxy, this flow
+# asserts the toolbar container that hosts the logo (id/toolbar) is visible.
+# This has not been confirmed against a live device/BrowserStack session; if
+# a tighter check is needed later, capture a UI Automator dump on a real
+# device to see whether AppCompat happens to expose a stable id/class for
+# the logo ImageView at runtime.
+- launchApp
+- assertVisible:
+    id: "org.commcare.dalvik:id/edit_username"
+- assertVisible:
+    id: "org.commcare.dalvik:id/toolbar"

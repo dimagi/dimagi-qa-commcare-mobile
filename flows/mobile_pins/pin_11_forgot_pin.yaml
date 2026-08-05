@@ -1,0 +1,28 @@
+appId: org.commcare.dalvik
+tags:
+  - mobile_pins
+  - automatable
+---
+# Master Mobile Plan (2026) > Mobile Pins > "Pin 11" - Forgot PIN.
+# "Forgot PIN?" (login.menu.password.mode) lives in the login screen's own
+# options menu and toggles the field back to password mode in place.
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- runFlow:
+    file: ../common/set_pin_via_dialog.yaml
+    env:
+      PIN: "1234"
+- runFlow: ../common/logout.yaml
+- assertVisible: "PIN"
+- tapOn: "More options"
+- tapOn: "Forgot PIN?"
+- tapOn:
+    id: "org.commcare.dalvik:id/edit_password"
+- inputText: "${CC_TEST_PASSWORD}"
+- hideKeyboard
+- tapOn:
+    id: "org.commcare.dalvik:id/login_button"
+- assertVisible: "Start"

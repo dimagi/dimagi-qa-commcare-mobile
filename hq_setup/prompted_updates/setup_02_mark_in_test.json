@@ -1,0 +1,17 @@
+{
+  "_comment": "Master Mobile Plan (2026) > Prompted Updates > Setup 2 ('Mark latest build In Test + install prior released build + login'). Run once via `python scripts/hq_client.py hq_setup/prompted_updates/setup_02_mark_in_test.json` before scenario_01/02's on-device flows. This un-releases the newest build (so no prompt fires yet) and makes sure the PRIOR build is (still) the one marked Released, matching what should already be installed on the device from a fresh CCZ install. The 'install prior released build + login' half of this Setup row is on-device/harness provisioning outside hq_client.py's scope (per docs/FRAMEWORK.md's architecture diagram, CCZ provisioning happens before BrowserStack invokes any flow) - the on-device 'login' step itself is just flows/common/login.yaml, reused at the top of scenario_01/02/03's flows rather than scripted separately here. app_id/saved_app_id values are placeholders - confirm the current 'Prompted Updates' app and its latest/prior build ids on the qateam domain (https://www.commcarehq.org/a/qateam/apps/view/<app_id>/releases/) before relying on this, since build ids get recreated between QA cycles.",
+  "actions": [
+    {
+      "type": "mark_build_status",
+      "app_id": "REPLACE_WITH_PROMPTED_UPDATES_APP_ID",
+      "saved_app_id": "REPLACE_WITH_LATEST_BUILD_ID",
+      "is_released": false
+    },
+    {
+      "type": "mark_build_status",
+      "app_id": "REPLACE_WITH_PROMPTED_UPDATES_APP_ID",
+      "saved_app_id": "REPLACE_WITH_PRIOR_BUILD_ID",
+      "is_released": true
+    }
+  ]
+}

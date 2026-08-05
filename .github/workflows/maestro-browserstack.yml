@@ -1,0 +1,60 @@
+name: Maestro BrowserStack QA
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Run only flows carrying this tag (e.g. mobile_pins). Leave blank to run everything."
+        required: false
+        default: "mobile_pins"
+      release_tag:
+        description: "commcare-android GitHub release tag to test (e.g. commcare_2.63.4). Leave blank for latest."
+        required: false
+        default: ""
+      devices:
+        description: "Comma-separated BrowserStack device names."
+        required: false
+        default: "Samsung Galaxy S20-10.0"
+      hq_setup:
+        description: "Path to an hq_setup/*.json pre-step file to run first (optional)."
+        required: false
+        default: ""
+  schedule:
+    # Nightly at 03:00 UTC against whatever the latest commcare-android release is.
+    - cron: "0 3 * * *"
+
+jobs:
+  maestro-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Maestro suite on BrowserStack
+        env:
+          BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
+          BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
+          HQ_API_USERNAME: ${{ secrets.HQ_API_USERNAME }}
+          HQ_API_PASSWORD: ${{ secrets.HQ_API_PASSWORD }}
+          HQ_SESSION_COOKIE: ${{ secrets.HQ_SESSION_COOKIE }}
+          HQ_DOMAIN: qateam
+          CC_TEST_USERNAME: ${{ secrets.CC_TEST_USERNAME }}
+          CC_TEST_PASSWORD: ${{ secrets.CC_TEST_PASSWORD }}
+          CC_TEST2_USERNAME: ${{ secrets.CC_TEST2_USERNAME }}
+          CC_TEST2_PASSWORD: ${{ secrets.CC_TEST2_PASSWORD }}
+          HQ_MOBILE_WORKER_USERNAME: ${{ secrets.HQ_MOBILE_WORKER_USERNAME }}
+          HQ_MOBILE_WORKER_PASSWORD: ${{ secrets.HQ_MOBILE_WORKER_PASSWORD }}
+          HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
+          HQ_WEB_USER_PASSWORD: ${{ secrets.HQ_WEB_USER_PASSWORD }}
+        run: |
+          ARGS="--devices ${{ github.event.inputs.devices || 'Samsung Galaxy S20-10.0' }}"
+          if [ -n "${{ github.event.inputs.tag }}" ]; then ARGS="$ARGS --tag ${{ github.event.inputs.tag }}"; fi
+          if [ -n "${{ github.event.inputs.release_tag }}" ]; then ARGS="$ARGS --release-tag ${{ github.event.inputs.release_tag }}"; fi
+          if [ -n "${{ github.event.inputs.hq_setup }}" ]; then ARGS="$ARGS --hq-setup ${{ github.event.inputs.hq_setup }}"; fi
+          python scripts/run_suite.py $ARGS

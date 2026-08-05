@@ -1,0 +1,11 @@
+{
+  "_comment": "Master Mobile Plan (2026) > Multimedia > 'Filesize 2' - update the Filesize-Warning QA test app to its 'No Warning' release-note build. Run once via `python scripts/hq_client.py hq_setup/multimedia/filesize_no_warning_update.json` before flows/multimedia/filesize_02_no_warning.yaml. app_id/saved_app_id below are REPLACE_WITH placeholders: hq_client.py (see its mark_build_status()) has no endpoint to look up a build BY its release-note/comment text - 'No Warning' must be found manually first, on this app's HQ Releases page (https://www.commcarehq.org/a/<domain>/apps/view/<app_id>/releases/), by matching the release-note text on each listed build, then copying that build's saved-app id into saved_app_id below. Confirm the app_id is still current before relying on this - app ids get recreated between QA cycles.",
+  "actions": [
+    {
+      "type": "mark_build_status",
+      "app_id": "REPLACE_WITH_FILESIZE_WARNING_APP_ID",
+      "saved_app_id": "REPLACE_WITH_NO_WARNING_RELEASE_NOTE_BUILD_ID",
+      "is_released": true
+    }
+  ]
+}

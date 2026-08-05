@@ -1,0 +1,48 @@
+appId: org.commcare.dalvik
+tags:
+  - right_to_left_text
+  - automatable
+---
+# Master Mobile Plan (2026) > Right to Left Text > "Setup 3" - Return to the
+# home screen and launch CommCare; verify CommCare opens successfully; select
+# options within CommCare and change the app's language to Arabic.
+# This is the pure IN-APP language switch (distinct from "Setup 2"'s
+# device-level `adb`/system-locale change, which is Partial and out of scope
+# for this flow). This exact feature already has Espresso coverage in
+# LanguagesTest.kt (testLanguageChanges), whose menu path this flow mirrors:
+#   InstrumentationUtility.kt selectOptionItem(languageOptionItemMatcher) ->
+#   openOptionsMenu() + click matcher withText(R.string.change_language)
+# Menu item / dialog text verified against:
+#   app/src/org/commcare/activities/StandardHomeActivity.java
+#     (R.id.action_change_language -> Localization.get("home.menu.locale.change"))
+#   app/src/org/commcare/activities/HomeScreenBaseActivity.java
+#     showLocaleChangeMenu() (dialog title Localization.get("home.menu.locale.select"))
+#   app/assets/locales/android_translatable_strings.txt:
+#     home.menu.locale.change=Change Language
+#     home.menu.locale.select=Choose your Language
+- launchApp
+- assertVisible:
+    id: "org.commcare.dalvik:id/edit_username"
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- assertVisible:
+    id: "org.commcare.dalvik:id/home_gridview_buttons"
+- tapOn: "More options"
+- tapOn: "Change Language"
+- assertVisible: "Choose your Language"
+- assertVisible:
+    id: "org.commcare.dalvik:id/choices_list_view"
+# CAVEAT: the list is populated from the currently-installed app's own locale
+# bundle (ChangeLocaleUtil.getLocaleNames() -> HomeScreenBaseActivity.java
+# showLocaleChangeMenu()/buildLocaleChoices()), not a fixed CommCare string -
+# each locale's display name is whatever that app's translation supplies for
+# its own locale code (e.g. "ar"). "Arabic" is not independently verified
+# against the specific RTL build ("Setup 1"'s deployed app); if that build
+# labels the option differently, update this selector to match.
+- tapOn: "Arabic"
+- assertNotVisible: "Choose your Language"
+- assertVisible:
+    id: "org.commcare.dalvik:id/home_gridview_buttons"

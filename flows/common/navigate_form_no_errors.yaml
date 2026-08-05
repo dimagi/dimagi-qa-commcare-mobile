@@ -1,0 +1,65 @@
+appId: org.commcare.dalvik
+---
+# Reusable: from the home screen ("Start" visible), open FORM_NAME, page
+# through a few questions with the form-entry Next button, exit WITHOUT
+# saving, and assert no generic/crash error dialog appeared - lands back on
+# the home screen. Backs the sheet's repeated "Navigate through Form X,
+# verify you receive no errors" verification steps.
+# Params: FORM_NAME - literal on-screen form/module name to tap (per the
+# calling scenario's own sheet wording, e.g. "Form 1"/"Form One").
+#
+# GENERIC/BEST-EFFORT CAVEAT: the specific pre-provisioned QA apps under test
+# here ("Mobile Updates - Test 1_2", "Mobile Updates - Test 3", "Mobile
+# Updates Test 4/5 Master") have menu/form structures that could not be
+# verified against any source in this repo (they are QA-only apps, not part
+# of the commcare-android source). FORM_NAME is tapped by text, assuming the
+# on-screen label matches the sheet's own shorthand exactly - a reasonable
+# but UNVERIFIED assumption. If it doesn't hold in practice, replace the
+# `tapOn: "${FORM_NAME}"` below with a position/index tap on
+# id/screen_suite_menu_list instead - see flows/common/submit_only_form.yaml
+# for that pattern (there used for a single-item list; extend with an index
+# for a multi-item one).
+#
+# Selectors verified against commcare-android source (read-only reference,
+# never modified by this repo):
+#   app/src/org/commcare/activities/HomeButtons.java (home.start -> "Start"
+#     tile -> enterRootModule()) enters the module/form list
+#     (app/res/layout/screen_suite_menu.xml -> id/screen_suite_menu_list).
+#   app/res/layout/screen_form_entry.xml +
+#     app/src/org/commcare/activities/components/FormNavigationUI.java ->
+#     id/nav_btn_next.
+#   app/res/values/strings.xml -> quit_form_title="Exit Form?",
+#     do_not_save="EXIT WITHOUT SAVING" (shown by
+#     FormEntryDialogs.createQuitDialog() on back-press when there are
+#     unsaved answers - tap is marked optional since the dialog may not
+#     appear if nothing was actually answered).
+#   Generic/unrecoverable error text (app/src/org/commcare/activities/
+#     UnrecoverableErrorActivity.java, android_translatable_strings.txt):
+#     activity.task.error.generic="Unexpected error! Please try again." and
+#     app.handled.error.explanation="CommCare will now restart." - matched
+#     case-insensitively as a best-effort net since there is no single fixed
+#     error-dialog resource id (dialogs here are built dynamically via
+#     StandardAlertDialog/AlertDialogFragment).
+- tapOn: "Start"
+- tapOn: "${FORM_NAME}"
+- assertVisible:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+    timeout: 5000
+- repeat:
+    times: 4
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/nav_btn_next"
+          optional: true
+- assertNotVisible:
+    text: "(?i).*unexpected error.*"
+- assertNotVisible:
+    text: "(?i).*commcare will now restart.*"
+- back
+- tapOn:
+    text: "(?i).*exit without saving.*"
+    optional: true
+- back
+- assertVisible:
+    text: "Start"
+    timeout: 5000

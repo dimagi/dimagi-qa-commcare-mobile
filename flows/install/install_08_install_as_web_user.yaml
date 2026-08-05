@@ -1,0 +1,52 @@
+appId: org.commcare.dalvik
+tags:
+  - install
+  - partial
+---
+# Master Mobile Plan (2026) > Install > "Install 8" - Install app as a web user.
+# PARTIAL: needs a valid HQ web-user email/password.
+- launchApp
+- tapOn: "More options"
+- tapOn: "See Apps for My User"
+- tapOn:
+    id: "org.commcare.dalvik:id/switch_button"
+- tapOn:
+    id: "org.commcare.dalvik:id/edit_email"
+# Confirmed against real BrowserStack runs: the FIRST tap that opens the
+# keyboard on a fresh device session can trigger Gboard's one-time "Get Smart
+# content directly in the keyboard" system consent dialog - a full-screen
+# OS-level overlay unrelated to this app that blocks every subsequent tap
+# until dismissed. `optional: true` makes this a no-op when it doesn't appear.
+- tapOn:
+    text: "Skip"
+    optional: true
+- inputText: "${HQ_WEB_USER_EMAIL}"
+- tapOn:
+    id: "org.commcare.dalvik:id/edit_password"
+- inputText: "${HQ_WEB_USER_PASSWORD}"
+- hideKeyboard
+- tapOn:
+    text: "Skip"
+    optional: true
+- tapOn:
+    id: "org.commcare.dalvik:id/get_apps_button"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/apps_list_view"
+    timeout: 30000
+- tapOn:
+    id: "org.commcare.dalvik:id/apps_list_view"
+# Confirmed against a real BrowserStack run: this tap actually DOES trigger a
+# real install (a follow-up screenshot showed "Setting Up App, Step 67 of
+# 90" actively progressing) even when Maestro reports the tap itself as
+# FAILED - it can't reconcile its hierarchy-change check with the heavy
+# native "Setting Up App" dialog taking over the screen. optional:true stops
+# that self-reported failure from aborting the flow; the extendedWaitUntil
+# below is the real success gate.
+- tapOn:
+    id: "org.commcare.dalvik:id/install_app_button"
+    retryTapIfNoChange: false
+    optional: true
+- extendedWaitUntil:
+    visible: "Setting Up App"
+    timeout: 60000

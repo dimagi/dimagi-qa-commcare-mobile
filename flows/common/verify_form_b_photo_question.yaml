@@ -1,0 +1,52 @@
+appId: org.commcare.dalvik
+---
+# Reusable: from the home screen, open FORM_NAME and verify it opens without
+# error and (per the sheet's "Update 15/19 - Unchanged form verification")
+# contains a photo-upload question, then exits without saving - lands back
+# on the home screen.
+# Params: FORM_NAME - the sheet always calls this "Form B".
+#
+# GENERIC/BEST-EFFORT CAVEAT: the sheet describes this as "a question asking
+# to upload a picture". The real image widget
+# (app/src/org/commcare/views/widgets/ImageWidget.java) exposes TWO buttons,
+# both created programmatically with NO fixed resource id (so text is the
+# only way to target them):
+#   - mCaptureButton, text = R.string.capture_image = "Take Picture"
+#     (app/res/values/strings.xml line 174) - opens the camera.
+#   - mChooseButton, text = R.string.choose_image = "Choose Image"
+#     (app/res/values/strings.xml line 223) - opens a gallery/file picker,
+#     the closer match to the sheet's "upload a picture" wording (see also
+#     flows/common/pick_first_gallery_image.yaml for the picker-side
+#     follow-up, not needed here since we only verify the question is
+#     present, not actually attach an image).
+# This asserts on either button's text and is also POSITION-ASSUMED (checks
+# the form's first screen), since the real question order in the
+# pre-provisioned "Mobile Updates Test 4/5 Master" QA app could not be
+# verified against any source in this repo.
+#
+# Selectors verified against commcare-android source (read-only reference,
+# never modified by this repo) - same citations as
+# flows/common/navigate_form_no_errors.yaml:
+#   HomeButtons.java (home.start) -> screen_suite_menu.xml
+#     (id/screen_suite_menu_list); screen_form_entry.xml +
+#     FormNavigationUI.java -> id/nav_btn_next; strings.xml ->
+#     quit_form_title="Exit Form?", do_not_save="EXIT WITHOUT SAVING".
+- tapOn: "Start"
+- tapOn: "${FORM_NAME}"
+- assertVisible:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+    timeout: 5000
+- assertVisible:
+    text: "(?i).*(take picture|choose image).*"
+- assertNotVisible:
+    text: "(?i).*unexpected error.*"
+- assertNotVisible:
+    text: "(?i).*commcare will now restart.*"
+- back
+- tapOn:
+    text: "(?i).*exit without saving.*"
+    optional: true
+- back
+- assertVisible:
+    text: "Start"
+    timeout: 5000

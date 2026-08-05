@@ -1,0 +1,52 @@
+appId: org.commcare.dalvik
+tags:
+  - recovery_measures
+  - automatable
+---
+# Master Mobile Plan (2026) > Recovery Measures > Point Release
+# (Test Case ID "CC Reinstall Needed 8" only - the Automatable row; "CC
+# Reinstall Needed 6" and "7" are out of scope per task instructions, since
+# both need a specific historical APK (2.49.4 / 2.49.5) installed first).
+#
+# Summary per coverage_matrix.csv: "Update to test version, verify unblocked
+# [i.e. no longer forced-update-blocked], submit a form successfully." This
+# is the natural continuation of cc_update_needed_flow.yaml's forced-update
+# scenario (see that file's header for the MEASURE_TYPE_CC_UPDATE /
+# PromptApkUpdateActivity source citations and its CAVEAT about the actual
+# CC-binary update happening outside Maestro/Play-Store-dependent) - once
+# the device is updated to the target/"test" CommCare point-release version
+# by whatever out-of-band means resolved that update, this flow verifies
+# the app is not just past the block screen but fully functional by
+# completing a real form submission.
+#
+# UNVERIFIED TEXT WARNING: per docs/FRAMEWORK.md's "Known gaps" item 4 and
+# reinstall_update_app_flow.yaml's header (this repo's convention for
+# Recovery Measures), the forced-update regex below is best-effort
+# case-insensitive even though it is grounded in a real hardcoded string -
+# see cc_update_needed_flow.yaml's header for the citation
+# (apk.update.required.title = "New version of ${0} is Required").
+#
+# Form-submission step reuses flows/common/submit_only_form.yaml verbatim -
+# see that file's header for its own CAVEAT (assumes the seated test app has
+# exactly one module and one form) and selector citations
+# (InstrumentationUtility.kt openModule()/openForm()/submitForm(),
+# R.id.screen_suite_menu_list / nav_btn_next / nav_btn_finish). The final
+# assertion uses form.entry.complete.save.success = "Form successfully
+# completed" (android_translatable_strings.txt:169) - a real, verified
+# string, used here as a substring regex per this workflow's regex
+# convention rather than an exact match.
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+# "CC Reinstall Needed 8" - verify unblocked: the device has already been
+# updated to the test/point-release version (see header comment), so no
+# forced-update prompt should appear and the home screen should load.
+- assertVisible: "Start"
+- assertNotVisible:
+    text: "(?i).*update.*required.*"
+# "CC Reinstall Needed 8" (cont.) - submit a form successfully.
+- runFlow: ../common/submit_only_form.yaml
+- assertVisible:
+    text: "(?i).*form.*success.*completed.*"

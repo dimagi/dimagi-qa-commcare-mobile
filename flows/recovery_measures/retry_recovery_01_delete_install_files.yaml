@@ -1,0 +1,57 @@
+appId: org.commcare.dalvik
+tags:
+  - recovery_measures
+  - partial
+---
+# Master Mobile Plan (2026) > Recovery Measures > Retry Recovery
+# (Test Case ID "Retry Recovery 1" - "Delete files at app-private install
+# path", Partial per coverage_matrix.csv: "App-private storage isn't
+# reachable from a standard file manager on modern Android - needs adb
+# shell").
+#
+# PREREQUISITE (out of Maestro's scope - run this via adb BEFORE this flow,
+# with the target CommCare app already installed/seated and a
+# MEASURE_TYPE_APP_UPDATE / MEASURE_TYPE_APP_REINSTALL_AND_UPDATE recovery
+# measure already pending, established by the same kind of out-of-scope HQ
+# setup that update_app_flow.yaml/reinstall_update_app_flow.yaml's headers
+# describe - this flow does not attempt to create that precondition, only
+# to corrupt the install directory once it exists):
+#
+#   adb shell run-as org.commcare.dalvik rm -rf \
+#     /storage/emulated/0/Android/data/org.commcare.dalvik/files/app/<APP_ID>/commcare/install
+#
+# Path derivation, verified against commcare-android source (read-only
+# reference, never modified by this repo):
+#   - CommCareApplication.getAndroidFsRoot() (app/src/org/commcare/
+#     CommCareApplication.java:1036-1039) = "<external storage>/Android/data/
+#     org.commcare.dalvik/files/"
+#   - CommCareApp.storageRoot() (app/src/org/commcare/CommCareApp.java:94-96)
+#     appends "app/" + record.getApplicationId() + "/" (the per-app
+#     ApplicationRecord ID, NOT the org.commcare.dalvik package name - swap
+#     in the actual seated app's ID for <APP_ID> above)
+#   - GlobalConstants.FILE_CC_INSTALL (app/src/org/commcare/utils/
+#     GlobalConstants.java:7) = "commcare/install"
+# so the full path is storageRoot() + "commcare/install", matching the
+# task's literal "android/data/org.commcare.dalvik/files/app/:appid/
+# commcare/install".
+#
+# CAVEAT ON run-as: this path is under external storage (Android/data/...),
+# not /data/data/... - but Android 11+'s scoped-storage sandboxing still
+# blocks a plain `adb shell rm` from touching another app's Android/data
+# subtree on many devices/BrowserStack real-device images, hence still
+# needing `run-as <package>` to assume the app's own uid before the rm, per
+# the task's own framing of this dependency ("App-private storage isn't
+# reachable ... needs adb shell"). Not exercised against a live BrowserStack
+# session in this environment - verify the run-as step is actually necessary
+# (vs. a plain `adb shell rm`) on your target device image before relying on
+# it.
+#
+# ON-DEVICE MAESTRO CONTENT (per task scope, this is deliberately the ONLY
+# step this flow performs - just closing and reopening CommCare, so that the
+# already-pending recovery measure re-executes against the now-missing
+# install directory and is expected to fail/offer Retry, which
+# retry_recovery_02_network_toggle_retry.yaml exercises independently rather
+# than chaining off of this file, per docs/FRAMEWORK.md's "each flow must be
+# runnable in isolation" convention):
+- stopApp
+- launchApp

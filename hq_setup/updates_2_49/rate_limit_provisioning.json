@@ -1,0 +1,11 @@
+{
+  "_comment": "Master Mobile Plan (2026) > Updates (coverage_matrix.csv XLSX Tab 'Updates', 2.49 grab-bag section) > 'Rate limit 1' - 'Download rate-limited app + login'. Marks the dedicated 'Rate Limiting' test app's latest build Released via HQ so the device can install/download it (the on-device install+login half of this row, plus the actual rate-limit-triggering submit loop, is covered on-device by flows/updates_2_49/rate_limit_02_04_popup_dont_show_toast.yaml, which explicitly ASSUMES this app is already installed and logged into - see that flow's header comment). Run via `python scripts/hq_client.py hq_setup/updates_2_49/rate_limit_provisioning.json`. app_id/saved_app_id are placeholders - fill in with the 'Rate Limiting' test app's current app_id/build id (these test apps get rebuilt between QA cycles, confirm before relying on stale ids).",
+  "actions": [
+    {
+      "type": "mark_build_status",
+      "app_id": "REPLACE_WITH_RATE_LIMITING_APP_ID",
+      "saved_app_id": "REPLACE_WITH_RATE_LIMITING_BUILD_ID",
+      "is_released": true
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+appId: org.commcare.dalvik
+tags:
+  - recovery_measures
+  - automatable
+---
+# Master Mobile Plan (2026) > Recovery Measures > Heartbeat Request
+# Improvement (Test Case ID "Heartbeat Request Improvement 1" - "Install
+# Test One (Released)/Test Two (In Test) via HQ, login, submit a form").
+# Only the HQ half (marking Test One released and Test Two in-test) is
+# Partial - run hq_setup/recovery_measures/heartbeat_1_setup.json's actions
+# BEFORE this flow (see that file's header). The on-device half automated
+# here is plain login + a single form submission, which per task framing is
+# "fine"/fully Automatable once that HQ state exists.
+#
+# Reuses flows/common/submit_only_form.yaml verbatim - see that file's own
+# header for its CAVEAT (assumes the seated test app has exactly one module
+# and one form) and selector citations (InstrumentationUtility.kt
+# openModule()/openForm()/submitForm(), R.id.screen_suite_menu_list /
+# nav_btn_next / nav_btn_finish - all in commcare-android, read-only
+# reference, never modified by this repo). Not re-deriving those selectors
+# here to avoid duplicating that file's citations.
+#
+# Note on scope: "Heartbeat Request Improvement" as a feature is about
+# org.commcare.heartbeat.HeartbeatRequester's periodic ping to HQ (which,
+# per HeartbeatRequester.java, can also update HiddenPreferences'
+# "latest CommCare version" the same way RecoveryMeasuresRequester does) -
+# this flow does not attempt to assert anything about the heartbeat request
+# itself firing or its timing (that is what "Heartbeat Request Improvement
+# 2" - the 1-hour real-time wait - covers, and that row is explicitly out of
+# scope per task instructions). This flow only covers the login+submit
+# on-device steps of row 1.
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- assertVisible: "Start"
+- runFlow: ../common/submit_only_form.yaml
+- assertVisible:
+    text: "(?i).*form.*success.*completed.*"

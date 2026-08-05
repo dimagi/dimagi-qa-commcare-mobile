@@ -1,0 +1,16 @@
+appId: org.commcare.dalvik
+---
+# Reusable: log in using a PIN instead of a password. Once a PIN is set for the
+# user, LoginActivity's password field (id/edit_password) switches to PIN entry
+# mode in place - same field id, different hint/behavior - per
+# login.attempt.fail.pin.detail in android_translatable_strings.txt ("...enter
+# the 4 digit PIN number that you chose...").
+- tapOn:
+    id: "org.commcare.dalvik:id/edit_username"
+- inputText: "${USERNAME}"
+- tapOn:
+    id: "org.commcare.dalvik:id/edit_password"
+- inputText: "${PIN}"
+- hideKeyboard
+- tapOn:
+    id: "org.commcare.dalvik:id/login_button"

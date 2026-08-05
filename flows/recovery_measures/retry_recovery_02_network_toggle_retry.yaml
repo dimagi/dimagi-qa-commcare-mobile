@@ -1,0 +1,112 @@
+appId: org.commcare.dalvik
+tags:
+  - recovery_measures
+  - automatable
+---
+# Master Mobile Plan (2026) > Recovery Measures > Retry Recovery
+# (Test Case ID "Retry Recovery 2" - "Reopen CommCare, recovery screen
+# triggers, disable network mid-recovery, verify Retry button present and
+# recovery succeeds after reconnecting"). Written as a self-contained flow
+# (per docs/FRAMEWORK.md's "each flow must be runnable in isolation"
+# convention) rather than chained after retry_recovery_01_delete_install_
+# files.yaml - it assumes the same out-of-scope precondition those other
+# Recovery Measures flows assume (a MEASURE_TYPE_APP_UPDATE or
+# MEASURE_TYPE_APP_REINSTALL_AND_UPDATE recovery measure already pending on
+# the currently-seated app via out-of-scope HQ setup), and re-establishes it
+# via login rather than depending on retry_recovery_01 having just run.
+#
+# Verified against commcare-android source (read-only reference, never
+# modified by this repo) - this is the SAME on-device screen used by
+# update_app_flow.yaml/reinstall_update_app_flow.yaml/offline_reinstall_
+# update_app_flow.yaml (ExecuteRecoveryMeasuresActivity /
+# ExecuteRecoveryMeasuresPresenter), not the PromptCCReinstallActivity /
+# PromptApkUpdateActivity screens used by cc_reinstall_needed_flow.yaml /
+# cc_update_needed_flow.yaml (those have no Retry button):
+#   - detail text: R.string.recovery_measure_detail = "Recovery procedures
+#     have been initiated for your CommCare App due to a problem with it.
+#     Please wait..." (app/res/values/strings.xml:305) - a real hardcoded
+#     string, not per-app HQ config.
+#   - Retry button: R.id.retry_button (app/res/layout/
+#     execute_recovery_measures.xml:56-64), text R.string.
+#     recovery_measure_retry = "Retry Recovery" (strings.xml:307) - shown via
+#     ExecuteRecoveryMeasuresActivity.enableRetry() only when
+#     ExecuteRecoveryMeasuresPresenter.onAsyncExecutionFailure() runs, i.e.
+#     the in-progress measure's resource/update task actually failed
+#     (app/src/org/commcare/recovery/measures/
+#     ExecuteRecoveryMeasuresPresenter.java:261-273).
+#   - Retry itself: tapping retry_button calls mPresenter.retry() ->
+#     clearState() + executePendingMeasures() (same file, retry()/
+#     executePendingMeasures()), i.e. it restarts the SAME pending measure
+#     from scratch - it does not require a fresh login.
+#
+# NETWORK TOGGLE MECHANISM: BrowserStack's own Maestro v2 build-trigger API
+# (POST .../app-automate/maestro/v2/android/build) has NO documented
+# network-condition/network-profile/airplane-mode capability parameter as of
+# this writing (checked live via browserstack.com/docs/app-automate/api-
+# reference/maestro/builds and .../maestro/references - those network-
+# profile capabilities exist for BrowserStack's Appium/Flutter products, not
+# their Maestro product). Maestro itself, however, ships first-class
+# device-level commands for exactly this - `setAirplaneMode: enabled|
+# disabled` and `toggleAirplaneMode` (https://docs.maestro.dev/reference/
+# commands-available/setairplanemode, .../toggleairplanemode) - documented
+# as Android-only (a no-op on iOS/web, which is fine since this app is
+# Android-only) with no stated root/real-device-vs-emulator restriction.
+# Since these are plain Maestro flow commands (not a BrowserStack capability
+# flag), they execute the same way regardless of which cloud runs the
+# Maestro session, so this flow uses `setAirplaneMode` directly rather than
+# a BrowserStack-side toggle - there is nothing to configure at the
+# run_suite.py/browserstack_client.py level for this to work.
+#
+# CAVEAT (timing): airplane mode must be enabled WHILE the pending measure's
+# download/resource-fetch is actually in flight for it to fail the way this
+# test case expects - if the device's network is fast enough that the
+# measure completes before setAirplaneMode: enabled takes effect, no retry
+# button will appear and the extendedWaitUntil below will time out. This is
+# the same class of timing-sensitive interleaving flagged in cc_update_needed
+# _flow.yaml's CAVEAT and docs/FRAMEWORK.md's "Known gaps" item 5's spirit -
+# not exercised against a live BrowserStack session in this environment;
+# tune the timing (e.g. toggle airplane mode immediately after login rather
+# than after the detail text appears) if this proves too fast to catch in
+# practice.
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+# Retry Recovery 2 (part 1) - recovery screen triggers automatically on login
+# because a measure is already pending (see header precondition).
+- assertVisible:
+    text: "(?i).*recovery (procedures|measures).*initiated.*"
+# Retry Recovery 2 (part 2) - disable network mid-recovery. See header's
+# NETWORK TOGGLE MECHANISM and timing CAVEAT.
+- setAirplaneMode: enabled
+# Retry Recovery 2 (part 3) - verify the Retry button appears once the
+# in-flight measure fails due to no network.
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/retry_button"
+    timeout: 60000
+- assertVisible:
+    id: "org.commcare.dalvik:id/retry_button"
+- assertVisible:
+    text: "Retry Recovery"
+# Retry Recovery 2 (part 4) - reconnect network, then tap Retry.
+- setAirplaneMode: disabled
+- tapOn:
+    id: "org.commcare.dalvik:id/retry_button"
+# Retry Recovery 2 (part 5) - recovery succeeds this time; mirrors update_app
+# _flow.yaml's/offline_reinstall_update_app_flow.yaml's pattern of an
+# auto-logout on successful measure completion, then a clean re-login with
+# no further recovery prompt.
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/edit_username"
+    timeout: 60000
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- assertVisible: "Start"
+- assertNotVisible:
+    text: "(?i).*recovery (procedures|measures).*initiated.*"

@@ -1,0 +1,44 @@
+appId: org.commcare.dalvik
+tags:
+  - mobile_pins
+  - automatable
+---
+# Master Mobile Plan (2026) > Mobile Pins > "Pin 13" - Login using changed PIN 2
+# (i.e. the PIN chosen via the Reset PIN flow in pin_12).
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- runFlow:
+    file: ../common/set_pin_via_dialog.yaml
+    env:
+      PIN: "1234"
+- runFlow: ../common/logout.yaml
+- tapOn: "More options"
+- tapOn: "Forgot PIN?"
+- tapOn:
+    id: "org.commcare.dalvik:id/edit_password"
+- inputText: "${CC_TEST_PASSWORD}"
+- hideKeyboard
+- tapOn:
+    id: "org.commcare.dalvik:id/login_button"
+- assertVisible: "Reset your PIN?"
+- tapOn: "Yes, set my PIN now"
+- tapOn:
+    id: "org.commcare.dalvik:id/pin_entry"
+- inputText: "9999"
+- tapOn:
+    id: "org.commcare.dalvik:id/pin_confirm_button"
+- tapOn:
+    id: "org.commcare.dalvik:id/pin_entry"
+- inputText: "9999"
+- tapOn:
+    id: "org.commcare.dalvik:id/pin_confirm_button"
+- runFlow: ../common/logout.yaml
+- runFlow:
+    file: ../common/login_with_pin.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PIN: "9999"
+- assertVisible: "Start"

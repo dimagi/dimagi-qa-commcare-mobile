@@ -1,0 +1,60 @@
+appId: org.commcare.dalvik
+tags:
+  - multimedia
+  - partial
+---
+# Master Mobile Plan (2026) > Multimedia > "Gif" - Gif renders in first
+# question of the "Gif/Remove Image" form.
+#
+# PARTIAL DEPENDENCY (per coverage_matrix.csv: "Element-visible assertion
+# automatable; 'is it actually animating' judgment skipped"): assumes the
+# Multimedia QA test app is installed with a "Multimedia" menu containing the
+# same "Gif/Remove Image" form used by photo_02_can_remove_chosen_photo.yaml
+# (see that flow's header comment for the citation of this form's
+# navigation path). Navigation is tapOn-by-visible-text so it matches
+# regardless of list position, but the exact form structure can't be
+# verified without that specific CCZ.
+#
+# This is checking the question's HINT image/media (attached to the
+# question's text/label), NOT a user-chosen answer image - a different
+# mechanism from photo_02's ImageWidget/discard_image flow. Verified against
+# source (read-only reference, not modified):
+#   app/src/org/commcare/views/media/MediaLayout.java setupImage()
+#     (line 257-302): if the hint image file's local URI ends in ".gif"
+#     (IMAGE_GIF_EXTENSION), it's loaded via Glide.asGif() instead of a plain
+#     setImageBitmap() - i.e. gif hint images get real animated rendering.
+#   Which ImageView actually becomes VISIBLE depends on useResizingImageView()
+#     (line 426-432): only true when Auto-Resize Images (the Image Resize 5/
+#     10/15/20 test cases' HQ setting) is "full"/"half"/"width" AND
+#     smart-inflation isn't enabled - i.e. the DEFAULT ("None") resize
+#     setting uses the plain id/image ImageView, not id/resizing_image. Since
+#     this app's current resize setting at test time is unverified, both are
+#     asserted with `optional: true` below rather than picking one.
+#
+# "is it actually animating" is an explicit human-judgment call per the
+# sheet's own note and coverage_matrix.csv - deliberately NOT asserted here,
+# only that the image element itself is visible/rendered.
+#
+# Exits without saving (this flow only checks the hint display, it doesn't
+# need to submit) - back/"exit without saving" pattern verified against
+# flows/common/navigate_form_no_errors.yaml's citations (quit_form_title=
+# "Exit Form?", do_not_save="EXIT WITHOUT SAVING").
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- tapOn: "Start"
+- tapOn: "Multimedia"
+- tapOn: "Gif/Remove Image"
+- assertVisible:
+    id: "org.commcare.dalvik:id/image"
+    optional: true
+- assertVisible:
+    id: "org.commcare.dalvik:id/resizing_image"
+    optional: true
+- back
+- tapOn:
+    text: "(?i).*exit without saving.*"
+    optional: true
+- back

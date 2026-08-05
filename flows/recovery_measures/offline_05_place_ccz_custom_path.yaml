@@ -1,0 +1,65 @@
+appId: org.commcare.dalvik
+tags:
+  - recovery_measures
+  - partial
+---
+# Master Mobile Plan (2026) > Recovery Measures > Recovery: Offline Reinstall
+# and Update App > "Recovery (offline) 5" - "Publish + download CCZ, move to
+# a custom non-Downloads device path".
+#
+# PARTIAL - REAL PREREQUISITE GAP, not fully automated by this flow or by
+# this repo's orchestrator (scripts/run_suite.py has no adb-push step for
+# any flow today - checked scripts/run_suite.py and scripts/browserstack_client.py,
+# neither shell out to `adb`). This flow file exists to document the exact
+# manual/scripted step someone must run BEFORE this flow, and to assert the
+# on-device consequence (the CCZ is reachable from a location other than the
+# system file picker's default Downloads view) as far as Maestro is able to
+# check that non-app-specific fact. Do NOT read this file's tags as claiming
+# full automation - it is intentionally still "partial" for this exact
+# reason, matching the coverage_matrix.csv row's own "Needs adb push to a
+# custom (non-Downloads) path" dependency note.
+#
+# REQUIRED MANUAL/CI PRE-STEP (not run by Maestro/this flow):
+#   1. Publish + download the target CCZ by whatever means your QA cycle
+#      normally uses (HQ app-preview CCZ download link, or
+#      scripts/download_apk.py's sibling process for CCZ builds - this repo
+#      has no dedicated CCZ-download script to point to, only download_apk.py
+#      for the CommCare binary itself).
+#   2. Push it to a BrowserStack App Automate device's storage at a path
+#      OTHER than the standard public Downloads directory
+#      (Environment.DIRECTORY_DOWNLOADS, which resolves to /sdcard/Download/
+#      on a typical Android device - this is general Android platform
+#      knowledge, not something read out of commcare-android source, since
+#      CommCare itself does not choose this path; the system file picker
+#      does):
+#        adb push <local-path-to>.ccz /sdcard/RecoveryMeasuresTest/test.ccz
+#      BrowserStack App Automate's own file-push mechanism (if using their
+#      API instead of a raw adb session against a device already reserved
+#      for this session) is the "Custom Media"/file upload feature - see
+#      BrowserStack's App Automate docs; this repo's browserstack_client.py
+#      does not currently wrap that endpoint, so wiring it in is future work,
+#      not something this flow file can do from inside a Maestro YAML.
+#   3. Only once that push has completed should this flow (or
+#      offline_06_select_ccz_via_picker.yaml, which is the flow that actually
+#      drives the "Select CCZ" -> file-picker step) be run.
+#
+# The path/filename above (/sdcard/RecoveryMeasuresTest/test.ccz) is this
+# flow's own placeholder convention for referring to "wherever the adb push
+# above landed the file" - offline_06_select_ccz_via_picker.yaml's file-picker
+# navigation references the same folder/file name in its comments. Change
+# both consistently if your real QA cycle uses a different custom path.
+#
+# This flow does not perform any on-device Maestro steps of its own beyond a
+# plain login/logout - there is nothing CommCare-specific to assert about a
+# file simply existing at a custom OS path before the recovery measure even
+# fires (that only becomes observable once "Select CCZ" is tapped, which is
+# offline_06_select_ccz_via_picker.yaml's job). Kept as a real (if thin) flow
+# file, rather than folding this note only into a comment elsewhere, so
+# run_suite.py's tag-based flow discovery still surfaces this row and its gap
+# instead of it silently vanishing from the suite.
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- runFlow: ../common/logout.yaml

@@ -1,0 +1,72 @@
+appId: org.commcare.dalvik
+tags:
+  - multimedia
+  - partial
+---
+# Master Mobile Plan (2026) > Multimedia > "Image Resize 25" - Photo taken
+# (via device camera) per question + submit.
+#
+# BEST-EFFORT / GENUINELY FLAKY (flagging clearly up front, the same way
+# photo_02_can_remove_chosen_photo.yaml flags its own caveats):
+# coverage_matrix.csv's own Dependency/Reason for this exact row says
+# outright "Camera capture is flaky/unsupported on most cloud emulators;
+# feasible only if the BrowserStack device supports an injected camera
+# image." This flow is written on that same understanding and should be
+# treated as a best-effort attempt, not a reliable CI gate.
+#
+# Unlike Image Resize 26 (gallery pick), there is no Maestro
+# `addMedia`-equivalent for camera capture: ImageWidget.java's
+# mCaptureButton fires a real `android.provider.MediaStore.ACTION_IMAGE_
+# CAPTURE` intent (verified: buildSystemCaptureIntent(), line 291) which
+# hands off to whichever camera app is registered on the device/emulator -
+# a real capture UI Maestro doesn't control, whose ids/behavior vary by OS
+# build, vendor camera app, and BrowserStack's own per-device virtual/
+# injected camera feed. The camera-side interaction is delegated to
+# ../common/capture_camera_photo.yaml (see that file's header for the full
+# best-effort/unverified caveat - every tap there is optional so a
+# non-matching camera UI degrades to a silent no-op rather than a hard
+# failure, but that also means this flow cannot guarantee a photo was
+# actually captured on a given device image).
+#
+# PARTIAL DEPENDENCY (menu/form structure, same assumption as
+# image_resize_01_04_default_setting.yaml): assumes the "Basic Tests"
+# Multimedia QA test app's "Image Resize" area exposes a form with four
+# image questions, each offering a "Take Picture" button, mirroring how
+# image_resize_26_photo_chosen.yaml's own header describes the parallel
+# "Choose Image" form for the gallery-pick variant of this same test
+# family. tapOn is by visible text throughout so it's resilient to list
+# position, but the exact four-question structure couldn't be verified
+# without that specific CCZ.
+#
+# "Take Picture" button text verified against res/values/strings.xml:174
+# (capture_image = "Take Picture"). nav_btn_next / nav_btn_finish ids
+# verified the same way as image_resize_26_photo_chosen.yaml -
+# res/layout/screen_form_entry.xml and FormAttachmentUploadTest.java's use
+# of R.id.nav_btn_next/nav_btn_finish to advance/submit a form.
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- tapOn: "Start"
+- tapOn: "Multimedia"
+- tapOn: "Image Resize"
+# Questions 1-3: take a photo, then advance.
+- repeat:
+    times: 3
+    commands:
+      - tapOn: "Take Picture"
+      - runFlow: ../common/capture_camera_photo.yaml
+      - tapOn:
+          id: "org.commcare.dalvik:id/nav_btn_next"
+          optional: true
+# Question 4 (last): take a photo, then finish instead of advancing.
+- tapOn: "Take Picture"
+- runFlow: ../common/capture_camera_photo.yaml
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_finish"
+    timeout: 10000
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"
+    optional: true

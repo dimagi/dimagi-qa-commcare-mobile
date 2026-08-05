@@ -1,0 +1,104 @@
+appId: org.commcare.dalvik
+tags:
+  - multimedia
+  - partial
+---
+# Master Mobile Plan (2026) > Multimedia > "MM4" - Question Image/Audio/Select
+# Choice navigation + submit.
+#
+# PARTIAL DEPENDENCY (per coverage_matrix.csv: "Navigation/tap/checkbox steps
+# automatable; 'audio plays correctly' is a human judgment call and is
+# skipped" - kept tagged `partial`, but the on-device navigation below is
+# fully automated): this assumes the Multimedia QA test app is installed
+# with a "Multimedia" menu containing a "Media Demo" form (name taken
+# verbatim from the task description - could not be verified against any
+# source in this repo, since it's a QA-only app, not part of
+# commcare-android). tapOn-by-visible-text so it matches regardless of list
+# position.
+#
+# AUDIO CAVEAT (matches coverage_matrix.csv's own note): this only taps the
+# hint-audio icon per question and moves on - it does NOT assert the audio
+# actually plays, since that's an explicit human-judgment call per the sheet.
+# Selector verified against source (read-only reference, not modified):
+#   app/res/layout/media_layout.xml -> id/audio_button (ImageButton, no fixed
+#     text - MediaLayout.java:437 wires it via findViewById(R.id.audio_button))
+#   MediaLayout.java:180-185 setupStandardAudio() only VISIBLE when the
+#     question has a hint audioURI at all, so this tap is marked optional in
+#     case a given question has no audio hint.
+#
+# IMAGE CAVEAT: "verify images display" is checked via the same MediaLayout
+# hint-image mechanism used by gif_can_add_gif.yaml (see that flow's header
+# comment for the full setupImage()/useResizingImageView() citation) - both
+# id/image and id/resizing_image are asserted as optional since which one is
+# active depends on this app's Auto-Resize Images setting, which isn't known
+# here.
+#
+# SELECT CHOICE CAVEAT (UNVERIFIED, TODO before relying on this): SelectOneWidget
+# and SelectMultiWidget (app/src/org/commcare/views/widgets/SelectOneWidget.java,
+# SelectMultiWidget.java) create their RadioButton/CheckBox views with
+# dynamically-generated ids (`i + buttonIdBase`, buttonIdBase derived from
+# `prompt.getIndex().hashCode()`), NOT fixed Android resource ids - so there is
+# no stable `org.commcare.dalvik:id/...` selector Maestro could target here.
+# The only viable Maestro strategy is tapping the choice's own label TEXT, but
+# the real label text for this specific "Media Demo" form's select questions
+# could not be verified against any source in this repo. The two placeholder
+# labels below ("Yes" / "Option 1") are GUESSES, marked `optional: true` so a
+# mismatch skips rather than fails the flow - replace them with this app's
+# actual choice-label text once the real CCZ is available.
+#
+# nav_btn_next / nav_btn_finish ids verified against res/layout/screen_form_entry.xml
+# and FormAttachmentUploadTest.java's use of R.id.nav_btn_next/nav_btn_finish.
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- tapOn: "Start"
+- tapOn: "Multimedia"
+- tapOn: "Media Demo"
+- repeat:
+    times: 8
+    while:
+      visible:
+        id: "org.commcare.dalvik:id/nav_btn_next"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/audio_button"
+          optional: true
+      - assertVisible:
+          id: "org.commcare.dalvik:id/image"
+          optional: true
+      - assertVisible:
+          id: "org.commcare.dalvik:id/resizing_image"
+          optional: true
+      # TODO(verify): replace with this app's real select-choice label text.
+      - tapOn:
+          text: "Yes"
+          optional: true
+      - tapOn:
+          text: "Option 1"
+          optional: true
+      - tapOn:
+          id: "org.commcare.dalvik:id/nav_btn_next"
+# Final question (no nav_btn_next left) - same best-effort checks, then finish.
+- tapOn:
+    id: "org.commcare.dalvik:id/audio_button"
+    optional: true
+- assertVisible:
+    id: "org.commcare.dalvik:id/image"
+    optional: true
+- assertVisible:
+    id: "org.commcare.dalvik:id/resizing_image"
+    optional: true
+- tapOn:
+    text: "Yes"
+    optional: true
+- tapOn:
+    text: "Option 1"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_finish"
+    timeout: 10000
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"

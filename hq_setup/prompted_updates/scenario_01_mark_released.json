@@ -1,0 +1,11 @@
+{
+  "_comment": "Master Mobile Plan (2026) > Prompted Updates > Prompted Update Scenario 1 ('Optional CCZ update end-to-end'). Run once via `python scripts/hq_client.py hq_setup/prompted_updates/scenario_01_mark_released.json` after Setup 2/3 have run (latest build In Test, Prompt Updates to CommCare/App = On) and after flows/prompted_updates/scenario_01_optional_ccz_update.yaml's first login/logout/login checkpoint - releasing the latest build is what makes the optional 'New version of the application is available' prompt appear on the flow's next login. saved_app_id should be the SAME build that Setup 2 marked In Test. app_id/saved_app_id are placeholders - confirm current ids on the qateam domain before relying on this.",
+  "actions": [
+    {
+      "type": "mark_build_status",
+      "app_id": "REPLACE_WITH_PROMPTED_UPDATES_APP_ID",
+      "saved_app_id": "REPLACE_WITH_LATEST_BUILD_ID",
+      "is_released": true
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "_comment": "Master Mobile Plan (2026) > Update (coverage_matrix.csv XLSX Tab 'Update') > Install ('Star + install latest build'). Marks the Update-tab test app's latest saved build Released via HQ (the 'star' action) so it becomes a real target for the on-device update. Run via `python scripts/hq_client.py hq_setup/update/install_mark_released.json`, normally right after hq_setup/update/setup_make_new_version.json's create_new_build has produced a new build (fill saved_app_id in with that build's id - or with '$LAST_BUILD_ID' and run both files' actions through a single run_pre_step call/merged spec if chaining in one invocation is preferred; kept as two separate files here to mirror how hq_setup/prompted_updates/varying_prompt_setup.json chains create_new_build -> mark_build_status within one file, while still matching this task's split into a distinct Set up vs Install row).\n\nThe on-device half of this row ('install latest build') needs NO new flow: it's already exercised by the existing Install-tab flows (flows/install/install_07_install_as_mobile_user.yaml, flows/install/install_08_install_as_web_user.yaml) and by flows/update/update_target_developer_options_flow.yaml's own 'Update App' step, which perform the actual on-device install/update-check against whatever build HQ has marked Released. app_id/saved_app_id are placeholders - fill in with the Update-tab test app's current app_id and the specific build's saved_app_id before running.",
+  "actions": [
+    {
+      "type": "mark_build_status",
+      "app_id": "REPLACE_WITH_UPDATE_TAB_APP_ID",
+      "saved_app_id": "REPLACE_WITH_LATEST_BUILD_ID",
+      "is_released": true
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+appId: org.commcare.dalvik
+tags:
+  - mobile_pins
+  - automatable
+---
+# Master Mobile Plan (2026) > Mobile Pins > "Pin 9" - Change PIN - Menu Options.
+# Note: the app shows the same "PIN set successfully" toast (pin.set.success)
+# for both first-time set and change - the sheet's "PIN successfully changed"
+# wording is the tester's paraphrase, not a distinct string in the app.
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- runFlow:
+    file: ../common/set_pin_via_dialog.yaml
+    env:
+      PIN: "1234"
+- runFlow:
+    file: ../common/change_pin_via_menu.yaml
+    env:
+      CURRENT_PIN: "1234"
+      NEW_PIN: "5678"
+- assertVisible:
+    text: "PIN set successfully"
+    timeout: 3000
+    optional: true
+- runFlow: ../common/logout.yaml

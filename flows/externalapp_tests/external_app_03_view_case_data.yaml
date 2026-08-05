@@ -1,0 +1,58 @@
+appId: ${EXTAPP_APP_ID}
+tags:
+  - externalapp_tests
+  - partial
+env:
+  # UNVERIFIED PLACEHOLDER - see flows/externalapp_tests/README.md.
+  EXTAPP_APP_ID: "com.dimagi.mobileapitestingapp"
+  EXTAPP_BTN_VIEW_CASE_DATA: "View Case Data"
+  # Same "sansar" domain login Setup 3 uses - see setup_03_login_and_background.yaml.
+  EXTAPP_QA_USERNAME: "qa_user"
+  EXTAPP_QA_PASSWORD: "123"
+---
+# Master Mobile Plan (2026) > ExternalApp Tests > "External App 3" (View Case Data):
+#   1. In the ExternalApp, select View Case Data
+#   2. Ensure a series of cases are visible
+#   3. Click on a case
+#   4. Verify you see all the properties and values saved to that case
+#
+# Re-establishes CommCare logged-in-and-backgrounded state itself (see External App 1's
+# comment for why) - the companion app must already be installed via `--other-app` before
+# this flow runs (flows/externalapp_tests/README.md).
+- runFlow:
+    file: ../common/login_and_background.yaml
+    env:
+      USERNAME: ${EXTAPP_QA_USERNAME}
+      PASSWORD: ${EXTAPP_QA_PASSWORD}
+- launchApp:
+    appId: ${EXTAPP_APP_ID}
+- tapOn: "${EXTAPP_BTN_VIEW_CASE_DATA}"
+
+# STEP 2, "ensure a series of cases are visible" - the case list itself is rendered by the
+# companion app querying commcare-android's CaseDataContentProvider
+# (app/src/org/commcare/provider/CaseDataContentProvider.java - "defines the interface for
+# external applications to gain read only access to the current user's sandbox", exported
+# with a `${applicationId}.provider.cases.read` permission per AndroidManifest.xml and
+# Permissions.java - confirmed this API genuinely exists, which is why this row is Partial
+# and not Not-automatable). But the actual case-list LAYOUT/ids are the companion app's own
+# UI, which has no source available in this environment (UNVERIFIED). The most defensible
+# assertion available without guessing a fake id is that we've navigated away from the
+# button-set screen - i.e. the button we just tapped is no longer on screen.
+- assertNotVisible: "${EXTAPP_BTN_VIEW_CASE_DATA}"
+
+# STEP 3, "click on a case" - any case satisfies this (the sheet doesn't require a specific
+# one). Companion app's list-row id/text is UNVERIFIED (no source access), so this taps a
+# fixed point in roughly the middle of the screen below where the button row was, as the
+# least-assumption-laden placeholder - it doesn't invent a fake resource-id name that would
+# look like a verified citation. TODO(verify): once the real companion app is available,
+# replace this with a proper `tapOn: {id: "<real case-row id>"}` (optionally + `index: 0`).
+- tapOn:
+    point: "50%, 45%"
+
+# STEP 4, "verify you see all the properties and values saved to that case" - property names
+# are specific to the "External App Fixture Tests" HQ app's case schema, which is a fixture
+# app (not in commcare-android source) and could not be inspected. TODO(verify): once the
+# real fixture app's case properties are known, replace this with concrete
+# `assertVisible: "<property label>"` / `assertVisible: "<expected value>"` checks. Left
+# unasserted here rather than guessed, same as FRAMEWORK.md's Install 5/6 validation-string
+# caveat.

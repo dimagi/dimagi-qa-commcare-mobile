@@ -1,0 +1,22 @@
+appId: org.commcare.dalvik
+tags:
+  - prompted_updates
+  - automatable
+---
+# Master Mobile Plan (2026) > Prompted Updates > "Varying Prompt 1" - Test Frequency.
+# ASSUMES the HQ-side setup has already run (see hq_setup/prompted_updates/
+# varying_prompt_setup.json): custom properties num-views-before-reducing-frequency=3,
+# reduced-show-frequency=4, regular-show-frequency=1, and build "3.4,1" released.
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- runFlow: ../common/update_app_via_menu.yaml
+- runFlow: ../common/logout.yaml
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- assertNotVisible: "New version of the application is available"

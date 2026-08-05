@@ -1,0 +1,58 @@
+appId: ${EXTAPP_APP_ID}
+tags:
+  - externalapp_tests
+  - partial
+env:
+  # UNVERIFIED PLACEHOLDER - see flows/externalapp_tests/README.md.
+  EXTAPP_APP_ID: "com.dimagi.mobileapitestingapp"
+  EXTAPP_BTN_VIEW_FIXTURE_DATA: "View Fixture Data"
+  # The sheet's own parenthetical example of fixture data types shown ("Data such as
+  # Locations, Groups etc") - copied verbatim as a candidate section label, but this is the
+  # sheet's illustrative wording, NOT confirmed as the companion app's exact on-screen text
+  # (UNVERIFIED, unlike the 4 button labels in External App 1 which are the sheet's literal
+  # step text).
+  EXTAPP_FIXTURE_SECTION_LOCATIONS: "Locations"
+  # Same "sansar" domain login Setup 3 uses - see setup_03_login_and_background.yaml.
+  EXTAPP_QA_USERNAME: "qa_user"
+  EXTAPP_QA_PASSWORD: "123"
+---
+# Master Mobile Plan (2026) > ExternalApp Tests > "External App 5" (View Fixture Data):
+#   1. In the ExternalApp, select View Fixture Data
+#   2. Ensure Fixture information is visible (Data such as Locations, Groups etc)
+#   3. Click on location data and verify you can see the information that comprises it
+#
+# Re-establishes CommCare logged-in-and-backgrounded state itself (see External App 1's
+# comment for why) - the companion app must already be installed via `--other-app` before
+# this flow runs (flows/externalapp_tests/README.md).
+- runFlow:
+    file: ../common/login_and_background.yaml
+    env:
+      USERNAME: ${EXTAPP_QA_USERNAME}
+      PASSWORD: ${EXTAPP_QA_PASSWORD}
+- launchApp:
+    appId: ${EXTAPP_APP_ID}
+- tapOn: "${EXTAPP_BTN_VIEW_FIXTURE_DATA}"
+
+# STEP 2, "ensure Fixture information is visible": fixture data is served by
+# commcare-android's FixtureDataContentProvider
+# (app/src/org/commcare/provider/FixtureDataContentProvider.java /
+# app/src/org/commcare/provider/FixtureDataAPI.java - AUTHORITY "...fixture", path
+# "fixturedb/*", exported with the same provider.cases.read-style permission pattern as
+# CaseDataContentProvider - confirmed this API genuinely exists). The companion app's actual
+# fixture-browser UI/ids are unverified (no source access), so this asserts the sheet's own
+# example section label rather than guessing an id. If the real app doesn't show a literal
+# "Locations" heading, override EXTAPP_FIXTURE_SECTION_LOCATIONS at run time.
+- assertVisible: "${EXTAPP_FIXTURE_SECTION_LOCATIONS}"
+
+# STEP 3, "click on location data and verify you can see the information that comprises it".
+# Tap by the same sheet-derived text rather than a guessed id/point, since we do have
+# concrete wording for this one (unlike External App 3/4's anonymous case rows).
+- tapOn: "${EXTAPP_FIXTURE_SECTION_LOCATIONS}"
+
+# "verify you can see the information that comprises it" - the actual location
+# attributes/values shown are specific to the "External App Fixture Tests" HQ app's fixture
+# data, which could not be inspected in this environment (it's a fixture, not something in
+# commcare-android source). TODO(verify): once the real fixture data/companion app UI is
+# known, replace this with concrete `assertVisible: "<attribute label>"` checks - left
+# unasserted here rather than guessed, same as FRAMEWORK.md's Install 5/6 validation-string
+# caveat.

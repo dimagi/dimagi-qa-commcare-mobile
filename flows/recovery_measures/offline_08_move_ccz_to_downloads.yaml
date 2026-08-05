@@ -1,0 +1,66 @@
+appId: org.commcare.dalvik
+tags:
+  - recovery_measures
+  - partial
+---
+# Master Mobile Plan (2026) > Recovery Measures > Recovery: Offline Reinstall
+# and Update App > "Recovery (offline) 8" - "Move CCZ into Downloads folder".
+#
+# PARTIAL - REAL PREREQUISITE GAP, same category as
+# offline_05_place_ccz_custom_path.yaml (see that file's header for why
+# neither scripts/run_suite.py nor scripts/browserstack_client.py currently
+# shell out to `adb` or wrap BrowserStack's file-push API). This row is that
+# same gap's mirror image: instead of pushing the CCZ to a custom path
+# (offline 5) to force a manual picker search (offline 6), this row relocates
+# it TO the standard Downloads folder so the picker finds it immediately in
+# its default view - the "happy path" contrast case to offline 5/6's
+# "unhappy path".
+#
+# REQUIRED MANUAL/CI PRE-STEP (not run by Maestro/this flow) - relocate the
+# same file offline_05_place_ccz_custom_path.yaml pushed:
+#   adb shell mv /sdcard/RecoveryMeasuresTest/test.ccz /sdcard/Download/test.ccz
+# (or a fresh `adb push` straight to /sdcard/Download/test.ccz if starting
+# from a local file instead of relocating the device-side copy - either
+# achieves the same end state). /sdcard/Download/ is
+# Environment.DIRECTORY_DOWNLOADS, the standard Android public downloads
+# directory and the system file picker's typical default landing view - this
+# is general Android platform knowledge, not something read out of
+# commcare-android source, since CommCare itself never references this path
+# directly (only the SAF picker it launches via ACTION_GET_CONTENT does).
+#
+# Once relocated, the on-device "Select CCZ" -> file-picker flow is
+# identical to offline_reinstall_update_app_flow.yaml's own "Recovery
+# (offline) 7" step (which already assumes a .ccz is reachable from the
+# picker's default view per that file's CAVEAT) - this flow file exists
+# separately mainly to give this coverage_matrix.csv row its own named
+# artifact/gap flag rather than being silently absorbed into that file
+# unlabeled, and to make explicit that the "it just works from the default
+# view" assumption in that file is EXACTLY this row's adb relocation, not a
+# given.
+#
+# Same SAF/system-file-picker CAVEAT as
+# offline_06_select_ccz_via_picker.yaml's header applies to the tap below
+# (separate system UI process, no commcare-android-verifiable resource ids,
+# text-based best-effort selector only) - except here no folder navigation
+# should be needed, since Downloads is the picker's default view.
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- assertVisible:
+    text: "(?i).*recovery (procedures|measures).*initiated.*"
+- assertVisible:
+    text: "(?i).*select ccz.*"
+- tapOn:
+    text: "(?i).*select ccz.*"
+- extendedWaitUntil:
+    visible:
+      text: "(?i).*test\\.ccz.*"
+    timeout: 10000
+- tapOn:
+    text: "(?i).*test\\.ccz.*"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/edit_username"
+    timeout: 60000

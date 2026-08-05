@@ -1,0 +1,25 @@
+appId: org.commcare.dalvik
+tags:
+  - mobile_pins
+  - automatable
+---
+# Master Mobile Plan (2026) > Mobile Pins > "Pin 8" - Login using PIN.
+# Self-contained: sets a PIN first (state pin_07 would otherwise have left
+# behind), then verifies the PIN can be used to log in.
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- runFlow:
+    file: ../common/set_pin_via_dialog.yaml
+    env:
+      PIN: "1234"
+- runFlow: ../common/logout.yaml
+- assertVisible: "PIN"
+- runFlow:
+    file: ../common/login_with_pin.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PIN: "1234"
+- assertVisible: "Start"

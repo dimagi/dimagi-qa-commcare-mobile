@@ -1,0 +1,77 @@
+appId: org.commcare.dalvik
+tags:
+  - multimedia
+  - partial
+---
+# Master Mobile Plan (2026) > Multimedia > "Image Resize 1", "Image Resize
+# 2", "Image Resize 3", "Image Resize 4" - View Large/Small/Wide/Tall image
+# form, at the app's default (out-of-the-box, no HQ change yet) Auto-Resize
+# Images setting. Per coverage_matrix.csv these 4 rows are each "Partial":
+# the on-device navigation is automatable, but confirming the viewed image
+# is genuinely "not distorted" at each resize tier is a visual-regression
+# check outside Maestro's built-in assertions - this flow only automates the
+# navigation half (open each form, confirm no crash/error surfaces, exit
+# cleanly) and leaves the visual-distortion judgment unautomated, same as
+# the CSV's own stated dependency.
+#
+# PARTIAL/UNVERIFIED DEPENDENCY: assumes the "Basic Tests" Multimedia QA
+# test app is already installed (out of scope for this flow - see
+# hq_setup/multimedia/*.json for the HQ-side resize-setting changes that
+# some sibling test cases in this family depend on instead) with a
+# "Multimedia" menu containing an "Image Resize" submenu, itself listing
+# four sibling forms named "Large Image", "Small Image", "Wide Image", and
+# "Tall Image" (literal names from the manual test sheet - "Basic
+# Tests"/"Image Resize" is a QA-specific CCZ not present in the
+# commcare-android source, so this exact menu structure could not be
+# verified against anything in this repo). tapOn is by visible text
+# throughout so it's resilient to list position.
+#
+# NOTE ON THE EXISTING image_resize_26 FLOW: that flow taps "Image Resize"
+# and lands directly in a 4-question form, with no separate per-form menu
+# tap - plausibly because CommCare auto-skips a menu screen when it has only
+# one child (so tapping "Image Resize" there enters its sole form
+# directly). This flow's test cases are explicitly per-form ("Large Image"
+# form, "Small Image" form, ...), so "Image Resize" is treated here as a
+# genuine menu with (at least) those four forms as children - flagged as an
+# assumption, not confirmed against the actual QA CCZ.
+#
+# Each form's open/page/exit sequence is delegated to
+# ../common/view_form_no_errors_from_menu.yaml (see that file for the full
+# selector citation) so it lands back on the "Image Resize" menu ready for
+# the next form, without re-navigating "Start" -> "Multimedia" -> "Image
+# Resize" four times over.
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- tapOn: "Start"
+- tapOn: "Multimedia"
+- tapOn: "Image Resize"
+# Image Resize 1 - Large Image
+- runFlow:
+    file: ../common/view_form_no_errors_from_menu.yaml
+    env:
+      FORM_NAME: "Large Image"
+# Image Resize 2 - Small Image
+- runFlow:
+    file: ../common/view_form_no_errors_from_menu.yaml
+    env:
+      FORM_NAME: "Small Image"
+# Image Resize 3 - Wide Image
+- runFlow:
+    file: ../common/view_form_no_errors_from_menu.yaml
+    env:
+      FORM_NAME: "Wide Image"
+# Image Resize 4 - Tall Image
+- runFlow:
+    file: ../common/view_form_no_errors_from_menu.yaml
+    env:
+      FORM_NAME: "Tall Image"
+# Back out of "Image Resize" -> "Multimedia" -> home, confirming the app is
+# still in a healthy state.
+- back
+- back
+- assertVisible:
+    text: "Start"
+    timeout: 5000

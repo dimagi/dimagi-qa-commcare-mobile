@@ -1,0 +1,16 @@
+{
+  "_comment": "Master Mobile Plan (2026) > Recovery Measures > Recovery: Offline Reinstall and Update App > 'Recovery (offline) 2' - 'Ensure Test Two released, Test Three in-test'. This is the offline-workflow's app (a separate HQ app from the plain 'Reinstall and Update App' app used by reinstall_update_2_mark_test_two.json - see offline_reinstall_update_app_flow.yaml's header for why MEASURE_TYPE_APP_OFFLINE_REINSTALL_AND_UPDATE is a distinct code path). 'Ensure ... released' (rather than 'Mark ... released') implies this may already be true from a prior cycle - mark_build_status is idempotent (POSTing is_released=true to an already-released build is a no-op per release_build()'s source), so this is safe to run either way. create_new_build cuts the Test Three build and leaves it in the default in-test (unreleased) state, satisfying 'Test Three in-test'. app_id/saved_app_id values are placeholders - Recovery Measures apps get rebuilt each QA cycle per the sheet's own 'Dimagi must reconfigure setup here prior to each run' note, so fill these in fresh every run.",
+  "actions": [
+    {
+      "type": "mark_build_status",
+      "app_id": "REPLACE_WITH_RECOVERY_OFFLINE_APP_ID",
+      "saved_app_id": "REPLACE_WITH_TEST_TWO_BUILD_ID",
+      "is_released": true
+    },
+    {
+      "type": "create_new_build",
+      "app_id": "REPLACE_WITH_RECOVERY_OFFLINE_APP_ID",
+      "comment": "Test Three (in-test) - Recovery (offline) 2"
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+appId: org.commcare.dalvik
+tags:
+  - mobile_pins
+  - automatable
+---
+# Master Mobile Plan (2026) > Mobile Pins > "Pin 14" - Reset your PIN Verification.
+# Declining the "Reset your PIN?" prompt (either "no, ask again" option) should
+# not let the user escape it - since they can now only reach the app via
+# Forgot PIN -> password, they'll be re-prompted every time.
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- runFlow:
+    file: ../common/set_pin_via_dialog.yaml
+    env:
+      PIN: "1234"
+- runFlow: ../common/logout.yaml
+- tapOn: "More options"
+- tapOn: "Forgot PIN?"
+- tapOn:
+    id: "org.commcare.dalvik:id/edit_password"
+- inputText: "${CC_TEST_PASSWORD}"
+- hideKeyboard
+- tapOn:
+    id: "org.commcare.dalvik:id/login_button"
+- assertVisible: "Reset your PIN?"
+- tapOn: "No, but ask again on next login"
+- runFlow: ../common/logout.yaml
+- assertVisible: "PIN"
+- tapOn: "More options"
+- tapOn: "Forgot PIN?"
+- tapOn:
+    id: "org.commcare.dalvik:id/edit_password"
+- inputText: "${CC_TEST_PASSWORD}"
+- hideKeyboard
+- tapOn:
+    id: "org.commcare.dalvik:id/login_button"
+- assertVisible: "Reset your PIN?"

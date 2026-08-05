@@ -1,0 +1,34 @@
+appId: org.commcare.dalvik
+tags:
+  - mobile_pins
+  - automatable
+---
+# Master Mobile Plan (2026) > Mobile Pins > "Pin 1" - Prompt.
+# Strings verified against app/assets/locales/android_translatable_strings.txt
+# (pin.dialog.prompt.set / pin.dialog.yes / pin.dialog.not.now / pin.dialog.never)
+# and app/src/org/commcare/views/dialogs/PaneledChoiceDialog.java (extra_info_button).
+#
+# ALSO COVERS coverage_matrix.csv's second "Pin 1" row ("Prompt shown again
+# after reinstall", following "Setup 5"'s uninstall +
+# "Setup 6"'s HQ-side reinstall - see flows/mobile_pins/setup_05_uninstall_app.yaml
+# and hq_setup/mobile_pins/setup_06_reinstall_application.json). The two rows
+# assert the exact same on-device condition ("Create a PIN?" is shown on the
+# first login after no PIN has ever been set) - the only difference is *why*
+# the app has no PIN state (never-had-one vs. just-reinstalled), which this
+# self-contained Maestro flow can't distinguish anyway (per this framework's
+# own convention every flow gets a fresh app install regardless of which
+# sheet row prompted it - see docs/FRAMEWORK.md "Each flow must be runnable
+# in isolation"). Deliberately NOT duplicated into a second
+# pin_01_prompt_after_reinstall.yaml file for that reason - point
+# coverage_matrix.csv's second "Pin 1" row at this same file.
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- assertVisible: "Create a PIN?"
+- assertVisible: "Yes, set my PIN now"
+- assertVisible: "No, but ask again on next login"
+- assertVisible: "No, and don't ask again"
+- assertVisible:
+    id: "org.commcare.dalvik:id/extra_info_button"

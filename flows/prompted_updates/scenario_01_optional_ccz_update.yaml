@@ -1,0 +1,53 @@
+appId: org.commcare.dalvik
+tags:
+  - prompted_updates
+  - partial
+---
+# Master Mobile Plan (2026) > Prompted Updates > "Prompted Update Scenario 1" -
+# Optional CCZ update end-to-end.
+#
+# PARTIAL: requires an HQ pre-step (mark the latest build Released) between
+# this flow's first and second logins - see
+# hq_setup/prompted_updates/scenario_01_mark_released.json. ASSUMES Setup 2/3
+# have already run: latest build In Test + prior build Released (Setup 2,
+# hq_setup/prompted_updates/setup_02_mark_in_test.json) and Prompt Updates to
+# CommCare/App = On (Setup 3, hq_setup/prompted_updates/setup_03_prompts_on.json).
+#
+# Reuses common/update_app_via_menu.yaml for the "New version of the
+# application is available" -> "Update to the Latest App Version" ->
+# "Update to version X & log out" sequence, same as varying_prompt_01/05 -
+# see that file's header for the exact string citations
+# (ccz.update.available.title, ccz.update.action, updates.staged.version)
+# against android_translatable_strings.txt. The menu-triggered path is used
+# here (rather than racing the automatic post-login prompt) as the
+# deterministic Maestro-automatable proxy for the same on-screen prompt,
+# same convention as flows/updates_partial_failed/scenario_3_reverted_app_versions.yaml.
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- assertVisible: "Start"
+- runFlow: ../common/logout.yaml
+
+# === HQ pre-step runs here in a real execution: mark the latest build Released ===
+# (hq_setup/prompted_updates/scenario_01_mark_released.json)
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+
+# Confirms the prompt appears, taps through "Update to the Latest App
+# Version", and confirms the update completes via "Update to version X & log
+# out" (which also logs the user out).
+- runFlow: ../common/update_app_via_menu.yaml
+
+# Relogin: confirm no more prompt now that the device is on the latest version.
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- assertNotVisible: "New version of the application is available"
+- assertVisible: "Start"

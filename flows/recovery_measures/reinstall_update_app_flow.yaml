@@ -1,0 +1,53 @@
+appId: org.commcare.dalvik
+tags:
+  - recovery_measures
+  - partial
+---
+# Master Mobile Plan (2026) > Recovery Measures > Recovery: Reinstall and
+# Update App (Reinstall/Update 1, 5, 6, 9, 10 - the on-device portions).
+#
+# UNVERIFIED TEXT WARNING: unlike most other flows in this repo, the
+# "needs to be reinstalled" message and the "Reinstall Using CCZ" / "Online
+# Install" button labels are NOT found anywhere in
+# app/assets/locales/android_translatable_strings.txt - the Recovery Measures
+# feature is configured per-app on the HQ recovery page, so this message text
+# may be admin-configurable rather than a fixed app string. The assertions
+# below use case-insensitive regex on the sheet's literal wording as a
+# best-effort match; confirm against your actual QA recovery-page config and
+# tighten these once verified.
+#
+# Run hq_setup/recovery_measures/reinstall_update_app_flow.json's HQ action
+# (mark Test Two released) BETWEEN the two halves of this flow, i.e. split
+# this into two Maestro runs in practice, or extend run_suite.py to pause here.
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+# Reinstall/Update 1 - pre-update sanity: no forced update on Test One.
+- assertNotVisible:
+    text: "(?i).*reinstall.*"
+- assertNotVisible:
+    text: "(?i).*update.*required.*"
+# --- HQ pre-step runs here in a real execution: mark Test Two released ---
+- runFlow: ../common/update_app_via_menu.yaml
+- runFlow: ../common/logout.yaml
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+# Reinstall/Update 5 - reinstall-needed message should now appear.
+- assertVisible:
+    text: "(?i).*reinstall.*"
+- assertVisible:
+    text: "(?i).*Reinstall.*CCZ.*"
+- assertVisible:
+    text: "(?i).*Online.*"
+# Reinstall/Update 6 - reinstall via CCZ, expect auto-logout afterward.
+- tapOn:
+    text: "(?i).*Reinstall.*CCZ.*"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/edit_username"
+    timeout: 30000

@@ -1,0 +1,11 @@
+{
+  "_comment": "Master Mobile Plan (2026) > Mobile Pins > 'Setup 6' - Reinstall Application (repeat of Setup 2-4, run after flows/mobile_pins/setup_05_uninstall_app.yaml has uninstalled the app on-device). Identical HQ action to hq_setup/mobile_pins/setup_02_install_application.json - kept as a separate file only because the sheet lists Setup 6 as its own row/step in the narrative, run at a different point in the sequence (after the uninstall, not before the first login). Run via `python scripts/hq_client.py hq_setup/mobile_pins/setup_06_reinstall_application.json`. Does NOT cover the repeat of Setup 4's barcode-scan claim step (Not automatable, same caveat as Setup 2). app_id/saved_app_id placeholders - see setup_02_install_application.json's comment for the 'Basic Tests'/qateam-domain assumption; confirm current before use.",
+  "actions": [
+    {
+      "type": "mark_build_status",
+      "app_id": "REPLACE_WITH_BASIC_TESTS_APP_ID",
+      "saved_app_id": "REPLACE_WITH_BASIC_TESTS_BUILD_ID",
+      "is_released": true
+    }
+  ]
+}

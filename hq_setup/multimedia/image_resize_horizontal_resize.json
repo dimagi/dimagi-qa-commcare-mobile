@@ -1,0 +1,24 @@
+{
+  "_comment": "Master Mobile Plan (2026) > Multimedia > Image Resize 10 - Change the 'Basic Tests' app's Auto-Resize Images setting to 'Horizontal Resize' on HQ, then cut and release a new build, so that Image Resize 11-14 (flows/multimedia/image_resize_11_14_horizontal_resize.yaml) exercise the app under that setting. Run once via `python scripts/hq_client.py hq_setup/multimedia/image_resize_horizontal_resize.json` before running that flow, after image_resize_full_resize.json's build has already been in place for Image Resize 6-9. app_id is a placeholder for the 'Basic Tests' Multimedia QA app - fill in from https://www.commcarehq.org/a/<domain>/apps/view/<app_id>/, confirming it's still current.",
+  "_unverified_key_warning": "See hq_setup/multimedia/image_resize_full_resize.json's '_unverified_key_warning' - the exact same caveat applies here: REPLACE_WITH_AUTO_RESIZE_KEY is an unverified placeholder for HQ's 'Auto-Resize Images' Advanced Settings control, not a confirmed custom_properties key name.",
+  "actions": [
+    {
+      "type": "set_custom_properties",
+      "app_id": "REPLACE_WITH_BASIC_TESTS_APP_ID",
+      "properties": {
+        "REPLACE_WITH_AUTO_RESIZE_KEY": "REPLACE_WITH_VALUE (Full Resize / Horizontal Resize / Half Resize / None)"
+      }
+    },
+    {
+      "type": "create_new_build",
+      "app_id": "REPLACE_WITH_BASIC_TESTS_APP_ID",
+      "comment": "Image Resize 10 - Auto-Resize Images = Horizontal Resize"
+    },
+    {
+      "type": "mark_build_status",
+      "app_id": "REPLACE_WITH_BASIC_TESTS_APP_ID",
+      "saved_app_id": "$LAST_BUILD_ID",
+      "is_released": true
+    }
+  ]
+}

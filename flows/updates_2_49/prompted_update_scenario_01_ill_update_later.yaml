@@ -1,0 +1,53 @@
+appId: org.commcare.dalvik
+tags:
+  - updates_2_49
+  - automatable
+---
+# Master Mobile Plan (2026) > Updates > "Prompted Update Scenario 1" (2.49
+# grab-bag section). NOTE: this is a distinct row from the "Prompted Update
+# Scenario 1" in the Prompted Updates tab (that one is Partial and about the
+# optional CCZ/app-content update prompt - see
+# flows/prompted_updates/varying_prompt_01_update_frequency.yaml). This one
+# is about the optional CommCare (APK) update prompt, and per
+# coverage_matrix.csv is Automatable - no HQ pre-step needed for the
+# on-device interaction itself.
+#
+# ASSUMES a released version of the "Basic Tests" app has already been
+# installed on the device and an optional APK update has been made
+# available to prompt for (that provisioning/HQ-release-marking step is out
+# of scope here, analogous to "Rate limit 1"). Only the on-device
+# login -> prompt -> "I'll update later" -> home-screen interaction is
+# scripted below.
+#
+# Selectors/strings verified against commcare-android source (read-only
+# reference, not modified):
+#   app/src/org/commcare/heartbeat/UpdatePromptHelper.java:
+#     promptForUpdateIfNeeded() launches PromptApkUpdateActivity right after
+#     login when an optional APK update is pending and hasn't been shown yet
+#     this session (checks the APK update before the CCZ one).
+#   app/src/org/commcare/activities/PromptApkUpdateActivity.java:
+#     setUpTypeSpecificUIComponents() sets promptTitle to
+#     "apk.update.available.title" (non-forced case) and doLaterButton's
+#     text to "update.later.button.text".
+#   app/src/org/commcare/activities/PromptActivity.java:
+#     doLaterButton (R.id.do_later_button) just finish()es the activity,
+#     returning to whatever launched it (the home screen after login).
+#   app/assets/locales/android_translatable_strings.txt:
+#     apk.update.available.title = "New version of ${0} is Available" (${0}
+#       = the client name, "CommCare" for this build flavor) (line 27)
+#     update.later.button.text = "I'll update later" (line 34)
+#     home.start = "Start" (line 59) - used below as a home-screen landmark.
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- extendedWaitUntil:
+    visible: "New version of CommCare is Available"
+    timeout: 20000
+- tapOn: "I'll update later"
+# Confirm the prompt is gone and we can keep using CommCare - landed on the
+# home screen, not blocked.
+- assertNotVisible: "New version of CommCare is Available"
+- assertVisible: "Start"
+- assertVisible: "Sync with Server"

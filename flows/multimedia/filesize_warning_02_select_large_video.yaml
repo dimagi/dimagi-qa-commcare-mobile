@@ -1,0 +1,63 @@
+appId: org.commcare.dalvik
+tags:
+  - multimedia
+  - partial
+---
+# Master Mobile Plan (2026) > Multimedia > "Filesize Warning 2" - continuing
+# from a video-capture question, select a previously-recorded large video
+# and expect a "File Too Large ... 15 MB" error.
+#
+# ******************************************************************
+# ** BLOCKED ON A MISSING TEST ASSET - DO NOT RUN UNTIL ADDED **
+# ******************************************************************
+# This flow's addMedia step references "./assets/oversized_test_video.mp4",
+# which does NOT yet exist (see filesize_01_trigger_warning.yaml's header
+# comment for the same missing-asset note - both flows can share this one
+# file once it's added: any dummy video file whose size exceeds
+# FormUploadUtil.MAX_BYTES, ~15MB). Not fabricated here. Keep this Test Case
+# ID classified as NOT actually passing/runnable until that asset exists.
+#
+# PARTIAL DEPENDENCY (per coverage_matrix.csv: "Automatable if the oversized
+# video can be pushed via addMedia"): assumes the Multimedia QA test app has
+# a video-capture question reachable via Start > Multimedia > "Video
+# Questions" (reusing the same menu name as lazy_video_02/04/05's dependency
+# - unverified whether this is literally the SAME form/menu those use, or a
+# separate one; if navigation fails here, check whether a distinct
+# "Filesize Warning" form/menu should be used instead) with both a "Take
+# Picture"/"Record Video" and "Choose Video" button per MediaWidget.java (see
+# media_02_capture_and_select.yaml's citation).
+#
+# This is a DIFFERENT error dialog from filesize_01/02's inline
+# attachment_above_size_limit warning - this one fires from the
+# CHOOSE-EXISTING path specifically. Verified against source (read-only
+# reference, not modified):
+#   app/src/org/commcare/activities/FormEntryActivity.java
+#     processChooserResponse() (line 486-514): after a gallery/file-picker
+#     result comes back for an AUDIO_VIDEO_DOCUMENT_FETCH intent, if
+#     FileUtil.isFileTooLargeToUpload(...) (> FormUploadUtil.MAX_BYTES) it
+#     calls showFileOversizeError() (line 506-507) INSTEAD of attaching the
+#     file - so the picked file is rejected outright, not attached-then-
+#     warned like the checkForOversizedMedia() inline-warning path.
+#   showFileOversizeError() (line 451-457) renders a real AlertDialog titled
+#     Localization.get("file.oversize.error.title") = "File Too Large" and
+#     message Localization.get("file.oversize.error.message") = "Selected
+#     file exceeds the file size limit of 15 MB. Please select a file whose
+#     size is less than 15 MB." (android_translatable_strings.txt:997-998) -
+#     this one DOES say "15 MB" verbatim (no off-by-one, unlike
+#     attachment_above_size_limit's "14 mb" - see filesize_01's citation).
+- addMedia:
+    - "./assets/oversized_test_video.mp4"
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- tapOn: "Start"
+- tapOn: "Video Questions"
+- tapOn: "Videos with valid references"
+- tapOn: "Choose Video"
+- runFlow: ../common/pick_first_gallery_image.yaml
+- assertVisible: "File Too Large"
+- assertVisible:
+    text: "(?i)Selected file exceeds the file size limit of 15 MB.*less than 15 MB"
+- tapOn: "OK"

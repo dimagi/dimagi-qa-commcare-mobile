@@ -1,0 +1,27 @@
+appId: org.commcare.dalvik
+tags:
+  - mobile_pins
+  - automatable
+---
+# Master Mobile Plan (2026) > Mobile Pins > "Pin 10" - Login using changed PIN 1.
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- runFlow:
+    file: ../common/set_pin_via_dialog.yaml
+    env:
+      PIN: "1234"
+- runFlow:
+    file: ../common/change_pin_via_menu.yaml
+    env:
+      CURRENT_PIN: "1234"
+      NEW_PIN: "5678"
+- runFlow: ../common/logout.yaml
+- runFlow:
+    file: ../common/login_with_pin.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PIN: "5678"
+- assertVisible: "Start"

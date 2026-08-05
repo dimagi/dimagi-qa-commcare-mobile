@@ -1,0 +1,51 @@
+appId: ${EXTAPP_APP_ID}
+tags:
+  - externalapp_tests
+  - partial
+env:
+  # UNVERIFIED PLACEHOLDER - see flows/externalapp_tests/README.md. The companion "Mobile API
+  # Testing App" is built by an internal Jenkins job
+  # (https://jenkins.dimagi.com/job/Mobile%20API%20Testing%20App/) not reachable from this
+  # environment, so its real Android package name could not be confirmed against a manifest.
+  # Replace with the real value (`aapt dump badging <apk> | grep package:\ name`) once
+  # available - every other flow in this suite reads the same env var, so this is the only
+  # place that needs to change.
+  EXTAPP_APP_ID: "com.dimagi.mobileapitestingapp"
+  # Button text copied verbatim from Master Mobile Plan (2026) > ExternalApp Tests >
+  # "External App 1" row's step 2. Exposed as env vars (not hardcoded) because the sheet's
+  # wording is the only source available - it has not been checked against the live
+  # companion app's actual on-screen copy.
+  EXTAPP_BTN_START_COMMCARE: "Start CommCare"
+  EXTAPP_BTN_ACQUIRE_KEY: "Acquire CommCare Key"
+  EXTAPP_BTN_VIEW_CASE_DATA: "View Case Data"
+  EXTAPP_BTN_VIEW_FIXTURE_DATA: "View Fixture Data"
+  # Same "sansar" domain login Setup 3 uses - see setup_03_login_and_background.yaml.
+  EXTAPP_QA_USERNAME: "qa_user"
+  EXTAPP_QA_PASSWORD: "123"
+---
+# Master Mobile Plan (2026) > ExternalApp Tests > "External App 1" (Launch ExternalApp):
+#   1. Launch the External App
+#   2. Verify you see a series of buttons, including:
+#      Start CommCare / Acquire CommCare Key / View Case Data / View Fixture Data
+#
+# Per this repo's own "each flow runnable in isolation" convention (docs/FRAMEWORK.md), this
+# re-establishes CommCare logged-in-and-backgrounded state itself via the same
+# flows/common/login_and_background.yaml subflow Setup 3 uses, rather than assuming Setup 3
+# already ran earlier in the same BrowserStack session. The companion app itself still needs
+# to have been pre-installed via BrowserStack's `otherApps` capability before this flow runs
+# (see scripts/run_suite.py --other-app / flows/externalapp_tests/README.md) - that part
+# can't be re-established from inside a Maestro flow, it's a session-level setup concern.
+#
+# appId/button text: see the env block above and README.md - both are UNVERIFIED since the
+# companion app's real manifest/UI could not be inspected in this environment.
+- runFlow:
+    file: ../common/login_and_background.yaml
+    env:
+      USERNAME: ${EXTAPP_QA_USERNAME}
+      PASSWORD: ${EXTAPP_QA_PASSWORD}
+- launchApp:
+    appId: ${EXTAPP_APP_ID}
+- assertVisible: "${EXTAPP_BTN_START_COMMCARE}"
+- assertVisible: "${EXTAPP_BTN_ACQUIRE_KEY}"
+- assertVisible: "${EXTAPP_BTN_VIEW_CASE_DATA}"
+- assertVisible: "${EXTAPP_BTN_VIEW_FIXTURE_DATA}"

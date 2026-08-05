@@ -1,0 +1,95 @@
+appId: org.commcare.dalvik
+tags:
+  - multimedia
+  - partial
+---
+# Master Mobile Plan (2026) > Multimedia > "Photo 1" - Remove a TAKEN
+# (camera-captured, not gallery-chosen) photo.
+#
+# **CAMERA-CAPTURE FLAKINESS CAVEAT (same as coverage_matrix.csv's "Image
+# Resize 25" row, which itself has no flow file yet for exactly this
+# reason)**: real camera capture is flaky/unsupported on most cloud
+# emulators/BrowserStack device images. Unlike addMedia (which pushes a file
+# straight into the MediaStore/gallery, used by photo_02 and image_resize_26),
+# there is no Maestro-native way to inject a photo into the OS camera app's
+# capture flow - this flow instead taps "Take Picture" and then best-effort
+# taps a handful of GUESSED shutter/confirm button ids from common Android
+# camera apps. THESE SHUTTER/CONFIRM SELECTORS HAVE NOT BEEN VERIFIED AGAINST
+# ANY REAL DEVICE OR EMULATOR CAMERA APP IN THIS ENVIRONMENT (analogous to
+# how ../common/pick_first_gallery_image.yaml's system-picker ids were taken
+# from Maestro's own published recipe, but no equivalent published recipe
+# exists for a full "take a real photo" flow) - expect this to need
+# per-device-image adjustment, or to simply not work at all on devices whose
+# camera app can't produce a picture without real camera hardware/input. Only
+# feasible if the BrowserStack device supports an injected camera image, per
+# the sheet's own dependency note.
+#
+# Continues from the same "Gif/Remove Image" form as
+# gif_can_add_gif.yaml/photo_02_can_remove_chosen_photo.yaml (Multimedia >
+# Gif/Remove Image) and progresses forward to a "Take a photo" question -
+# POSITION-ASSUMED via a bounded Next-tap loop (mirrors
+# flows/common/navigate_form_no_errors.yaml's exact repeat/optional-tap
+# idiom) since the form's real question order/count is unverified.
+#
+# mCaptureButton text verified against res/values/strings.xml:174
+# (capture_image = "Take Picture") - app/src/org/commcare/views/widgets/
+# MediaWidget.java adds both mCaptureButton and mChooseButton to every media
+# question, so "Take Picture" should be present alongside "Choose Image" on
+# whichever question this is.
+#
+# discard_image ("Remove Image") button behavior verified against the same
+# ImageWidget.java citation as photo_02_can_remove_chosen_photo.yaml: starts
+# View.GONE, only VISIBLE once a binary attachment is actually registered -
+# so this flow's assertVisible/tapOn/assertNotVisible sequence only passes if
+# the best-effort camera capture above genuinely produced an attached image.
+# If the camera step silently fails (very likely on a device without a real
+# camera), this flow will fail at the first assertVisible "Remove Image" -
+# that's an honest failure, not a false pass.
+#
+# Deliberately does NOT submit the form afterward: photo_02's own header
+# comment already flags that whether this specific CCZ allows submitting
+# with the image question left blank after removal is unverified, and the
+# sheet's own wording for Photo 1 doesn't call for a submit step.
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- tapOn: "Start"
+- tapOn: "Multimedia"
+- tapOn: "Gif/Remove Image"
+- repeat:
+    times: 6
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/nav_btn_next"
+          optional: true
+- assertVisible:
+    text: "Take Picture"
+    timeout: 5000
+- tapOn: "Take Picture"
+# BEST-EFFORT camera capture - see header caveat. Tries a shutter button on
+# a couple of common Android camera-app packages, then a "done"/checkmark
+# confirm button, all optional since none of these are confirmed for the
+# actual device image this runs on.
+- tapOn:
+    id: "com.android.camera2:id/shutter_button"
+    optional: true
+- tapOn:
+    id: "com.google.android.GoogleCamera:id/shutter_button"
+    optional: true
+- tapOn:
+    text: "Shutter"
+    optional: true
+- tapOn:
+    id: "com.android.camera2:id/done_button"
+    optional: true
+- tapOn:
+    id: "com.google.android.GoogleCamera:id/done_button"
+    optional: true
+- tapOn:
+    text: "(?i)^(done|ok|confirm|save)$"
+    optional: true
+- assertVisible: "Remove Image"
+- tapOn: "Remove Image"
+- assertNotVisible: "Remove Image"

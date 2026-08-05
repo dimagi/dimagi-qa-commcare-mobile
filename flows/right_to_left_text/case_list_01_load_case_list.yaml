@@ -1,0 +1,37 @@
+appId: org.commcare.dalvik
+tags:
+  - right_to_left_text
+  - automatable
+---
+# Master Mobile Plan (2026) > Right to Left Text > "Case list 1" - From the
+# home screen, select the green start button; select the second item (a
+# module); ensure a case list loads.
+# Pure navigation check: the RTL column-order/alignment/arrow-direction
+# judgment for this screen lives in "Case list 2-4" in coverage_matrix.csv
+# (all Not automatable - visual layout judgment), so this flow only proves
+# the case list loads and deliberately does not switch to Arabic first (see
+# question_types_02_open_first_form.yaml's header comment for the same
+# reasoning).
+# Selectors:
+#  - "Start" button text: same as question_types_02_open_first_form.yaml
+#    (android_translatable_strings.txt home.start=Start).
+#  - list rows: same row_txt-by-index approach as
+#    question_types_02_open_first_form.yaml (app/res/layout/
+#    menu_list_item_modern.xml row_txt id, via
+#    org/commcare/adapters/MenuAdapter.java) - index 1 = second entry.
+#  - case list screen: R.id.screen_entity_select_list
+#    (app/src/org/commcare/activities/EntitySelectActivity.java; also the id
+#    InstrumentationUtility.kt's openFirstIncompleteForm()/
+#    searchCaseAndSelect() click into via
+#    clickListItem(R.id.screen_entity_select_list, position)).
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- tapOn: "Start"
+- tapOn:
+    id: "org.commcare.dalvik:id/row_txt"
+    index: 1
+- assertVisible:
+    id: "org.commcare.dalvik:id/screen_entity_select_list"

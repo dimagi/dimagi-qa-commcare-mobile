@@ -1,0 +1,31 @@
+appId: org.commcare.dalvik
+---
+# Reusable: log in (via login.yaml), confirm the home screen loaded, then background
+# CommCare WITHOUT logging out - used by ExternalApp Tests' "Setup 3" (Deploy Basic Tests,
+# step 4: "Minimize CommCare but leave it running the background") and reused by every
+# External App N flow that needs CommCare already logged in and running in the background
+# before switching to the companion app.
+# Params: USERNAME, PASSWORD.
+#
+# Login selectors: see login.yaml's own citations
+# (InstrumentationUtility.kt -> login(), LoginActivity.java).
+# Home-screen confirmation id: org.commcare.dalvik:id/nsv_home_screen - the same
+# NestedScrollView id logout.yaml already relies on for the home screen.
+#
+# BACKGROUNDING: Maestro's `pressKey` command supports a "home" key value that simulates
+# pressing the device Home button - it backgrounds the current foreground app WITHOUT
+# stopping its process (unlike `killApp`, or `launchApp` with its default stopApp:true),
+# confirmed against Maestro's published command reference
+# (https://docs.maestro.dev/reference/commands-available/presskey). This intentionally does
+# NOT call logout.yaml or `killApp` - callers need CommCare alive and authenticated in the
+# background so a companion app's `launchApp` (or an Android Intent it fires) can bring it
+# back to the foreground later without needing to log in again.
+- runFlow:
+    file: login.yaml
+    env:
+      USERNAME: ${USERNAME}
+      PASSWORD: ${PASSWORD}
+- assertVisible:
+    id: "org.commcare.dalvik:id/nsv_home_screen"
+    timeout: 10000
+- pressKey: "home"

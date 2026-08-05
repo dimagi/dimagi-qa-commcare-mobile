@@ -1,0 +1,20 @@
+appId: org.commcare.dalvik
+tags:
+  - mobile_pins
+  - automatable
+---
+# Master Mobile Plan (2026) > Mobile Pins > "Pin 7" - Setup PIN.
+# Choosing "Yes, set my PIN now" from the dialog skips PinAuthenticationActivity
+# and goes straight to CreatePinActivity (see HomeScreenBaseActivity.showPinChoiceDialog
+# -> createPinChoice -> launchPinCreateScreen), unlike the menu-driven "Set My PIN"
+# path in pin_04 which requires password auth first.
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- runFlow:
+    file: ../common/set_pin_via_dialog.yaml
+    env:
+      PIN: "1234"
+- runFlow: ../common/logout.yaml

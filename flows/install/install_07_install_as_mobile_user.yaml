@@ -1,0 +1,77 @@
+appId: org.commcare.dalvik
+tags:
+  - install
+  - partial
+---
+# Master Mobile Plan (2026) > Install > "Install 7" - Install app as a mobile user.
+# PARTIAL: needs a valid HQ mobile-worker username/domain/password. Uses the
+# same fields InstallFromListTest.kt drives (edit_username/edit_domain/edit_password).
+- launchApp
+- tapOn: "More options"
+- tapOn: "See Apps for My User"
+- tapOn:
+    id: "org.commcare.dalvik:id/edit_username"
+# Confirmed against several real BrowserStack runs: the FIRST tap that opens
+# the keyboard on a fresh device session can trigger Gboard's one-time
+# "Get Smart content directly in the keyboard" system consent dialog, which
+# is a full-screen OS-level overlay completely unrelated to this app. It
+# blocks every subsequent tap until dismissed (this was the real cause of
+# several confusing earlier failures, including an apparent "password field
+# got silently cleared" - a hardware Back press was actually dismissing this
+# dialog, not the keyboard, at that moment). Dismiss it defensively wherever
+# it might appear; `optional: true` makes it a no-op when it doesn't.
+- tapOn:
+    text: "Skip"
+    optional: true
+- inputText: "${HQ_MOBILE_WORKER_USERNAME}"
+- tapOn:
+    id: "org.commcare.dalvik:id/edit_domain"
+- inputText: "${HQ_DOMAIN}"
+- tapOn:
+    id: "org.commcare.dalvik:id/edit_password"
+- inputText: "${HQ_MOBILE_WORKER_PASSWORD}"
+- hideKeyboard
+- tapOn:
+    text: "Skip"
+    optional: true
+# hideKeyboard has proven flaky across real runs - works sometimes, not
+# others, non-deterministically. scrollUntilVisible does NOT help here: per
+# res/layout/user_get_available_apps.xml this form sits in a ScrollView
+# inside a `gravity="center"` LinearLayout, and InstallFromListActivity has
+# no windowSoftInputMode override in AndroidManifest.xml - on this Android 10
+# device that defaults to keyboard "pan" behavior, not "resize", so the
+# ScrollView's measured height never actually shrinks for the keyboard and
+# genuinely has no extra scroll room to give (confirmed: scrollUntilVisible
+# swiped 8 times with zero effect). Retry hideKeyboard alone a few times
+# (NOT paired with a tap - tapping "SEE AVAILABLE APPS" submits the login;
+# repeating that risks firing the request multiple times) and only tap once,
+# after the retries, when the button is actually confirmed visible.
+- repeat:
+    times: 3
+    commands:
+      - hideKeyboard
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/get_apps_button"
+    timeout: 10000
+- tapOn:
+    id: "org.commcare.dalvik:id/get_apps_button"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/apps_list_view"
+    timeout: 30000
+- tapOn:
+    id: "org.commcare.dalvik:id/apps_list_view"
+# Confirmed against a real BrowserStack run on install_08: this tap actually
+# DOES trigger a real install even when Maestro reports the tap itself as
+# FAILED - it can't reconcile its hierarchy-change check with the heavy
+# native "Setting Up App" dialog taking over the screen. optional:true stops
+# that self-reported failure from aborting the flow; the extendedWaitUntil
+# below is the real success gate.
+- tapOn:
+    id: "org.commcare.dalvik:id/install_app_button"
+    retryTapIfNoChange: false
+    optional: true
+- extendedWaitUntil:
+    visible: "Setting Up App"
+    timeout: 60000

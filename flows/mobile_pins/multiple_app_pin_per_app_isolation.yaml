@@ -1,0 +1,148 @@
+appId: org.commcare.dalvik
+tags:
+  - mobile_pins
+  - automatable
+---
+# Master Mobile Plan (2026) > Mobile Pins > "Mutiple App PIN" (sheet's own
+# spelling; coverage_matrix.csv keeps the Test Case ID verbatim, this file is
+# named with the correct spelling since it's just a descriptive slug) - the
+# "Per-app PIN isolation" half: "login as test1/123 on Basic Tests and set
+# PIN, login same user on Case Management and set PIN, uninstall Basic Tests,
+# login using PIN in Case Management app, verify login is functional."
+#
+# ASSUMES both "Basic Tests" and "Case Management" CCZ apps are already
+# installed & seated side-by-side as TWO APP PROFILES INSIDE THE SAME
+# CommCare APK (CommCare's own "multiple apps" feature - see
+# app/src/org/commcare/utils/MultipleAppsUtil.java on the read-only
+# commcare-android reference - NOT two separate APKs). That provisioning is
+# "Mutiple App PIN"'s OTHER coverage_matrix.csv row ("Install two CCZ apps +
+# enable PIN", Partial) and is covered by
+# hq_setup/mobile_pins/mutiple_app_pin_install_apps.json (HQ publish half)
+# plus "Setup 4"'s barcode-claim step, run twice, once per app (Not
+# automatable, out of scope here - see that JSON's header comment).
+#
+# APP-SWITCHING CAVEAT (read before relying on this): commcare-android has no
+# single-tap "switch active app" UI action. The only way to seat a
+# not-currently-seated app found in the read-only reference is via
+# SingleAppManagerActivity's "Update" button (id/update_button, always
+# visible per app/res/layout/single_app_view.xml) or "Verify Resources"
+# button (id/verify_button, visibility conditional on
+# !appRecord.resourcesValidated() per that activity's refresh() method) -
+# both call SingleAppManagerActivity.seatApp() as a side effect when the
+# selected app isn't already seated (app/src/org/commcare/activities/
+# SingleAppManagerActivity.java update()/verifyResources()), which launches
+# SeatAppActivity (a brief "CommCare is loading your app" progress screen -
+# android_translatable_strings.txt line 418: seating.app=CommCare is loading
+# your app - that auto-finishes with RESULT_OK, no tap needed) and then
+# proceeds into UpdateActivity or CommCareVerificationActivity respectively.
+# This flow uses the "Update" button since it's unconditionally visible
+# (avoids depending on the MM-validation state of a freshly-installed app),
+# and UpdateActivity.returnResult() (~line 558-566) auto-finishes itself with
+# a toast once the update check resolves - no explicit dismissal tap is
+# needed, but there's no fixed on-screen landmark to assert mid-way either,
+# so this flow waits on the SEATING PROGRESS SCREEN clearing instead, then
+# force-restarts the app (stopApp + launchApp) so DispatchActivity's normal
+# startup dispatch() picks up the now-seated app fresh and lands on ITS
+# LoginActivity, rather than trying to navigate the intermediate
+# Update/SingleAppManager screens precisely. NOT exercised against a live
+# BrowserStack run - the exact intermediate screen timing/text for this
+# specific seat-via-Update path is a reasonable read of the source above,
+# not a confirmed live result; increase the extendedWaitUntil timeouts below
+# if it flakes in practice.
+#
+# Selectors/strings verified against commcare-android source (read-only
+# reference, never modified by this repo):
+#   app/res/layout/app_manager.xml: id/apps_list_view.
+#   app/res/layout/single_app_view.xml: id/app_name, id/update_button.
+#   app/src/org/commcare/adapters/AppManagerAdapter.java line ~37:
+#     appName.setText(toDisplay.getDisplayName()) - each apps_list_view row's
+#     visible text is that app's HQ-configured display name, i.e. literally
+#     "Basic Tests" / "Case Management".
+#   flows/common/set_pin_via_dialog.yaml / flows/common/login_with_pin.yaml -
+#     reused as-is for the actual PIN-setting/PIN-login steps below.
+#   flows/mobile_pins/setup_05_uninstall_app.yaml - same "Go To App Manager" >
+#     select app > "Uninstall" sequence reused below for the
+#     "uninstall Basic Tests" step.
+
+# --- "login as test1/123 on Basic Tests and set PIN" ---
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- runFlow:
+    file: ../common/set_pin_via_dialog.yaml
+    env:
+      PIN: "1111"
+- assertVisible:
+    text: "PIN set successfully"
+    timeout: 3000
+    optional: true
+- runFlow: ../common/logout.yaml
+
+# --- "login same user on Case Management and set PIN" ---
+# Switch the seated app from "Basic Tests" to "Case Management" via App
+# Manager (see header CAVEAT above for exactly what this does and why).
+- tapOn: "More options"
+- tapOn: "Go To App Manager"
+- assertVisible:
+    id: "org.commcare.dalvik:id/apps_list_view"
+- tapOn: "Case Management"
+- assertVisible:
+    id: "org.commcare.dalvik:id/app_name"
+- tapOn:
+    id: "org.commcare.dalvik:id/update_button"
+- assertVisible:
+    text: "CommCare is loading your app"
+    timeout: 5000
+    optional: true # only shown if Case Management wasn't already seated
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/app_name"
+    timeout: 60000
+- stopApp
+- launchApp
+- assertVisible:
+    id: "org.commcare.dalvik:id/edit_username"
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- runFlow:
+    file: ../common/set_pin_via_dialog.yaml
+    env:
+      PIN: "2222"
+- assertVisible:
+    text: "PIN set successfully"
+    timeout: 3000
+    optional: true
+- runFlow: ../common/logout.yaml
+
+# --- "uninstall Basic Tests" ---
+# Same App Manager > select app > Uninstall sequence as
+# flows/mobile_pins/setup_05_uninstall_app.yaml, but targeting "Basic Tests"
+# specifically by name (index-0 isn't safe here - Case Management is now
+# also installed, and list order isn't guaranteed).
+- tapOn: "More options"
+- tapOn: "Go To App Manager"
+- assertVisible:
+    id: "org.commcare.dalvik:id/apps_list_view"
+- tapOn: "Basic Tests"
+- tapOn: "Uninstall"
+- assertVisible: "CommCare will uninstall your app and then reboot to save changes."
+- tapOn: "OK"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/edit_username"
+    timeout: 30000
+
+# --- "login using PIN in Case Management app, verify login is functional" ---
+# Uninstalling Basic Tests should leave Case Management as the only
+# (therefore seated) app, landing back on ITS login screen.
+- runFlow:
+    file: ../common/login_with_pin.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PIN: "2222"
+- assertVisible: "Start"

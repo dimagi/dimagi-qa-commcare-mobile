@@ -1,0 +1,152 @@
+appId: org.commcare.dalvik
+tags:
+  - update
+  - automatable
+---
+# Master Mobile Plan (2026) > Update (coverage_matrix.csv XLSX Tab "Update").
+# One combined, sequential flow covering these five "Automatable" Test Case
+# IDs, since the source sheet writes them as a single continuous narrative
+# (enable dev options -> change update target -> update -> revert target ->
+# confirm no-op update -> verify via logout/login):
+#   - "Change update target"
+#   - "Update + Check for changes"
+#   - "Change update target back"
+#   - "Confirm that no update occurs if you try"
+#   - "Verify update"
+# This intentionally departs from docs/FRAMEWORK.md's usual "one flow file
+# per test case" convention: splitting these five up would just force every
+# downstream flow to re-establish developer-mode + update-target state via
+# runFlow for no isolation benefit, since the sheet's own ordering makes them
+# inherently stateful/sequential (each step assumes the previous one's device
+# state).
+#
+# Two sibling rows from the same sheet section are NOT covered here, per the
+# task's explicit scope:
+#   - "Make a change" / "Check for new build" - both "Not automatable": an
+#     ad-hoc HQ app-builder edit with no fixed target, and an HQ release-page
+#     browser inspection.
+#   - Because of the above, "Update + Check for changes" here only verifies
+#     the update-check completes cleanly (lands back on an "up to date"
+#     indicator), NOT that a specific app-content change was reflected -
+#     asserting that would require the out-of-scope HQ-side edit.
+#
+# Selectors verified against commcare-android source (read-only reference,
+# never modified by this repo):
+#   - app/instrumentation-tests/src/org/commcare/utils/InstrumentationUtility.kt
+#     -> enableDeveloperMode(): tap "About CommCare" 4x, dismissing the
+#     resulting info dialog with "OK" each time, to unlock developer mode.
+#   - app/instrumentation-tests/src/org/commcare/androidTests/DeveloperOptionsTests.kt
+#     -> testDevelopersOptions() / testUpdateOptions(): a live Espresso test
+#     that exercises this *exact* scenario end to end (enable dev mode ->
+#     Settings > Developer Options > "Show Update Options Item" > Enabled ->
+#     Settings > "Update Options" > "Latest saved state" -> "Update App" ->
+#     assert "App is up to date"). Every on-screen text below ("Settings",
+#     "Developer Options", "Show Update Options Item", "Enabled",
+#     "Update Options", "Latest saved state", "Latest version", "Update App",
+#     "App is up to date") is copied verbatim from that test.
+#   - app/res/xml/preferences_developer.xml: title="Show Update Options Item"
+#     (key cc-show-update-target-options).
+#   - app/res/xml/main_preferences.xml: title="Update Options" (key
+#     cc-update-target) - only visible once "Show Update Options Item" is
+#     Enabled (see MainConfigurablePreferences.setVisibilityOfUpdateOptionsPref()).
+#   - app/res/values/strings.xml: update_target_labels array = ["Latest
+#     version", "Latest saved state"]; pref_enabled_labels array =
+#     ["Enabled", "Disabled"].
+#   - app/assets/locales/android_translatable_strings.txt:
+#       home.menu.settings=Settings
+#       home.menu.about=About CommCare
+#       home.menu.update=Update App
+#       settings.developer.options=Developer Options
+#       settings.developer.title=Developer Options
+#       updates.success=App is up to date
+#       commcare.version=CommCare Android, version "${0}"(${1}), built on: ${2}
+#       dialog.ok=OK (About CommCare dialog's positive button; R.string.ok,
+#         used directly by InstrumentationUtility.enableDeveloperMode(), is
+#         also "OK")
+#   - app/src/org/commcare/activities/UpdateUIController.java:108 sets the
+#     on-screen progress text to Localization.get("updates.success") when an
+#     update check finds nothing to install - this is the literal live text
+#     DeveloperOptionsTests.kt asserts, so it's used here in preference to
+#     the notification-only "notification.install.uptodate.detail" string.
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- assertVisible: "Start"
+
+# === "Change update target" =============================================
+# Enable developer mode: About CommCare x4, dismissing with OK each time.
+- repeat:
+    times: 4
+    commands:
+      - tapOn: "More options"
+      - tapOn: "About CommCare"
+      - tapOn: "OK"
+
+# Menu > Settings > Developer Options > Show Update Options Item > Enabled.
+- tapOn: "More options"
+- tapOn: "Settings"
+- tapOn: "Developer Options"
+- assertVisible: "Show Update Options Item"
+- tapOn: "Show Update Options Item"
+- tapOn: "Enabled"
+- back
+- back
+- assertVisible: "Start"
+
+# Menu > Settings > Update Options > Latest saved state.
+- tapOn: "More options"
+- tapOn: "Settings"
+- tapOn: "Update Options"
+- tapOn: "Latest saved state"
+- back
+- assertVisible: "Start"
+
+# === "Update + Check for changes" =======================================
+# No HQ-side app change was made (out of scope, see header comment), so we
+# only assert the update check completes cleanly rather than that any
+# content changed.
+- tapOn: "More options"
+- tapOn: "Update App"
+- extendedWaitUntil:
+    visible: "App is up to date"
+    timeout: 30000
+- back
+- assertVisible: "Start"
+
+# === "Change update target back" ========================================
+- tapOn: "More options"
+- tapOn: "Settings"
+- tapOn: "Update Options"
+- tapOn: "Latest version"
+- back
+- assertVisible: "Start"
+
+# === "Confirm that no update occurs if you try" ==========================
+- tapOn: "More options"
+- tapOn: "Update App"
+- extendedWaitUntil:
+    visible: "App is up to date"
+    timeout: 30000
+- assertVisible: "App is up to date"
+- back
+- assertVisible: "Start"
+
+# === "Verify update" =====================================================
+# Best-effort: logout/login should still work post-update, and the About
+# CommCare dialog should still report *some* version string. Not asserting a
+# specific version number since no controlled version bump happened on HQ
+# (out of scope, see header comment).
+- runFlow: ../common/logout.yaml
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- assertVisible: "Start"
+- tapOn: "More options"
+- tapOn: "About CommCare"
+- assertVisible:
+    text: "(?i).*CommCare Android, version.*"
+- tapOn: "OK"

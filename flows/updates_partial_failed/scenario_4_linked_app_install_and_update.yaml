@@ -1,0 +1,103 @@
+appId: org.commcare.dalvik
+tags:
+  - updates_partial_failed
+  - partial
+---
+# Master Mobile Plan (2026) > Updates (partial and failed) > Test Case ID: 4.
+# App under test: "Mobile Updates Test 4/5 Master" (per the tab's own "Apps"
+# note) - a CommCare master app with a linked app.
+#
+# Setup 1 ("Master App") and Setup 2 ("Linked App") rows are Not automatable
+# per coverage_matrix.csv (pure HQ release-page references, no device
+# action) and are skipped entirely.
+#
+# - Installation 1: "Install the CommCare apk version in test" is a
+#   harness-level action - BrowserStack App Automate installs the APK under
+#   test before any Maestro flow runs (scripts/run_suite.py, per
+#   docs/FRAMEWORK.md's architecture diagram), so there is no in-app Maestro
+#   step for the install itself. The on-device equivalent this flow can
+#   assert is that a fresh install lands on the expected pre-login screen.
+# - Installation 2: "Install version V2 of the linked app" - reuses the exact
+#   selectors flows/install/install_07_install_as_mobile_user.yaml already
+#   verified against InstallFromListTest.kt (edit_username/edit_domain/
+#   edit_password/get_apps_button/apps_list_view/install_app_button).
+#   PARTIAL: needs valid HQ mobile-worker credentials, same as
+#   install_07/install_08.
+# - Update 13 (Partial - HQ mark-released dependency): "On HQ, ensure Version
+#   V6 is marked Released on the linked app's release page" - an HQ API
+#   pre-step this repo does not script (see
+#   hq_setup/recovery_measures/reinstall_update_app_flow.json for the JSON
+#   shape a "mark_build_status" action would take; not authored as its own
+#   hq_setup/*.json here since building that JSON was explicitly out of
+#   scope for this task). Once that's done externally, the on-device part is
+#   the same "Update App" menu action reused elsewhere in this workflow.
+# - Update 14: Form A verification (contains Registration Date + Age
+#   questions).
+# - Update 15: Form B verification (contains a photo-upload question).
+#
+# GENERIC/BEST-EFFORT: "Mobile Updates Test 4/5 Master" is a pre-provisioned
+# QA app whose exact form/question structure isn't available in this repo -
+# see flows/common/verify_form_a_questions.yaml and
+# flows/common/verify_form_b_photo_question.yaml for the specific caveats on
+# "Form A"/"Form B" naming and question order/wording.
+- launchApp
+- tapOn: "More options"
+- assertVisible: "See Apps for My User"
+
+# --- Installation 2: install the linked app (V2) as a mobile worker. ---
+- tapOn: "See Apps for My User"
+- tapOn:
+    id: "org.commcare.dalvik:id/edit_username"
+- inputText: "${HQ_MOBILE_WORKER_USERNAME}"
+- tapOn:
+    id: "org.commcare.dalvik:id/edit_domain"
+- inputText: "${HQ_DOMAIN}"
+- tapOn:
+    id: "org.commcare.dalvik:id/edit_password"
+- inputText: "${HQ_MOBILE_WORKER_PASSWORD}"
+- hideKeyboard
+- tapOn:
+    id: "org.commcare.dalvik:id/get_apps_button"
+- assertVisible:
+    id: "org.commcare.dalvik:id/apps_list_view"
+- tapOn:
+    id: "org.commcare.dalvik:id/apps_list_view"
+- tapOn:
+    id: "org.commcare.dalvik:id/install_app_button"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/edit_username"
+    timeout: 30000
+
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- assertVisible: "Start"
+
+# === HQ pre-step runs here in a real execution: mark linked-app V6 Released ===
+# --- Update 13 (Partial - HQ mark-released dependency, see header). ---
+- runFlow: ../common/update_app_via_menu.yaml
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- assertVisible: "Start"
+- runFlow:
+    file: ../common/check_app_version_via_about.yaml
+    env:
+      EXPECTED_VERSION: "22"
+
+# --- Update 14: Form A verification (contains Registration Date + Age). ---
+- runFlow:
+    file: ../common/verify_form_a_questions.yaml
+    env:
+      FORM_NAME: "Form A"
+
+# --- Update 15: Form B verification (contains photo-upload question). ---
+- runFlow:
+    file: ../common/verify_form_b_photo_question.yaml
+    env:
+      FORM_NAME: "Form B"

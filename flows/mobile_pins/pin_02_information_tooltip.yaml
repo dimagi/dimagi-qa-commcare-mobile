@@ -1,0 +1,22 @@
+appId: org.commcare.dalvik
+tags:
+  - mobile_pins
+  - automatable
+---
+# Master Mobile Plan (2026) > Mobile Pins > "Pin 2" - Information.
+# The grey 'i' is R.id.extra_info_button; its text panel is R.id.extra_info_content,
+# toggled visible/gone by PaneledChoiceDialog.toggleExtraInfoVisibility().
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- assertVisible: "Create a PIN?"
+- tapOn:
+    id: "org.commcare.dalvik:id/extra_info_button"
+- assertVisible:
+    id: "org.commcare.dalvik:id/extra_info_content"
+- tapOn:
+    id: "org.commcare.dalvik:id/extra_info_button"
+- assertNotVisible:
+    id: "org.commcare.dalvik:id/extra_info_content"

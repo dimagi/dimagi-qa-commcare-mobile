@@ -1,0 +1,65 @@
+appId: org.commcare.dalvik
+tags:
+  - recovery_measures
+  - automatable
+---
+# Master Mobile Plan (2026) > Recovery Measures > Recovery: Reinstall and
+# Update App > "Reinstall and update 3" - "Return to mobile, update CommCare
+# to Test Two". Written as its own standalone flow file rather than an
+# extension of reinstall_update_app_flow.yaml (that file already covers
+# Reinstall/Update 1, 5, 6 and is described as an existing template - keeping
+# it untouched avoids colliding with anything already built around it) - this
+# flow is the natural bridge step between it and
+# hq_setup/recovery_measures/reinstall_update_2_mark_test_two.json /
+# reinstall_update_4_mark_test_three.json.
+#
+# ORDER OF OPERATIONS for a real run of this section:
+#   1. reinstall_update_app_flow.yaml's "Reinstall/Update 1" portion (login,
+#      assert no forced update on Test One)
+#   2. hq_setup/recovery_measures/reinstall_update_2_mark_test_two.json
+#      (mark Test Two released, cut Test Three in-test)
+#   3. THIS FLOW ("Reinstall and update 3" - update to Test Two)
+#   4. hq_setup/recovery_measures/reinstall_update_4_mark_test_three.json
+#      (mark Test Three released)
+#   5. reinstall_update_app_flow.yaml's "Reinstall/Update 5, 6" portion
+#      (assert reinstall message, tap "Reinstall Using CCZ")
+#
+# Reuses flows/common/update_app_via_menu.yaml verbatim (same subflow
+# reinstall_update_app_flow.yaml itself uses to move Test One -> Test Two) -
+# see that file's header for its own selector/string citations
+# (home.menu.update = "Update App", ccz.update.available.title, etc., all
+# from android_translatable_strings.txt). Since AppUtils.notOnLatestAppVersion()
+# is what a normal CCZ-update banner reacts to (MEASURE_TYPE_APP_UPDATE's own
+# code path, distinct from the reinstall chooser) and Test Two was just
+# marked released in the HQ pre-step above, "Update App" from the overflow
+# menu is expected to offer the CCZ update to Test Two here in the ordinary
+# (non-recovery-measure) way.
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+# "Reinstall and update 3" - update CommCare app to Test Two via the normal
+# "Update App" menu path (not the recovery-measures forced flow).
+- runFlow: ../common/update_app_via_menu.yaml
+- runFlow: ../common/logout.yaml
+# Confirm the update actually landed before handing back to the HQ pre-step
+# that marks Test Three released (reinstall_update_4_mark_test_three.json).
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+# ASSUMPTION (not verifiable from commcare-android source, which has no
+# knowledge of this QA cycle's specific build numbering): "Test Two" maps to
+# profile version "2" per the sheet's own "Version N" naming pattern (Test
+# One=1, Test Two=2, Test Three=3), consistent with how
+# check_app_version_via_about.yaml's docstring describes its EXPECTED_VERSION
+# param. Confirm against your actual QA build's real profile version before
+# relying on this assertion, and adjust if this cycle's builds are numbered
+# differently.
+- runFlow:
+    file: ../common/check_app_version_via_about.yaml
+    env:
+      EXPECTED_VERSION: "2"
+- runFlow: ../common/logout.yaml

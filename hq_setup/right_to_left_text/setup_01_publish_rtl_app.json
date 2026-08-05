@@ -1,0 +1,11 @@
+{
+  "_comment": "Master Mobile Plan (2026) > Right to Left Text > 'Setup 1' - Uninstall + install latest build + deploy RTL app. This JSON covers only the HQ half: marking the RTL-test app's latest build Released so it becomes installable on the device (via the same barcode-claim / on-device install mechanism as Mobile Pins' 'Setup 4', which is Not automatable and stays a manual step - see hq_setup/mobile_pins/setup_02_install_application.json's comment for the analogous caveat). The sheet's 'Uninstall' half of this step is just resetting device state before a fresh install - if a prior RTL app build is already on the device, uninstall it the same way flows/mobile_pins/setup_05_uninstall_app.yaml does (via 'Go To App Manager' > select app > 'Uninstall') before running this JSON and re-provisioning. Run via `python scripts/hq_client.py hq_setup/right_to_left_text/setup_01_publish_rtl_app.json`. app_id/saved_app_id are placeholders for whichever qateam-domain app ships the Arabic ('ar') locale bundle - flows/right_to_left_text/setup_03_change_language_to_arabic.yaml's own header comment already flags that its 'Choose your Language' list is populated from THIS specific app's translation bundle, not a fixed CommCare string, so this app_id must point at that same RTL-strings app. Confirm current before use, app ids get recreated between QA cycles.",
+  "actions": [
+    {
+      "type": "mark_build_status",
+      "app_id": "REPLACE_WITH_RTL_TEST_APP_ID",
+      "saved_app_id": "REPLACE_WITH_RTL_TEST_APP_BUILD_ID",
+      "is_released": true
+    }
+  ]
+}

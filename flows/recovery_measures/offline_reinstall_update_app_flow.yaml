@@ -1,0 +1,107 @@
+appId: org.commcare.dalvik
+tags:
+  - recovery_measures
+  - partial
+---
+# Master Mobile Plan (2026) > Recovery Measures > Recovery: Offline
+# Reinstall and Update App (Setup 1, Recovery (offline) 1, 3, 7, 10, 11 -
+# the Automatable rows). Recovery (offline) 2, 4, 5, 6, 8, 9 are explicitly
+# out of scope here per task instructions - they need adb file pushes to
+# custom paths, adb file relocation, "no CCZ found" + manual file-picker
+# recovery, or a device uninstall/reinstall + a second HQ mark-released
+# call, none of which this flow attempts.
+#
+# UNVERIFIED TEXT WARNING: as with reinstall_update_app_flow.yaml (this
+# file's template), treat the sheet's literal wording as
+# admin-configurable/unverified and match via best-effort case-insensitive
+# regex rather than exact strings, per docs/FRAMEWORK.md's "Known gaps"
+# item 4.
+#
+# What IS verified against commcare-android source (read-only reference,
+# never modified by this repo):
+#   - RecoveryMeasure.MEASURE_TYPE_APP_OFFLINE_REINSTALL_AND_UPDATE, handled
+#     in ExecuteRecoveryMeasuresPresenter.executeMeasure(): unlike the
+#     online-or-CCZ chooser dialog used by the plain "Reinstall and Update
+#     App" measure, this measure type skips straight to the CCZ-only path -
+#     mActivity.hideReinstall() + setCczSelectionVisibility(true) - so only
+#     a single "Select CCZ" button is shown (no chooser dialog, no "Online
+#     Reinstall" option).
+#   - The generic screen detail text and the button label ARE real hardcoded
+#     strings in app/res/values/strings.xml (distinct from
+#     android_translatable_strings.txt, which is the only file the original
+#     template checked):
+#       recovery_measure_detail = "Recovery procedures have been initiated
+#       for your CommCare App due to a problem with it. Please wait..."
+#       recovery_measure_select_ccz = "Select CCZ"
+#   - execute_recovery_measures.xml: R.id/select_ccz_button.
+#
+# CAVEAT (beyond text wording): completing the actual CCZ file-selection
+# step below assumes a .ccz file is already reachable from the system
+# document picker's default view (e.g. the device's standard Downloads
+# folder) by the time this flow reaches that step. This flow does NOT push
+# any file via adb (that's explicitly what makes Recovery (offline) 5/6/8
+# Partial instead of Automatable) - it assumes the file got there through
+# some other non-adb mechanism (e.g. a normal browser download of a
+# CCZ/profile link HQ can serve) that happens before/alongside the HQ
+# pre-step below. If no such file is present when this flow runs, the
+# "Select CCZ" -> file-picker step will need a human to intervene or this
+# flow's tapOn to be pointed at a known real filename.
+#
+# Setup 1 is the HQ-side "download/deploy" step (Partial - needs HQ API);
+# only the login portion is automated here.
+# Recovery (offline) 2 is Partial ("HQ API: mark build released"). Run
+# hq_setup/recovery_measures/offline_reinstall_update_app_flow.json's HQ
+# action (mark the next test build released, queuing a
+# MEASURE_TYPE_APP_OFFLINE_REINSTALL_AND_UPDATE measure) at the point marked
+# below - split this into two Maestro runs in practice, or extend
+# run_suite.py to pause here. (Not writing the actual hq_setup JSON per task
+# scope - just flagging it.)
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+# Recovery (offline) 1 - pre-update sanity: no forced recovery screen yet.
+- assertVisible: "Start"
+- assertNotVisible:
+    text: "(?i).*recovery (procedures|measures).*initiated.*"
+- assertNotVisible:
+    text: "(?i).*select ccz.*"
+# --- HQ pre-step runs here in a real execution: mark next build released
+# and queue an app_offline_reinstall_and_update recovery measure
+# (Recovery (offline) 2, Partial) ---
+- runFlow: ../common/logout.yaml
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+# Recovery (offline) 3 - the queued measure triggers automatically; only the
+# CCZ-only path is shown (see header comment), no chooser dialog.
+- assertVisible:
+    text: "(?i).*recovery (procedures|measures).*initiated.*"
+- assertVisible:
+    text: "(?i).*select ccz.*"
+# Recovery (offline) 7 - pick the CCZ file via the system document picker.
+# See CAVEAT above: this assumes the file is already reachable from the
+# picker's default view.
+- tapOn:
+    text: "(?i).*select ccz.*"
+- tapOn:
+    text: "(?i).*\\.ccz$"
+# Recovery (offline) 10 - install completes and the device auto-logs out.
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/edit_username"
+    timeout: 60000
+# Recovery (offline) 11 - negative check: no further forced recovery screen.
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- assertVisible: "Start"
+- assertNotVisible:
+    text: "(?i).*recovery (procedures|measures).*initiated.*"
+- assertNotVisible:
+    text: "(?i).*select ccz.*"

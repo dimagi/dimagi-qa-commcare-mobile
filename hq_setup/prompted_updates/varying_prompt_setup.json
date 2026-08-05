@@ -1,0 +1,25 @@
+{
+  "_comment": "Master Mobile Plan (2026) > Prompted Updates > Varying Prompt Setup 1 & 2. Run once via `python scripts/hq_client.py hq_setup/prompted_updates/varying_prompt_setup.json` before running the varying_prompt_* flows. app_id below is the 'Case Management' app from the qateam domain per the sheet's linked domain (https://www.commcarehq.org/a/qateam/apps/view/<app_id>/) - confirm it's still current before relying on this, app ids get recreated between QA cycles.",
+  "actions": [
+    {
+      "type": "set_custom_properties",
+      "app_id": "REPLACE_WITH_CASE_MANAGEMENT_APP_ID",
+      "properties": {
+        "num-views-before-reducing-frequency": "3",
+        "reduced-show-frequency": "4",
+        "regular-show-frequency": "1"
+      }
+    },
+    {
+      "type": "create_new_build",
+      "app_id": "REPLACE_WITH_CASE_MANAGEMENT_APP_ID",
+      "comment": "3.4,1"
+    },
+    {
+      "type": "mark_build_status",
+      "app_id": "REPLACE_WITH_CASE_MANAGEMENT_APP_ID",
+      "saved_app_id": "$LAST_BUILD_ID",
+      "is_released": true
+    }
+  ]
+}

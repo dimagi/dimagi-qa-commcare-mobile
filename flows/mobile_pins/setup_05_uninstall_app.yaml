@@ -1,0 +1,58 @@
+appId: org.commcare.dalvik
+tags:
+  - mobile_pins
+  - automatable
+---
+# Master Mobile Plan (2026) > Mobile Pins > "Setup 5" - Remove Application
+# From Device (uninstall via App Manager). In the sheet's narrative this
+# resets the "Create a PIN?" first-login-prompt / PIN-set state between the
+# Pin 1..14 cycle and "Setup 6"'s reinstall (see
+# hq_setup/mobile_pins/setup_06_reinstall_application.json).
+# ASSUMES a single CCZ app is already installed & seated on the device (per
+# "Setup 2"/"Setup 4"'s HQ-publish + barcode-claim steps - both out of scope
+# here; see hq_setup/mobile_pins/setup_02_install_application.json's header
+# comment). coverage_matrix.csv's own Dependency/Reason column notes this
+# could also be done via `adb uninstall` instead of on-screen navigation -
+# this flow implements the on-screen App Manager path instead, since that's
+# what the sheet's test case actually exercises (adb uninstall would remove
+# the CommCare Android app entirely, not just the CCZ, and wouldn't exercise
+# the app's own uninstall-confirmation UI the sheet is checking).
+#
+# Selectors verified against commcare-android source (read-only reference,
+# never modified by this repo):
+#   app/instrumentation-tests/src/org/commcare/utils/InstrumentationUtility.kt
+#     -> uninstallCurrentApp(): openOptionsMenu() [from the login screen] ->
+#     click "Go To App Manager" -> click the first apps_list_view row ->
+#     click "Uninstall" -> confirm the reboot-warning dialog's OK button ->
+#     lands back on the app-manager screen with install_app_button visible
+#     (no app currently installed). This flow mirrors that exact sequence.
+#   app/src/org/commcare/activities/LoginActivity.java (~line 709,
+#     MENU_APP_MANAGER case -> new Intent(this, AppManagerActivity.class)) -
+#     "Go To App Manager" is a LOGIN-SCREEN overflow item, not a home-screen
+#     one (android_translatable_strings.txt line 345:
+#     login.menu.app.manager=Go To App Manager).
+#   app/res/layout/app_manager.xml: id/apps_list_view (ListView of installed
+#     apps), id/install_app_button (MaterialButton shown once no app is
+#     seated - see AppManagerActivity.installAppClicked()/installApp()).
+#   app/res/layout/single_app_view.xml: id/uninstall_button ->
+#     SingleAppManagerActivity.rebootAlertDialog() -> StandardAlertDialog
+#     titled getString(R.string.uninstalling) ("Uninstalling your app") with
+#     message getString(R.string.uninstall_reboot_warning) ("CommCare will
+#     uninstall your app and then reboot to save changes."), positive button
+#     getString(R.string.ok) ("OK") -> SingleAppManagerActivity.uninstall().
+#   app/res/values/strings.xml: uninstall_app="Uninstall" (button text).
+- launchApp
+- tapOn: "More options"
+- tapOn: "Go To App Manager"
+- assertVisible:
+    id: "org.commcare.dalvik:id/apps_list_view"
+- tapOn:
+    id: "org.commcare.dalvik:id/apps_list_view"
+    index: 0
+- tapOn: "Uninstall"
+- assertVisible: "CommCare will uninstall your app and then reboot to save changes."
+- tapOn: "OK"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/install_app_button"
+    timeout: 30000

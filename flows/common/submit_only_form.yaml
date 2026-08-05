@@ -1,0 +1,52 @@
+appId: org.commcare.dalvik
+---
+# Reusable: from the CommCare home screen, enter a test app's module/form and
+# submit it, for apps that have exactly one module and one form (e.g. the
+# "Rate Limiting" test app referenced by coverage_matrix.csv's "Rate limit 1"
+# row - PARTIAL because it needs to be pre-provisioned; this subflow only
+# does the on-device navigation, which is Automatable).
+#
+# Selectors verified against commcare-android source (read-only reference,
+# not modified) - app/instrumentation-tests/src/org/commcare/utils/
+# InstrumentationUtility.kt:
+#   openModule()/openForm() -> tapOn "Start", then click the sole row in the
+#     R.id.screen_suite_menu_list list (used for both the module list and,
+#     if the app has a separate form list under that module, the form list).
+#   nextPage()/submitForm() -> R.id.nav_btn_next / R.id.nav_btn_finish.
+#
+# CAVEAT: tapping the screen_suite_menu_list container's center (rather than
+# a specific row by label) only works because the target app is assumed to
+# have exactly ONE entry at each list level - this has not been verified
+# against the actual "Rate Limiting" app's real module/form labels, since
+# provisioning that app is out of this repo's scope. If that app shows more
+# than one row at any level, replace the relevant tapOn below with a
+# tapOn-by-text using the real label.
+- tapOn: "Start"
+- runFlow:
+    when:
+      visible:
+        id: "org.commcare.dalvik:id/screen_suite_menu_list"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/screen_suite_menu_list"
+- runFlow:
+    when:
+      visible:
+        id: "org.commcare.dalvik:id/screen_suite_menu_list"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/screen_suite_menu_list"
+# Answer/advance through however many questions the form has, then finish.
+- repeat:
+    while:
+      visible:
+        id: "org.commcare.dalvik:id/nav_btn_next"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/nav_btn_next"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_finish"
+    timeout: 10000
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"

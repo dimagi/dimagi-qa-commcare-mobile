@@ -1,0 +1,84 @@
+appId: org.commcare.dalvik
+tags:
+  - recovery_measures
+  - partial
+---
+# Master Mobile Plan (2026) > Recovery Measures > Recovery: Update App
+# (Setup 1, Update 1-6 - the on-device portions).
+#
+# UNVERIFIED TEXT WARNING: as with reinstall_update_app_flow.yaml (this
+# file's template), the sheet's literal wording for the on-device Recovery
+# Measures screen is treated as admin-configurable/unverified and matched
+# via best-effort case-insensitive regex rather than exact strings, per that
+# file's header comment and docs/FRAMEWORK.md's "Known gaps" item 4.
+#
+# HOWEVER, unlike the reinstall variant, a generic detail string for this
+# exact screen IS present in commcare-android's app/res/values/strings.xml
+# (a resource file distinct from android_translatable_strings.txt, which is
+# the only file the original template checked) - see
+# ExecuteRecoveryMeasuresActivity.setUpUI() / R.string.recovery_measure_detail:
+#   recovery_measure_detail = "Recovery procedures have been initiated for
+#   your CommCare App due to a problem with it. Please wait..."
+# and, per ExecuteRecoveryMeasuresPresenter.executeMeasure()'s
+# MEASURE_TYPE_APP_UPDATE branch, the update itself runs automatically via
+# executeAutoUpdate() with NO chooser dialog and no button for the user to
+# tap (unlike the reinstall variant's "Online Reinstall" / "Reinstall Using
+# CCZ" chooser) - progress is shown via
+# recovery_measure_app_update_progress = "Updating %1$s out of %2$s
+# resources". These are real hardcoded app strings, not per-app HQ config,
+# so this flow's regexes should be safe to tighten to exact matches once
+# confirmed against your QA build's actual screen.
+#
+# Setup 1 is the HQ-side "download/deploy Test One + login" step (Partial -
+# needs HQ API to publish Test One); only the login portion is automated
+# here.
+# Update 2 and Update 4 are both Partial ("HQ API: mark build released").
+# Run hq_setup/recovery_measures/update_app_flow.json's HQ action (mark the
+# next test build released, i.e. queue a MEASURE_TYPE_APP_UPDATE recovery
+# measure for the currently-seated app) at the point marked below BETWEEN
+# the two halves of this flow - i.e. split this into two Maestro runs in
+# practice, or extend run_suite.py to pause here. (Not writing the actual
+# hq_setup JSON per task scope - just flagging it.)
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+# Update 1 - pre-update sanity: no forced update/recovery screen on Test One.
+- assertVisible: "Start"
+- assertNotVisible:
+    text: "(?i).*recovery (procedures|measures).*initiated.*"
+- assertNotVisible:
+    text: "(?i).*update.*required.*"
+# --- HQ pre-step runs here in a real execution: mark next build released
+# and queue an app_update recovery measure (Update 2, Partial) ---
+- runFlow: ../common/logout.yaml
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+# Update 3 - the queued app_update recovery measure triggers automatically
+# on login; no button tap is expected (see header comment).
+- assertVisible:
+    text: "(?i).*recovery (procedures|measures).*initiated.*"
+# Update 4 (Partial, HQ mark-released) covers QA cycles where a second HQ
+# mark-released step is needed to get the measure picked up; see header
+# comment. Nothing to do on-device for it beyond what's already asserted
+# above/below.
+# Update 5 - update completes and the device auto-logs out.
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/edit_username"
+    timeout: 60000
+# Update 6 - negative check: no further forced update after the update.
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- assertVisible: "Start"
+- assertNotVisible:
+    text: "(?i).*recovery (procedures|measures).*initiated.*"
+- assertNotVisible:
+    text: "(?i).*update.*required.*"

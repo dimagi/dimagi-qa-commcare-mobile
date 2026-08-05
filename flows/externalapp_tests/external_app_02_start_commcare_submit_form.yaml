@@ -1,0 +1,109 @@
+appId: ${EXTAPP_APP_ID}
+tags:
+  - externalapp_tests
+  - partial
+env:
+  # UNVERIFIED PLACEHOLDER - see flows/externalapp_tests/README.md.
+  EXTAPP_APP_ID: "com.dimagi.mobileapitestingapp"
+  # Button text copied verbatim from the sheet's "External App 2" row, step 1.
+  EXTAPP_BTN_START_COMMCARE: "Start CommCare"
+  # Value typed into the Basic Form's answer field (step 3, "Enter a value") - the sheet
+  # doesn't specify a concrete value, any accepted string/number satisfies "enter a value".
+  EXTAPP_FORM_ANSWER_VALUE: "42"
+  # Same "sansar" domain login Setup 3 uses - see setup_03_login_and_background.yaml.
+  EXTAPP_QA_USERNAME: "qa_user"
+  EXTAPP_QA_PASSWORD: "123"
+---
+# Master Mobile Plan (2026) > ExternalApp Tests > "External App 2" (Start CommCare):
+#   1. In the ExternalApp, select Start CommCare
+#   2. Verify the Basic Form launches
+#   3. Enter a value and submit
+#   4. Ensure you're able to successfully submit
+#
+# Re-establishes CommCare logged-in-and-backgrounded state itself (see External App 1's
+# comment for why) - the companion app must already be installed via `--other-app` before
+# this flow runs (flows/externalapp_tests/README.md).
+- runFlow:
+    file: ../common/login_and_background.yaml
+    env:
+      USERNAME: ${EXTAPP_QA_USERNAME}
+      PASSWORD: ${EXTAPP_QA_PASSWORD}
+- launchApp:
+    appId: ${EXTAPP_APP_ID}
+- tapOn: "${EXTAPP_BTN_START_COMMCARE}"
+
+# CROSS-APP CONTEXT SWITCH - approach used and why:
+# Tapping "Start CommCare" in the companion app is expected to fire an Android Intent that
+# brings CommCare's own form-entry Activity to the foreground (that's the whole point of the
+# CaseDataContentProvider/FixtureDataContentProvider-style external-API surface this suite is
+# testing - confirmed present in commcare-android's AndroidManifest.xml, though no dedicated
+# "launch a form" intent-filter/Activity was found in source to cite by name). Once that
+# happens, Maestro keeps driving whatever's now in the foreground - `tapOn`/`assertVisible`/
+# `inputText` all act on the current on-screen accessibility tree regardless of which app
+# owns it; only `launchApp` itself cares about appId. We deliberately do NOT add an explicit
+# `launchApp: appId: org.commcare.dalvik` here, because:
+#   (a) we don't know exactly what Activity "Start CommCare" launches, so forcing an explicit
+#       launchApp (which restarts the target app unless stopApp:false is passed) risks racing
+#       or clobbering the specific screen the companion app's Intent just opened instead of
+#       landing on the Basic Form it's supposed to trigger; and
+#   (b) plain `assertVisible: {id: "org.commcare.dalvik:id/nav_btn_next"}` below is a
+#       sufficient, source-verified way to confirm CommCare's form-entry screen did launch,
+#       without needing to force-foreground CommCare ourselves.
+# If this "auto-follow" assumption doesn't hold against the real companion app (e.g. it needs
+# an explicit foreground nudge), add
+# `- launchApp: {appId: org.commcare.dalvik, stopApp: false}` right after the tapOn above -
+# stopApp:false brings an already-running/backgrounded app forward without restarting it
+# (confirmed via Maestro's launchApp docs), which matters here since CommCare is already
+# logged in and must stay that way.
+
+# Form-entry screen: nav_btn_next/nav_btn_finish ids verified against
+# app/res/layout/screen_form_entry.xml + app/src/org/commcare/activities/components/
+# FormNavigationUI.java (same citation flows/common/submit_only_form.yaml uses) - matched via
+# a single regex `id` selector since either one being visible confirms the Basic Form
+# launched (single-question forms show nav_btn_finish directly, multi-question ones show
+# nav_btn_next first).
+- assertVisible:
+    id: "org.commcare.dalvik:id/nav_btn_(next|finish)"
+    timeout: 15000
+
+# ENTER A VALUE: the Basic Form's exact question/field is specific to the "External App
+# Fixture Tests" HQ app (fixture-only, not in commcare-android source - UNVERIFIED), so this
+# can't be targeted by a question-specific id or label text. It CAN be targeted generically
+# though: commcare-android/app/res/layout/edit_text_question_widget.xml (the layout every
+# text-entry question uses, per StringWidget.java's getAnswerLayout()) declares its EditText
+# with no android:id at all, but app/src/org/commcare/views/QuestionsView.java's
+# setFocus(context, indexOfLastChangedWidget) auto-focuses widgets.get(0) - the FIRST question
+# widget on screen - whenever a screen is freshly navigated to (indexOfLastChangedWidget==-1,
+# per FormEntryActivityUIController.java's initial createView() call), and StringWidget's own
+# setFocus() override both requestFocus()s that EditText AND opens the soft keyboard. So on a
+# single-question "Basic Form" screen, the answer field already has focus with no tap needed -
+# `inputText` below types directly into it.
+- inputText: "${EXTAPP_FORM_ANSWER_VALUE}"
+- hideKeyboard
+- repeat:
+    while:
+      visible:
+        id: "org.commcare.dalvik:id/nav_btn_next"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/nav_btn_next"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_finish"
+    timeout: 10000
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"
+
+# "Ensure you're able to successfully submit" - no fixed success-toast text could be verified
+# for this fixture app (UNVERIFIED), so this asserts the ABSENCE of CommCare's generic/
+# unrecoverable-error text instead (same citation as flows/common/navigate_form_no_errors.yaml:
+# app/src/org/commcare/activities/UnrecoverableErrorActivity.java +
+# android_translatable_strings.txt's activity.task.error.generic / app.handled.error.explanation)
+# - a submit that neither errors nor leaves the form-entry screen open is the best generic
+# proxy available for "successfully submit" without a confirmed success string to assert on.
+- assertNotVisible:
+    text: "(?i).*unexpected error.*"
+- assertNotVisible:
+    text: "(?i).*commcare will now restart.*"
+- assertNotVisible:
+    id: "org.commcare.dalvik:id/nav_btn_finish"

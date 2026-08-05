@@ -1,0 +1,22 @@
+appId: org.commcare.dalvik
+tags:
+  - prompted_updates
+  - automatable
+---
+# Master Mobile Plan (2026) > Prompted Updates > "Varying Prompt 5" - Test a
+# forced .ccz update. (In the source sheet this reuses steps 11-13 of
+# Prompted Update Scenario 2 - clicking through the forced-update completion
+# and confirming no further prompt - rather than introducing new UI.)
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- runFlow: ../common/update_app_via_menu.yaml
+- runFlow: ../common/logout.yaml
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- assertNotVisible: "New version of the application is available"

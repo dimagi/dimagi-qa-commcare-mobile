@@ -1,0 +1,77 @@
+appId: org.commcare.dalvik
+tags:
+  - multimedia
+  - partial
+---
+# Master Mobile Plan (2026) > Multimedia > "Filesize 2" - update the app to
+# the "No Warning" release-note build, upload the two specifically-named
+# large-but-allowed files, verify no size warning appears.
+#
+# ******************************************************************
+# ** BLOCKED ON MISSING TEST ASSETS - DO NOT RUN UNTIL ADDED **
+# ******************************************************************
+# This flow's addMedia step references two files that DO NOT YET EXIST in
+# this repo and have NOT been fabricated here:
+#   flows/multimedia/assets/disable file size warning video (6mb).mp4
+#   flows/multimedia/assets/disable file size warning audio (8mb).mp3
+# Real dummy media files matching those exact sizes (~6MB / ~8MB - both
+# comfortably under FormUploadUtil.MAX_BYTES's ~15MB hard limit, so they
+# should never trip the app's own hard-coded oversize check either way; see
+# filesize_01_trigger_warning.yaml's citation of that constant) must be added
+# at those paths, named exactly as above (parentheses included) per the
+# sheet's own file names, before this flow can run. Until then, keep this
+# Test Case ID classified as NOT actually passing/runnable.
+#
+# PARTIAL DEPENDENCY (per coverage_matrix.csv: "Needs specific named media
+# files provisioned + addMedia"): the HQ-side pre-step that marks the "No
+# Warning" release-noted build as Released (so "Update App" below actually
+# pulls it) is in hq_setup/multimedia/filesize_no_warning_update.json - run
+# that via `python scripts/hq_client.py hq_setup/multimedia/filesize_no_warning_update.json`
+# before this flow. See that file's own _comment for why its saved_app_id is
+# a REPLACE_WITH placeholder (hq_client.py has no "find build by release
+# note/comment text" lookup - it must be found manually on HQ's Releases
+# page first).
+#
+# On-device update mechanism reused verbatim from
+# flows/common/update_app_via_menu.yaml (home.menu.update="Update App",
+# ccz.update.available.title, ccz.update.action, updates.staged.version -
+# see that file for the exact string-key citations).
+#
+# WIDGET-TYPE ASSUMPTION: named files are a video and an audio file, so this
+# targets "Choose Video" then "Choose Sound" - same MediaWidget.java
+# citation (both a capture and a choose button exist per question) as
+# media_02_capture_and_select.yaml.
+#
+# "verify no warning" - checked as an explicit assertNotVisible against the
+# same attachment_above_size_limit-derived message text cited in
+# filesize_01_trigger_warning.yaml (the one this flow is contrasting
+# against), immediately after each choose+pick.
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- runFlow: ../common/update_app_via_menu.yaml
+- addMedia:
+    - "./assets/disable file size warning video (6mb).mp4"
+    - "./assets/disable file size warning audio (8mb).mp3"
+- tapOn: "Start"
+- tapOn: "Multimedia"
+- tapOn: "Filesize Warning"
+- tapOn: "Choose Video"
+- runFlow: ../common/pick_first_gallery_image.yaml
+- assertNotVisible:
+    text: "(?i)Media attachment too large"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+    optional: true
+- tapOn: "Choose Sound"
+- runFlow: ../common/pick_first_gallery_image.yaml
+- assertNotVisible:
+    text: "(?i)Media attachment too large"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_finish"
+    timeout: 10000
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"

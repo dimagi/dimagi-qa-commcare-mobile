@@ -1,0 +1,95 @@
+appId: org.commcare.dalvik
+tags:
+  - recovery_measures
+  - partial
+---
+# Master Mobile Plan (2026) > Recovery Measures > Recovery: Offline Reinstall
+# and Update App > "Recovery (offline) 9" - "Uninstall/reinstall Test Two +
+# mark Test Three released". This is the ON-DEVICE half only; the HQ
+# "mark Test Three released" half is
+# hq_setup/recovery_measures/offline_9_mark_test_three.json - run that JSON
+# between this flow's uninstall step and its final re-login (see this flow's
+# inline marker below, same "split into two Maestro runs" convention as every
+# other Partial HQ pre-step in this repo).
+#
+# PARTIAL for the same reason reinstall_update_07_10_online_install_and_negative.yaml's
+# "Reinstall and update 7" uninstall/reinstall step is not a clean
+# Automatable row: reinstalling needs a real profile/install URL typed into
+# SetupEnterURLFragment's edit_profile_location field, and this repo has no
+# existing env var for "the Recovery Measures offline app's install URL" -
+# see that file's header CAVEAT for the full explanation (same gap,
+# different app). RECOVERY_APP_INSTALL_URL below is reused from that file's
+# convention rather than inventing a second env var name; if your two
+# Recovery Measures HQ apps (plain reinstall-and-update vs. offline
+# reinstall-and-update) are different HQ apps with different install URLs,
+# use a distinct var name per app and update both files consistently.
+#
+# App Manager uninstall path verified against commcare-android source -
+# same citations as reinstall_update_07_10_online_install_and_negative.yaml's
+# header (LoginActivity's "Go To App Manager" menu item,
+# AppManagerActivity/SingleAppManagerActivity's uninstall_button ->
+# "Uninstalling your app" confirm dialog -> OK, CommCareSetupActivity's
+# enter_app_location -> edit_profile_location -> start_install ->
+# btn_start_install install-confirm chain) - not re-derived here, see that
+# file for the full citation list.
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- runFlow: ../common/logout.yaml
+- tapOn: "More options"
+- tapOn: "Go To App Manager"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/apps_list_view"
+    timeout: 15000
+- tapOn:
+    id: "org.commcare.dalvik:id/apps_list_view"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/uninstall_button"
+    timeout: 10000
+- tapOn:
+    id: "org.commcare.dalvik:id/uninstall_button"
+- assertVisible: "Uninstalling your app"
+- tapOn: "OK"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/install_app_button"
+    timeout: 30000
+- tapOn:
+    id: "org.commcare.dalvik:id/install_app_button"
+- tapOn:
+    id: "org.commcare.dalvik:id/enter_app_location"
+- tapOn:
+    id: "org.commcare.dalvik:id/edit_profile_location"
+- inputText: "${RECOVERY_APP_INSTALL_URL}"
+- hideKeyboard
+- tapOn:
+    id: "org.commcare.dalvik:id/start_install"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/btn_start_install"
+    timeout: 15000
+- tapOn:
+    id: "org.commcare.dalvik:id/btn_start_install"
+- extendedWaitUntil:
+    visible: "Setting Up App"
+    timeout: 60000
+# --- HQ pre-step runs here in a real execution:
+# hq_setup/recovery_measures/offline_9_mark_test_three.json (mark Test Three
+# released again) - split into two Maestro runs in practice, or extend
+# run_suite.py to pause here. ---
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+# Once the HQ pre-step above has run, the offline reinstall-and-update
+# measure should fire again on this login - same assertion
+# offline_reinstall_update_app_flow.yaml's "Recovery (offline) 3" step makes.
+- assertVisible:
+    text: "(?i).*recovery (procedures|measures).*initiated.*"
+- assertVisible:
+    text: "(?i).*select ccz.*"

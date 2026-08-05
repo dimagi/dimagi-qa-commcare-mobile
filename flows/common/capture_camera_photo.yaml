@@ -1,0 +1,52 @@
+appId: org.commcare.dalvik
+---
+# Reusable subflow: run this right after tapping a "Take Picture" button
+# (ImageWidget.java's mCaptureButton -> a real
+# `android.provider.MediaStore.ACTION_IMAGE_CAPTURE` intent, source line
+# ~291 - see the calling flow's header for the full citation). Attempts to
+# drive whatever camera app the OS hands the intent off to: press the
+# shutter, then confirm/accept the captured photo, landing back in
+# CommCare's form with the image question filled in.
+#
+# BEST-EFFORT / UNVERIFIED, NOT the same confidence level as
+# pick_first_gallery_image.yaml: that subflow's two selectors were both
+# confirmed against Maestro's own published recipe for a *specific*,
+# documented problem (system photo picker). There is no equivalent
+# published recipe for "drive an arbitrary camera app's capture UI" -
+# camera apps vary far more (vendor skins, BrowserStack's per-device
+# virtual/injected camera feed, even whether a capture confirmation screen
+# exists at all vs. auto-returning immediately). The ids/content-descriptions
+# below are simply the most common ones across AOSP/stock Android camera
+# apps (Camera2 API sample app and derivatives), not verified against a live
+# BrowserStack device. EVERY tap here is `optional: true` specifically so
+# that a non-matching camera UI degrades to a silent no-op rather than
+# failing the whole flow - which also means this subflow provides no hard
+# guarantee a photo was actually captured. Treat any flow depending on this
+# as best-effort per coverage_matrix.csv's own note that camera capture is
+# "flaky/unsupported on most cloud emulators".
+- extendedWaitUntil:
+    visible:
+      id: "com.android.camera2:id/shutter_button"
+    timeout: 5000
+    optional: true
+- tapOn:
+    id: "com.android.camera2:id/shutter_button"
+    optional: true
+- tapOn:
+    id: "com.google.android.GoogleCamera:id/shutter_button"
+    optional: true
+- tapOn:
+    text: "Shutter"
+    optional: true
+# Some camera apps show a review/confirm screen after capture with a
+# checkmark/"Done"/"OK" action; others return to the calling app
+# immediately. Try the common confirm affordances, all optional.
+- tapOn:
+    id: "com.android.camera2:id/done_button"
+    optional: true
+- tapOn:
+    id: "com.google.android.GoogleCamera:id/done_button"
+    optional: true
+- tapOn:
+    text: "(?i)^(done|ok|save|confirm)$"
+    optional: true

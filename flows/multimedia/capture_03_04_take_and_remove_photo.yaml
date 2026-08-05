@@ -1,0 +1,93 @@
+appId: org.commcare.dalvik
+tags:
+  - multimedia
+  - partial
+---
+# Master Mobile Plan (2026) > Multimedia > "Capture 3" (Take picture for
+# image question) + "Capture 4" (Remove + retake image), combined since
+# Capture 4 is a direct continuation of Capture 3 on the same question.
+#
+# **CAMERA-CAPTURE FLAKINESS CAVEAT (same as
+# photo_01_can_remove_taken_photo.yaml / coverage_matrix.csv's "Image Resize
+# 25" row)**: real camera capture is flaky/unsupported on most cloud
+# emulators/BrowserStack device images - there is no Maestro-native way to
+# inject a photo into the OS camera app's capture flow. The shutter/confirm
+# selectors below are the SAME unverified guesses used in
+# photo_01_can_remove_taken_photo.yaml - see that flow's header comment for
+# the full caveat. Only feasible if the BrowserStack device supports an
+# injected camera image.
+#
+# PARTIAL DEPENDENCY: assumes a "Basic Tests" QA test app module containing
+# a "Multimedia Only" form (names taken verbatim from the task description -
+# unverified against any source in this repo, since it's a QA-only app) with
+# an Image question reachable directly (no Next taps assumed before it,
+# analogous to photo_02_can_remove_chosen_photo.yaml's "Choose Image" being
+# question 1 of ITS form) via Start > Basic Tests > Multimedia Only.
+#
+# Button text (capture_image="Take Picture", discard_image="Remove Image")
+# verified against the same res/values/strings.xml citations as
+# photo_02_can_remove_chosen_photo.yaml / photo_01_can_remove_taken_photo.yaml.
+#
+# "verify image visible" IS NOT asserted by a direct id selector: unlike the
+# discard_image button, ImageWidget.java's own attached-image preview
+# (mImageView, line 68/192) is created purely in code with only a setTag(),
+# no fixed Android resource id (app/src/org/commcare/views/widgets/
+# ImageWidget.java) - the same "no fixed resource id" caveat already
+# documented in flows/common/verify_form_b_photo_question.yaml for this
+# widget's buttons. The best available proxy signal is discard_image
+# ("Remove Image") itself becoming VISIBLE, since ImageWidget only flips it
+# to VISIBLE once a binary attachment is actually registered (same
+# mDiscardButton citation as photo_02) - i.e. if "Remove Image" is showing,
+# an image was successfully attached and is presumably being previewed.
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- tapOn: "Start"
+- tapOn: "Basic Tests"
+- tapOn: "Multimedia Only"
+# --- Capture 3: take a picture, verify it attached ---
+- tapOn: "Take Picture"
+- tapOn:
+    id: "com.android.camera2:id/shutter_button"
+    optional: true
+- tapOn:
+    id: "com.google.android.GoogleCamera:id/shutter_button"
+    optional: true
+- tapOn:
+    text: "Shutter"
+    optional: true
+- tapOn:
+    id: "com.android.camera2:id/done_button"
+    optional: true
+- tapOn:
+    id: "com.google.android.GoogleCamera:id/done_button"
+    optional: true
+- tapOn:
+    text: "(?i)^(done|ok|confirm|save)$"
+    optional: true
+- assertVisible: "Remove Image"
+# --- Capture 4: remove it, then retake ---
+- tapOn: "Remove Image"
+- assertNotVisible: "Remove Image"
+- tapOn: "Take Picture"
+- tapOn:
+    id: "com.android.camera2:id/shutter_button"
+    optional: true
+- tapOn:
+    id: "com.google.android.GoogleCamera:id/shutter_button"
+    optional: true
+- tapOn:
+    text: "Shutter"
+    optional: true
+- tapOn:
+    id: "com.android.camera2:id/done_button"
+    optional: true
+- tapOn:
+    id: "com.google.android.GoogleCamera:id/done_button"
+    optional: true
+- tapOn:
+    text: "(?i)^(done|ok|confirm|save)$"
+    optional: true
+- assertVisible: "Remove Image"

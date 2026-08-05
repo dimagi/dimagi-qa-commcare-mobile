@@ -1,0 +1,263 @@
+Workflow,XLSX Tab,Test Case ID,Summary,Automatability,Dependency / Reason,Flow file (if implemented)
+Install,Install,Setup 1,Download latest CommCare app,Automatable,"Handled by framework's APK-provisioning step, not a per-test flow",(handled by scripts/download_apk.py - no dedicated flow needed)
+Install,Install,Install 1,Scan Barcode Install,Not automatable,Requires visiting HQ release page in a desktop browser and scanning a live on-screen barcode with the device camera,
+Install,Install,Install 4,"Verifying ""See Apps for My User"" menu item",Automatable,,flows/install/install_04_see_apps_menu_item_visible.yaml
+Install,Install,Install 5,Verifying mobile user login page fields,Automatable,,flows/install/install_05_mobile_user_login_page.yaml
+Install,Install,Install 6,Verifying web user login page fields,Automatable,,flows/install/install_06_web_user_login_page.yaml
+Install,Install,Install 7,Install app as mobile user,Partial,Needs a valid HQ mobile-worker username/domain/password (env vars); on-device flow itself is automatable,flows/install/install_07_install_as_mobile_user.yaml
+Install,Install,Install 8,Install app as web user,Partial,Needs a valid HQ web-user email/password (env vars),flows/install/install_08_install_as_web_user.yaml
+Update,Update,Set up,Ensure app workspace clean / make new version,Partial,HQ API: create new version if needed,hq_setup/update/setup_make_new_version.json
+Update,Update,Install,Star + install latest build,Partial,"HQ API: mark build starred/released, then on-device install",hq_setup/update/install_mark_released.json
+Update,Update,Make a change,Edit module/form name on HQ (arbitrary change),Not automatable,Ad-hoc HQ app-builder edit with no fixed target - inherently manual/exploratory,
+Update,Update,Change update target,Enable dev options + set update target to Latest Saved State,Automatable,,flows/update/update_target_developer_options_flow.yaml
+Update,Update,Update + Check for changes,Update App + verify change reflected,Automatable,,flows/update/update_target_developer_options_flow.yaml
+Update,Update,Check for new build,Verify HQ auto-created a build with correct comment/timestamp,Not automatable,HQ release-page inspection in a browser,
+Update,Update,Change update target back,Set target back to Latest Version,Automatable,,flows/update/update_target_developer_options_flow.yaml
+Update,Update,Confirm that no update occurs if you try,Verify 'up to date' message,Automatable,,flows/update/update_target_developer_options_flow.yaml
+Update,Update,Uninstall/Reinstall,Fresh Play Store install + old app version,Partial,Needs a specific old app build provisioned + a real Play Store install,
+Update,Update,Interrupt update,Toggle airplane mode mid-download,Not automatable,Timing-critical manual airplane-mode toggle during a live download,
+Update,Update,Reestablish connection,Wait ~10 minutes,Not automatable,Open-ended real-time wait,
+Update,Update,Verify update,"Logout/login, confirm version",Automatable,,flows/update/update_target_developer_options_flow.yaml
+Update,Update,Recheck button 1,"HQ trivial change + release, then airplane mode",Not automatable,HQ change + airplane-mode timing,
+Update,Update,Recheck button 2,"Reconnect, press Recheck, verify update",Partial,"Needs a scripted network-disable/enable step (BrowserStack network condition, not physical airplane mode)",
+Mobile Pins,Mobile Pins,Setup 1,Install CommCare,Automatable,Framework setup step,(handled by scripts/download_apk.py - no dedicated flow needed)
+Mobile Pins,Mobile Pins,Setup 2,Publish app to device via HQ,Partial,HQ API: publish/star latest build,(handled by hq_setup/mobile_pins/setup_02_install_application.json - no dedicated flow needed beyond common/login.yaml)
+Mobile Pins,Mobile Pins,Setup 3,Enable Developer Options (tap About CommCare 4x),Automatable,,flows/mobile_pins/setup_03_enable_developer_options.yaml
+Mobile Pins,Mobile Pins,Setup 4,Claim mobile privileges via barcode scan on HQ page,Not automatable,Requires scanning a live barcode rendered by a desktop-browser session on commcarehq.org/account/mobile_privileges/,
+Mobile Pins,Mobile Pins,Pin 1,Prompt shown on first login,Automatable,,flows/mobile_pins/pin_01_prompt_shown_on_first_login.yaml
+Mobile Pins,Mobile Pins,Pin 2,Info tooltip toggle,Automatable,,flows/mobile_pins/pin_02_information_tooltip.yaml
+Mobile Pins,Mobile Pins,Pin 3,"'No, and don't ask again'",Automatable,,flows/mobile_pins/pin_03_no_dont_ask_again.yaml
+Mobile Pins,Mobile Pins,Pin 4,Set My Pin (menu path),Automatable,,flows/mobile_pins/pin_04_set_my_pin.yaml
+Mobile Pins,Mobile Pins,Setup 5,Uninstall app via App Manager,Automatable,Can be done via adb uninstall instead of on-screen navigation,flows/mobile_pins/setup_05_uninstall_app.yaml
+Mobile Pins,Mobile Pins,Setup 6,Reinstall app (repeat Setup 2-4),Partial,Same HQ + barcode dependency as Setup 2/4,(handled by hq_setup/mobile_pins/setup_06_reinstall_application.json - no dedicated flow needed beyond flows/mobile_pins/setup_05_uninstall_app.yaml)
+Mobile Pins,Mobile Pins,Pin 1,Prompt shown again after reinstall,Automatable,,flows/mobile_pins/pin_01_prompt_shown_on_first_login.yaml (same on-device assertion as the first 'Pin 1' row - see that file's header comment for why no separate file was written)
+Mobile Pins,Mobile Pins,Pin 6,"'No, but ask again later'",Automatable,,flows/mobile_pins/pin_06_no_but_ask_again_later.yaml
+Mobile Pins,Mobile Pins,Pin 7,Setup PIN via prompt,Automatable,,flows/mobile_pins/pin_07_setup_pin.yaml
+Mobile Pins,Mobile Pins,Pin 8,Login using PIN,Automatable,,flows/mobile_pins/pin_08_login_using_pin.yaml
+Mobile Pins,Mobile Pins,Pin 9,Change PIN via options menu,Automatable,,flows/mobile_pins/pin_09_change_pin_menu.yaml
+Mobile Pins,Mobile Pins,Pin 10,Login using changed PIN,Automatable,,flows/mobile_pins/pin_10_login_using_changed_pin.yaml
+Mobile Pins,Mobile Pins,Pin 11,Forgot PIN reverts to password,Automatable,,flows/mobile_pins/pin_11_forgot_pin.yaml
+Mobile Pins,Mobile Pins,Pin 12,Reset PIN,Automatable,,flows/mobile_pins/pin_12_reset_pin.yaml
+Mobile Pins,Mobile Pins,Pin 13,Login using reset PIN,Automatable,,flows/mobile_pins/pin_13_login_using_reset_pin.yaml
+Mobile Pins,Mobile Pins,Pin 14,Reset PIN prompt persists after decline,Automatable,,flows/mobile_pins/pin_14_reset_pin_persists_after_decline.yaml
+Mobile Pins,Mobile Pins,Mutiple App PIN,Install two CCZ apps + enable PIN,Partial,HQ API: publish for two apps,"(handled by hq_setup/mobile_pins/mutiple_app_pin_install_apps.json - no dedicated flow needed beyond Setup 4's manual barcode-claim, run once per app)"
+Mobile Pins,Mobile Pins,Mutiple App PIN,Per-app PIN isolation after uninstalling one app,Automatable,,flows/mobile_pins/multiple_app_pin_per_app_isolation.yaml
+Multimedia,Multimedia,MM1,Install w/o multimedia + manual zip transfer + install via Options menu,Not automatable,Requires downloading a zip from HQ and moving it onto the device SD card from a PC,
+Multimedia,Multimedia,MM2,Verification Fail after moving a media file out via file manager,Not automatable,Needs device file-manager relocation of an app-internal media file (adb-level access on modern Android),
+Multimedia,Multimedia,MM3,Verification Success after moving file back,Not automatable,Same dependency as MM2,
+Multimedia,Multimedia,MM4,Question Image/Audio/Select Choice navigation + submit,Partial,Navigation/tap/checkbox steps automatable; 'audio plays correctly' is a human judgment call and is skipped,flows/multimedia/mm4_question_types.yaml
+Multimedia,Multimedia,MM5,Verification Failure from Advanced > Validate Media menu,Not automatable,Same file-relocation dependency as MM2,
+Multimedia,Multimedia,MM6,Retry after restoring file,Not automatable,Same dependency as MM5,
+Multimedia,Multimedia,Icons,View module/form icons + audio,Partial,Icon-visible assertions automatable; audio-plays judgment skipped,flows/multimedia/icons_module_form_icons.yaml
+Multimedia,Multimedia,Image Resize 1,View Large/Small/Wide/Tall image form,Partial,Navigation automatable; 'not distorted' is a visual-regression check outside Maestro's built-in assertions,flows/multimedia/image_resize_01_04_default_setting.yaml
+Multimedia,Multimedia,Image Resize 2,View Large/Small/Wide/Tall image form,Partial,Navigation automatable; 'not distorted' is a visual-regression check outside Maestro's built-in assertions,flows/multimedia/image_resize_01_04_default_setting.yaml
+Multimedia,Multimedia,Image Resize 3,View Large/Small/Wide/Tall image form,Partial,Navigation automatable; 'not distorted' is a visual-regression check outside Maestro's built-in assertions,flows/multimedia/image_resize_01_04_default_setting.yaml
+Multimedia,Multimedia,Image Resize 4,View Large/Small/Wide/Tall image form,Partial,Navigation automatable; 'not distorted' is a visual-regression check outside Maestro's built-in assertions,flows/multimedia/image_resize_01_04_default_setting.yaml
+Multimedia,Multimedia,Image Resize 5,Change Auto-Resize Images setting on HQ ('Full Resize') + new build,Not automatable,HQ app-builder Advanced Settings edit,hq_setup/multimedia/image_resize_full_resize.json
+Multimedia,Multimedia,Image Resize 6,Repeat of Image Resize 1-4 after resize setting change,Partial,Same as Image Resize 1-4,flows/multimedia/image_resize_06_09_full_resize.yaml
+Multimedia,Multimedia,Image Resize 7,Repeat of Image Resize 1-4 after resize setting change,Partial,Same as Image Resize 1-4,flows/multimedia/image_resize_06_09_full_resize.yaml
+Multimedia,Multimedia,Image Resize 8,Repeat of Image Resize 1-4 after resize setting change,Partial,Same as Image Resize 1-4,flows/multimedia/image_resize_06_09_full_resize.yaml
+Multimedia,Multimedia,Image Resize 9,Repeat of Image Resize 1-4 after resize setting change,Partial,Same as Image Resize 1-4,flows/multimedia/image_resize_06_09_full_resize.yaml
+Multimedia,Multimedia,Image Resize 10,Change Auto-Resize Images to 'Horizontal Resize' + new build,Not automatable,HQ app-builder Advanced Settings edit,hq_setup/multimedia/image_resize_horizontal_resize.json
+Multimedia,Multimedia,Image Resize 11,Repeat with rotation check,Partial,Same as Image Resize 1-4,flows/multimedia/image_resize_11_14_horizontal_resize.yaml
+Multimedia,Multimedia,Image Resize 12,Repeat with rotation check,Partial,Same as Image Resize 1-4,flows/multimedia/image_resize_11_14_horizontal_resize.yaml
+Multimedia,Multimedia,Image Resize 13,Repeat with rotation check,Partial,Same as Image Resize 1-4,flows/multimedia/image_resize_11_14_horizontal_resize.yaml
+Multimedia,Multimedia,Image Resize 14,Repeat with rotation check,Partial,Same as Image Resize 1-4,flows/multimedia/image_resize_11_14_horizontal_resize.yaml
+Multimedia,Multimedia,Image Resize 15,Change Auto-Resize Images to 'Half Resize' + new build,Not automatable,HQ app-builder Advanced Settings edit,hq_setup/multimedia/image_resize_half_resize.json
+Multimedia,Multimedia,Image Resize 16,Repeat,Partial,Same as Image Resize 1-4,flows/multimedia/image_resize_16_19_half_resize.yaml
+Multimedia,Multimedia,Image Resize 17,Repeat,Partial,Same as Image Resize 1-4,flows/multimedia/image_resize_16_19_half_resize.yaml
+Multimedia,Multimedia,Image Resize 18,Repeat,Partial,Same as Image Resize 1-4,flows/multimedia/image_resize_16_19_half_resize.yaml
+Multimedia,Multimedia,Image Resize 19,Repeat,Partial,Same as Image Resize 1-4,flows/multimedia/image_resize_16_19_half_resize.yaml
+Multimedia,Multimedia,Image Resize 20,Restore Auto-Resize Images to 'None' + new build,Not automatable,HQ app-builder Advanced Settings edit,hq_setup/multimedia/image_resize_none_resize.json
+Multimedia,Multimedia,Image Resize 21,Repeat,Partial,Same as Image Resize 1-4,flows/multimedia/image_resize_21_24_none_resize.yaml
+Multimedia,Multimedia,Image Resize 22,Repeat,Partial,Same as Image Resize 1-4,flows/multimedia/image_resize_21_24_none_resize.yaml
+Multimedia,Multimedia,Image Resize 23,Repeat,Partial,Same as Image Resize 1-4,flows/multimedia/image_resize_21_24_none_resize.yaml
+Multimedia,Multimedia,Image Resize 24,Repeat,Partial,Same as Image Resize 1-4,flows/multimedia/image_resize_21_24_none_resize.yaml
+Multimedia,Multimedia,Image Resize 25,Photo taken per question + submit,Partial,Camera capture is flaky/unsupported on most cloud emulators; feasible only if the BrowserStack device supports an injected camera image,flows/multimedia/image_resize_25_photo_taken.yaml
+Multimedia,Multimedia,Image Resize 26,Photo chosen (from gallery) per question + submit,Automatable,Use Maestro addMedia to push a known image into the device gallery first,flows/multimedia/image_resize_26_photo_chosen.yaml
+Multimedia,Multimedia,Image Resize 27,HQ Submit History attachment size/type verification,Not automatable,HQ report browser inspection,
+Multimedia,Multimedia,Image Resize 28,HQ Submit History attachment size/type verification,Not automatable,HQ report browser inspection,
+Multimedia,Multimedia,Video Types,Standard vs inline video playback,Not automatable,Playback-correctness is a human judgment call,
+Multimedia,Multimedia,Gif,Gif renders in first question,Partial,Element-visible assertion automatable; 'is it actually animating' judgment skipped,flows/multimedia/gif_can_add_gif.yaml
+Multimedia,Multimedia,Photo 1,Remove taken photo,Partial,Same camera-capture caveat as Image Resize 25,flows/multimedia/photo_01_can_remove_taken_photo.yaml
+Multimedia,Multimedia,Photo 2,Remove chosen photo,Automatable,addMedia + remove-button flow,flows/multimedia/photo_02_can_remove_chosen_photo.yaml
+Multimedia,Multimedia,Photo Verification,HQ Submit History - fields left blank,Not automatable,HQ report browser inspection,
+Multimedia,Multimedia,Image Compatibility,Low/high density setting across two different physical device tiers,Not automatable,Requires an actual low-end and a high-end physical device plus an HQ setting change,
+Multimedia,Multimedia,Logo 1,Dimagi logo visible on login screen,Automatable,,flows/multimedia/logo_01_login_logo.yaml
+Multimedia,Multimedia,Logo 2,Dimagi logo visible on home screen,Automatable,,flows/multimedia/logo_02_home_screen_logo.yaml
+Multimedia,Multimedia,Logo 3,Dimagi logo visible in demo mode,Automatable,,flows/multimedia/logo_03_demo_logo.yaml
+Multimedia,Multimedia,Media 1,Open captured media using a chosen external app,Not automatable,Depends on Android's app-chooser dialog and whatever third-party apps happen to be preinstalled on the farm image,
+Multimedia,Multimedia,Media 2,Media capture/select + custom-property check + sync,Partial,On-device capture/sync automatable with addMedia; the 'no custom properties present' check is an HQ inspection step,flows/multimedia/media_02_capture_and_select.yaml
+Multimedia,Multimedia,Media 3,Verify .aes encryption extension via device file manager,Not automatable,App-private storage path isn't reachable from a standard file manager on modern Android - needs adb shell,
+Multimedia,Multimedia,Media 4,HQ Submit History attachment-name verification,Not automatable,HQ report browser inspection,
+Multimedia,Multimedia,Filesize 1,Trigger oversized-file warning,Partial,Needs a >15MB test file pushed via addMedia; BLOCKED: needs flows/multimedia/assets/oversized_test_video.mp4,flows/multimedia/filesize_01_trigger_warning.yaml
+Multimedia,Multimedia,Filesize 2,"Upload named large-but-allowed files, verify no warning",Partial,Needs specific named media files provisioned + addMedia; BLOCKED: needs named 6mb/8mb test assets under flows/multimedia/assets/,flows/multimedia/filesize_02_no_warning.yaml
+Multimedia,Multimedia,Filesize Warning 1,"Record a ~1 min video, expect size-limit error",Not automatable,Real camera video recording on a device farm is slow/unreliable,
+Multimedia,Multimedia,Filesize Warning 2,"Select the same oversized video, expect error",Partial,Automatable if the oversized video can be pushed via addMedia; BLOCKED: needs flows/multimedia/assets/oversized_test_video.mp4,flows/multimedia/filesize_warning_02_select_large_video.yaml
+Multimedia,Multimedia,External File in Forms,Open a locally-placed mp4 via in-form hyperlink,Partial,Needs the video file pushed to a specific non-sandboxed device path first; BLOCKED: run_suite.py has no adb-push pre-step hook yet,flows/multimedia/external_file_in_forms.yaml
+Multimedia,Multimedia,Lazy Video 1,Install low-media build then release the lazy-video build,Partial,HQ API: mark build released,hq_setup/multimedia/lazy_video_release.json
+Multimedia,Multimedia,Lazy Video 2,'Missing video' popup shown per question,Automatable,,flows/multimedia/lazy_video_02_file_missing_popup.yaml
+Multimedia,Multimedia,Lazy Video 3,Download + play lazily-loaded video,Partial,Depends on a real background download completing within the test's timeout,flows/multimedia/lazy_video_03_download_and_play.yaml
+Multimedia,Multimedia,Lazy Video 4,Videos still play after relogin,Automatable,,flows/multimedia/lazy_video_04_relogin_videos_play.yaml
+Multimedia,Multimedia,Lazy Video 5,'Media not found' message for unreferenced videos,Automatable,,flows/multimedia/lazy_video_05_no_references_media_not_found.yaml
+Multimedia,Multimedia,Capture 1,Gather signature (draw + save),Automatable,Maestro swipe/drag gestures can draw a signature,
+Multimedia,Multimedia,Capture 2,Signature reset + redraw,Automatable,,
+Multimedia,Multimedia,Capture 3,Take picture for image question,Partial,Camera-capture caveat,flows/multimedia/capture_03_04_take_and_remove_photo.yaml
+Multimedia,Multimedia,Capture 4,Remove + retake image,Partial,Camera-capture caveat,flows/multimedia/capture_03_04_take_and_remove_photo.yaml
+Multimedia,Multimedia,Capture 5,Record + play video,Not automatable,Real camera recording + playback-correctness judgment,
+Multimedia,Multimedia,Capture 6,Record + play audio,Not automatable,Audio-quality judgment,
+Multimedia,Multimedia,Capture 7,Pause/resume while recording audio,Not automatable,Same as Capture 6,
+Multimedia,Multimedia,Capture 8,HQ Submit History multimedia integrity check,Not automatable,HQ report browser inspection,
+Prompted Updates,Prompted Updates,Setup 1,Confirm CommCare Version build setting,Not automatable,Read-only HQ Advanced Settings inspection - no state to script,
+Prompted Updates,Prompted Updates,Setup 2,Mark latest build In Test + install prior released build + login,Partial,HQ API: set build status,
+Prompted Updates,Prompted Updates,Setup 3,Set Prompt Updates to CommCare/App = On,Partial,HQ API: update-settings toggle,
+Prompted Updates,Prompted Updates,Prompted Update Scenario 1,Optional CCZ update end-to-end,Partial,HQ API: mark latest build Released; rest is on-device,
+Prompted Updates,Prompted Updates,Prompted Update Scenario 2,Forced CCZ update blocker screen,Partial,HQ API: set Forced + mark Released,
+Prompted Updates,Prompted Updates,Prompted Update Scenario 3,No prompt for an un-starred build,Partial,HQ API: create a new unreleased build,
+Prompted Updates,Prompted Updates,Prompted Update Scenario 4 (NOTE: The earliest version for which this test can be performed is CommCare 2.40. Skip it for earlier versions),APK update via Play Store using a 2-versions-back APK,Not automatable,Needs a specific historical APK sideloaded + a real Play Store update chain,
+Prompted Updates,Prompted Updates,Setup 1,Set custom keys + release build 3.4.1,Partial,HQ API: set custom properties + create/release build,
+Prompted Updates,Prompted Updates,Setup 2,Update custom keys + release build 3.4.2,Partial,Same as above,
+Prompted Updates,Prompted Updates,Varying Prompt 1,Update frequency end-to-end,Automatable,,flows/prompted_updates/varying_prompt_01_update_frequency.yaml
+Prompted Updates,Prompted Updates,Varying Prompt 3,3 login/logout cycles as test2 - views-before-reducing-frequency,Automatable,,flows/prompted_updates/varying_prompt_03_views_before_reducing_frequency.yaml
+Prompted Updates,Prompted Updates,Varying Prompt 4,4th-login reduced-frequency prompt,Automatable,,flows/prompted_updates/varying_prompt_04_reduced_show_frequency.yaml
+Prompted Updates,Prompted Updates,Varying Prompt 5,Forced update completion,Automatable,,flows/prompted_updates/varying_prompt_05_forced_update_completion.yaml
+ExternalApp Tests,ExternalApp Tests,Setup 1,Install companion Mobile API Testing App from Jenkins,Partial,Needs the companion APK downloaded from Jenkins and installed alongside CommCare,(out-of-band provisioning - fetching the APK from an internal Jenkins job is not a Maestro flow; see flows/externalapp_tests/README.md for how the resulting APK is consumed via `run_suite.py --other-app`)
+ExternalApp Tests,ExternalApp Tests,Setup 2,Install CommCare under test,Automatable,,
+ExternalApp Tests,ExternalApp Tests,Setup 3,Deploy fixture test app + login + background CommCare,Partial,HQ API: publish app (see hq_setup/externalapp_tests/setup_03_deploy_fixture_app.json),hq_setup/externalapp_tests/setup_03_deploy_fixture_app.json; flows/externalapp_tests/setup_03_login_and_background.yaml
+ExternalApp Tests,ExternalApp Tests,External App 1,"Launch companion app, verify button set",Partial,"Spike confirmed (BrowserStack otherApps) - companion app appId/button text are UNVERIFIED placeholders, see flows/externalapp_tests/README.md",flows/externalapp_tests/external_app_01_launch_and_verify_buttons.yaml
+ExternalApp Tests,ExternalApp Tests,External App 2,Start CommCare from companion app + submit form,Partial,"Spike confirmed (BrowserStack otherApps) - companion app appId UNVERIFIED, see flows/externalapp_tests/README.md",flows/externalapp_tests/external_app_02_start_commcare_submit_form.yaml
+ExternalApp Tests,ExternalApp Tests,External App 3,View Case Data in companion app,Partial,"Spike confirmed (BrowserStack otherApps) - companion app appId/case-row selectors UNVERIFIED, see flows/externalapp_tests/README.md",flows/externalapp_tests/external_app_03_view_case_data.yaml
+ExternalApp Tests,ExternalApp Tests,External App 4,Long-press case -> launch update form in CommCare,Partial,"Spike confirmed (BrowserStack otherApps) - companion app appId/case-row selectors UNVERIFIED, see flows/externalapp_tests/README.md",flows/externalapp_tests/external_app_04_launch_update_form.yaml
+ExternalApp Tests,ExternalApp Tests,External App 5,View Fixture Data,Partial,"Spike confirmed (BrowserStack otherApps) - companion app appId/fixture selectors UNVERIFIED, see flows/externalapp_tests/README.md",flows/externalapp_tests/external_app_05_view_fixture_data.yaml
+ExternalApp Tests,ExternalApp Tests,External App 6,Acquire CommCare Key + OS permission dialog + sync,Not automatable,Combines the cross-app flow with an OS permission dialog that behaves inconsistently across device-farm Android versions,
+Right to Left Text,Right to Left Text,Setup 1,Uninstall + install latest build + deploy RTL app,Partial,HQ API: publish app,(handled by hq_setup/right_to_left_text/setup_01_publish_rtl_app.json - no dedicated flow needed beyond Setup 4-style manual barcode-claim)
+Right to Left Text,Right to Left Text,Setup 2,Change device system language to Arabic,Partial,Scriptable via adb (settings put system system_locales ar) instead of manual navigation,flows/right_to_left_text/setup_02_change_device_language_to_arabic.yaml
+Right to Left Text,Right to Left Text,Setup 3,Change in-app language to Arabic,Automatable,,flows/right_to_left_text/setup_03_change_language_to_arabic.yaml
+Right to Left Text,Right to Left Text,Login 1,Header RTL alignment,Not automatable,Visual layout/mirroring judgment,
+Right to Left Text,Right to Left Text,Login 2,Body RTL alignment,Not automatable,Visual layout/mirroring judgment,
+Right to Left Text,Right to Left Text,Login 3,Typed-text RTL population,Not automatable,Visual layout/mirroring judgment,
+Right to Left Text,Right to Left Text,Home Screen 1,RTL alignment/mirroring/animation check,Not automatable,Visual layout/mirroring/animation-direction judgment,
+Right to Left Text,Right to Left Text,Home Screen 2,RTL alignment/mirroring/animation check,Not automatable,Visual layout/mirroring/animation-direction judgment,
+Right to Left Text,Right to Left Text,Home Screen 3,RTL alignment/mirroring/animation check,Not automatable,Visual layout/mirroring/animation-direction judgment,
+Right to Left Text,Right to Left Text,Home Screen 4,RTL alignment/mirroring/animation check,Not automatable,Visual layout/mirroring/animation-direction judgment,
+Right to Left Text,Right to Left Text,Home Screen 5,RTL alignment/mirroring/animation check,Not automatable,Visual layout/mirroring/animation-direction judgment,
+Right to Left Text,Right to Left Text,Home Screen 6,RTL alignment/mirroring/animation check,Not automatable,Visual layout/mirroring/animation-direction judgment,
+Right to Left Text,Right to Left Text,Home Screen 7,RTL alignment/mirroring/animation check,Not automatable,Visual layout/mirroring/animation-direction judgment,
+Right to Left Text,Right to Left Text,Home Screen 8,RTL alignment/mirroring/animation check,Not automatable,Visual layout/mirroring/animation-direction judgment,
+Right to Left Text,Right to Left Text,Question Types 1,Form/menu list RTL alignment,Not automatable,Visual layout judgment,
+Right to Left Text,Right to Left Text,Question Types 2,Open first form (pure navigation),Automatable,,flows/right_to_left_text/question_types_02_open_first_form.yaml
+Right to Left Text,Right to Left Text,Question Types 3,Swipe direction/progress bar/whitespace/position RTL check,Not automatable,Visual/gesture-direction judgment,
+Right to Left Text,Right to Left Text,Question Types 4,Swipe direction/progress bar/whitespace/position RTL check,Not automatable,Visual/gesture-direction judgment,
+Right to Left Text,Right to Left Text,Question Types 5,Swipe direction/progress bar/whitespace/position RTL check,Not automatable,Visual/gesture-direction judgment,
+Right to Left Text,Right to Left Text,Question Types 6,Swipe direction/progress bar/whitespace/position RTL check,Not automatable,Visual/gesture-direction judgment,
+Right to Left Text,Right to Left Text,Question Types 7,Swipe direction/progress bar/whitespace/position RTL check,Not automatable,Visual/gesture-direction judgment,
+Right to Left Text,Right to Left Text,Case list 1,Load case list (pure navigation),Automatable,,flows/right_to_left_text/case_list_01_load_case_list.yaml
+Right to Left Text,Right to Left Text,Case list 2,Column order/alignment/arrow-direction check,Not automatable,Visual layout judgment,
+Right to Left Text,Right to Left Text,Case list 3,Column order/alignment/arrow-direction check,Not automatable,Visual layout judgment,
+Right to Left Text,Right to Left Text,Case list 4,Column order/alignment/arrow-direction check,Not automatable,Visual layout judgment,
+Right to Left Text,Right to Left Text,General,Popup/spinner RTL + counter-clockwise rotation,Not automatable,Visual/animation-direction judgment,
+Updates (partial and failed),Updates (partial and failed),Setup,"Stage CCZ update, interrupt with CommCare update mid-stream",Not automatable,Requires precisely timed interleaving of a real CommCare binary update mid-flow,
+Updates (partial and failed),Updates (partial and failed),Update 1,Confirm staged update auto-applies,Automatable,,flows/updates_partial_failed/scenario_1_staged_update_auto_apply.yaml
+Updates (partial and failed),Updates (partial and failed),Update 2,Updated Form 1 verification,Automatable,,flows/updates_partial_failed/scenario_1_staged_update_auto_apply.yaml
+Updates (partial and failed),Updates (partial and failed),Update 3,Unchanged Form 2 verification,Automatable,,flows/updates_partial_failed/scenario_1_staged_update_auto_apply.yaml
+Updates (partial and failed),Updates (partial and failed),Setup,Update CommCare while CCZ download in progress,Not automatable,Same timing-critical interleaving,
+Updates (partial and failed),Updates (partial and failed),Update 4,Confirm update did not auto-apply,Automatable,,flows/updates_partial_failed/scenario_2_manual_update_after_interrupted_download.yaml
+Updates (partial and failed),Updates (partial and failed),Update 5,Manually complete update afterward,Automatable,,flows/updates_partial_failed/scenario_2_manual_update_after_interrupted_download.yaml
+Updates (partial and failed),Updates (partial and failed),Update 6,Updated Form 1 verification,Automatable,,flows/updates_partial_failed/scenario_2_manual_update_after_interrupted_download.yaml
+Updates (partial and failed),Updates (partial and failed),Update 7,Unchanged Form 2 verification,Automatable,,flows/updates_partial_failed/scenario_2_manual_update_after_interrupted_download.yaml
+Updates (partial and failed),Updates (partial and failed),"Update between reverted app versions: 
+Setup",Install Version 1 of version-reverted app,Automatable,,flows/updates_partial_failed/scenario_3_reverted_app_versions.yaml
+Updates (partial and failed),Updates (partial and failed),Update 8,CommCare update 2.45 -> test version,Automatable,,flows/updates_partial_failed/scenario_3_reverted_app_versions.yaml
+Updates (partial and failed),Updates (partial and failed),Update 9,"Mark V2 released, update to it",Partial,HQ API: mark build released,flows/updates_partial_failed/scenario_3_reverted_app_versions.yaml
+Updates (partial and failed),Updates (partial and failed),Update 10,"Mark V4 released, update to it",Partial,HQ API: mark build released,flows/updates_partial_failed/scenario_3_reverted_app_versions.yaml
+Updates (partial and failed),Updates (partial and failed),Update 11,Form One verification,Automatable,,flows/updates_partial_failed/scenario_3_reverted_app_versions.yaml
+Updates (partial and failed),Updates (partial and failed),Update 12,Form Two verification,Automatable,,flows/updates_partial_failed/scenario_3_reverted_app_versions.yaml
+Updates (partial and failed),Updates (partial and failed),Setup 1,Master app release page reference,Not automatable,Pure HQ page reference - no device action,
+Updates (partial and failed),Updates (partial and failed),Setup 2,Linked app release page reference,Not automatable,Pure HQ page reference - no device action,
+Updates (partial and failed),Updates (partial and failed),Installation 1,Install CommCare APK,Automatable,,flows/updates_partial_failed/scenario_4_linked_app_install_and_update.yaml
+Updates (partial and failed),Updates (partial and failed),Installation 2,Install linked app V2,Automatable,,flows/updates_partial_failed/scenario_4_linked_app_install_and_update.yaml
+Updates (partial and failed),Updates (partial and failed),Update 13,"Mark V6 released on linked app, update",Partial,HQ API: mark build released,flows/updates_partial_failed/scenario_4_linked_app_install_and_update.yaml
+Updates (partial and failed),Updates (partial and failed),Update 14,Form A verification (new questions),Automatable,,flows/updates_partial_failed/scenario_4_linked_app_install_and_update.yaml
+Updates (partial and failed),Updates (partial and failed),Update 15,Form B verification (unchanged),Automatable,,flows/updates_partial_failed/scenario_4_linked_app_install_and_update.yaml
+Updates (partial and failed),Updates (partial and failed),Setup,Install old CommCare 2.45,Partial,Needs a specific historical APK provisioned externally,
+Updates (partial and failed),Updates (partial and failed),Installation 1,Install linked app V2 (Version 18),Automatable,,flows/updates_partial_failed/scenario_5_relogin_autoupdate_verification.yaml
+Updates (partial and failed),Updates (partial and failed),Update 16,"Stage update to V6, interrupt with CommCare update mid-flow",Not automatable,Timing-critical interleaved binary update,
+Updates (partial and failed),Updates (partial and failed),Update 17,Re-login,Automatable,,flows/updates_partial_failed/scenario_5_relogin_autoupdate_verification.yaml
+Updates (partial and failed),Updates (partial and failed),Update verification,Verify auto-update to V6,Automatable,,flows/updates_partial_failed/scenario_5_relogin_autoupdate_verification.yaml
+Updates (partial and failed),Updates (partial and failed),Update 18,Form A verification,Automatable,,flows/updates_partial_failed/scenario_5_relogin_autoupdate_verification.yaml
+Updates (partial and failed),Updates (partial and failed),Update 19,Form B verification,Automatable,,flows/updates_partial_failed/scenario_5_relogin_autoupdate_verification.yaml
+Recovery Measures,Recovery Measures,Setup 1,Download/deploy Test One + login,Partial,HQ API: publish Test One,flows/recovery_measures/update_app_flow.yaml
+Recovery Measures,Recovery Measures,Reinstall and update 1,Reinstall and Update App step,Automatable,,flows/recovery_measures/reinstall_update_app_flow.yaml
+Recovery Measures,Recovery Measures,Reinstall and update 2,Reinstall and Update App step,Partial,HQ API: mark build released,hq_setup/recovery_measures/reinstall_update_2_mark_test_two.json
+Recovery Measures,Recovery Measures,Reinstall and update 3,Reinstall and Update App step,Automatable,,flows/recovery_measures/reinstall_update_03_update_to_test_two.yaml
+Recovery Measures,Recovery Measures,Reinstall and update 4,Reinstall and Update App step,Partial,HQ API: mark build released,hq_setup/recovery_measures/reinstall_update_4_mark_test_three.json
+Recovery Measures,Recovery Measures,Reinstall and update 5,Reinstall and Update App step,Automatable,,flows/recovery_measures/reinstall_update_app_flow.yaml
+Recovery Measures,Recovery Measures,Reinstall and update 6,Reinstall and Update App step,Automatable,,flows/recovery_measures/reinstall_update_app_flow.yaml
+Recovery Measures,Recovery Measures,Reinstall and update 7,Reinstall and Update App step,Automatable,,flows/recovery_measures/reinstall_update_07_10_online_install_and_negative.yaml
+Recovery Measures,Recovery Measures,Reinstall and update 8,Reinstall and Update App step,Automatable,,flows/recovery_measures/reinstall_update_07_10_online_install_and_negative.yaml
+Recovery Measures,Recovery Measures,Reinstall and update 9,Reinstall and Update App step,Automatable,,flows/recovery_measures/reinstall_update_07_10_online_install_and_negative.yaml
+Recovery Measures,Recovery Measures,Reinstall and update 10,Reinstall and Update App step,Automatable,,flows/recovery_measures/reinstall_update_07_10_online_install_and_negative.yaml
+Recovery Measures,Recovery Measures,Setup 1,Download/deploy + login,Partial,HQ API,flows/recovery_measures/update_app_flow.yaml
+Recovery Measures,Recovery Measures,Update 1,Update App step,Automatable,,flows/recovery_measures/update_app_flow.yaml
+Recovery Measures,Recovery Measures,Update 2,Update App step,Partial,HQ API: mark build released,flows/recovery_measures/update_app_flow.yaml
+Recovery Measures,Recovery Measures,Update 3,Update App step,Automatable,,flows/recovery_measures/update_app_flow.yaml
+Recovery Measures,Recovery Measures,Update 4,Update App step,Partial,HQ API: mark build released,flows/recovery_measures/update_app_flow.yaml
+Recovery Measures,Recovery Measures,Update 5,Update App step,Automatable,,flows/recovery_measures/update_app_flow.yaml
+Recovery Measures,Recovery Measures,Update 6,Update App step,Automatable,,flows/recovery_measures/update_app_flow.yaml
+Recovery Measures,Recovery Measures,Setup 1,Download/deploy,Partial,HQ API,flows/recovery_measures/offline_reinstall_update_app_flow.yaml
+Recovery Measures,Recovery Measures,Recovery (offline) 1,Offline Reinstall and Update App step,Automatable,,flows/recovery_measures/offline_reinstall_update_app_flow.yaml
+Recovery Measures,Recovery Measures,Recovery (offline) 2,Offline Reinstall and Update App step,Partial,HQ API: mark build released,hq_setup/recovery_measures/offline_2_mark_test_two.json
+Recovery Measures,Recovery Measures,Recovery (offline) 3,Offline Reinstall and Update App step,Automatable,,flows/recovery_measures/offline_reinstall_update_app_flow.yaml
+Recovery Measures,Recovery Measures,Recovery (offline) 4,Offline Reinstall and Update App step,Partial,HQ API: mark build released,hq_setup/recovery_measures/offline_4_mark_test_three.json
+Recovery Measures,Recovery Measures,Recovery (offline) 5,"Publish + download CCZ, move to custom device path",Partial,Needs adb push to a custom (non-Downloads) path; BLOCKED: needs adb push of a .ccz to a custom device path first,flows/recovery_measures/offline_05_place_ccz_custom_path.yaml
+Recovery Measures,Recovery Measures,Recovery (offline) 6,Trigger 'no CCZ found' + manual file-picker select,Partial,Depends on step 5's pushed file,flows/recovery_measures/offline_06_select_ccz_via_picker.yaml
+Recovery Measures,Recovery Measures,Recovery (offline) 7,Offline Reinstall and Update App step,Automatable,,flows/recovery_measures/offline_reinstall_update_app_flow.yaml
+Recovery Measures,Recovery Measures,Recovery (offline) 8,Move CCZ into Downloads folder,Partial,adb file relocation; BLOCKED: needs adb file relocation first,flows/recovery_measures/offline_08_move_ccz_to_downloads.yaml
+Recovery Measures,Recovery Measures,Recovery (offline) 9,Uninstall/reinstall Test Two + mark Test Three released,Partial,Device reinstall + HQ API,hq_setup/recovery_measures/offline_9_mark_test_three.json + flows/recovery_measures/offline_09_uninstall_reinstall_test_two.yaml
+Recovery Measures,Recovery Measures,Recovery (offline) 10,Offline Reinstall and Update App step,Automatable,,flows/recovery_measures/offline_reinstall_update_app_flow.yaml
+Recovery Measures,Recovery Measures,Recovery (offline) 11,Offline Reinstall and Update App step,Automatable,,flows/recovery_measures/offline_reinstall_update_app_flow.yaml
+Recovery Measures,Recovery Measures,CC Reinstall Needed 1,CC Reinstall Needed step,Partial,"Needs a specific historical APK; BLOCKED: needs a specific historical APK - commcare_2.45.0/.1/.2 tags confirmed to exist, ambiguous which",hq_setup/recovery_measures/cc_reinstall_needed_provisioning.json
+Recovery Measures,Recovery Measures,CC Reinstall Needed 2,CC Reinstall Needed step,Partial,HQ API: mark released,hq_setup/recovery_measures/cc_reinstall_needed_2_mark_released.json
+Recovery Measures,Recovery Measures,CC Reinstall Needed 3,CC Reinstall Needed step,Automatable,,flows/recovery_measures/cc_reinstall_needed_flow.yaml
+Recovery Measures,Recovery Measures,CC Reinstall Needed 4,CC Reinstall Needed step,Automatable,,flows/recovery_measures/cc_reinstall_needed_flow.yaml
+Recovery Measures,Recovery Measures,CC Reinstall Needed 5,CC Reinstall Needed step,Automatable,,flows/recovery_measures/cc_reinstall_needed_flow.yaml
+Recovery Measures,Recovery Measures,CC Reinstall Needed 1,CC Update Needed step,Partial,Needs historical APK; BLOCKED: needs a specific historical APK,hq_setup/recovery_measures/cc_update_needed_provisioning.json
+Recovery Measures,Recovery Measures,CC Reinstall Needed 2,CC Update Needed step,Partial,HQ API: mark released + raise recovery Max Version,hq_setup/recovery_measures/cc_update_needed_2_mark_released.json
+Recovery Measures,Recovery Measures,CC Reinstall Needed 3,CC Update Needed step,Automatable,,flows/recovery_measures/cc_update_needed_flow.yaml
+Recovery Measures,Recovery Measures,CC Reinstall Needed 4,CC Update Needed step,Automatable,,flows/recovery_measures/cc_update_needed_flow.yaml
+Recovery Measures,Recovery Measures,CC Reinstall Needed 5,CC Update Needed step,Automatable,,flows/recovery_measures/cc_update_needed_flow.yaml
+Recovery Measures,Recovery Measures,Retry Recovery 1,Delete files under app-private install path,Partial,App-private storage isn't reachable from a standard file manager on modern Android - needs adb shell; BLOCKED: needs adb shell run-as file deletion first,flows/recovery_measures/retry_recovery_01_delete_install_files.yaml
+Recovery Measures,Recovery Measures,Retry Recovery 2,"Disable network mid-recovery, verify Retry button",Partial,Needs a scripted network-disable step (BrowserStack network condition) instead of physical airplane mode,flows/recovery_measures/retry_recovery_02_network_toggle_retry.yaml
+Recovery Measures,Recovery Measures,CC Reinstall Needed 6,"Install 2.49.4, verify no forced update",Partial,Needs a specific historical APK; BLOCKED: needs commcare_2.49.4 APK,hq_setup/recovery_measures/point_release_provisioning.json
+Recovery Measures,Recovery Measures,CC Reinstall Needed 7,"Install 2.49.5, verify forced-update message",Partial,Needs a specific historical APK; BLOCKED: needs commcare_2.49.5 APK,hq_setup/recovery_measures/point_release_provisioning.json
+Recovery Measures,Recovery Measures,CC Reinstall Needed 8,"Update to test version, verify unblocked",Automatable,,flows/recovery_measures/point_release_flow.yaml
+Recovery Measures,Recovery Measures,Heartbeat Request Improvement 1,Install Test One/Two via HQ + submit form,Partial,HQ API,hq_setup/recovery_measures/heartbeat_1_setup.json + flows/recovery_measures/heartbeat_01_setup_and_submit.yaml
+Recovery Measures,Recovery Measures,Heartbeat Request Improvement 2,Mark Test Two released + wait 1 hour + verify heartbeat recovery,Not automatable,Requires a full real-time 1-hour wait - impractical for billed device-farm sessions,
+Trigger Device Logs,Trigger device logs,Device Logs 1,Set feature flag + install/login/submit/logout,Partial,"HQ API: superuser feature-flag toggle (one-time env setup, not scripted per-run)",
+Trigger Device Logs,Trigger device logs,Device Logs 2,Django Admin - add domain/username,Not automatable,Django Admin is a raw desktop-browser admin page,
+Trigger Device Logs,Trigger device logs,Device Logs 3,Login + sync + wait 10 min for Sumologic ingestion,Not automatable,Open-ended real-time ingestion wait,
+Trigger Device Logs,Trigger device logs,Device Logs 4,Query Sumologic + validate log entries,Not automatable,Pure desktop-browser Sumologic query - no device interaction,
+Updates,Updates,Rate limit 1,Download rate-limited app + login,Partial,Needs the specific rate-limited test app provisioned,hq_setup/updates_2_49/rate_limit_provisioning.json
+Updates,Updates,Rate limit 2,Submit + verify rate-limit popup + close,Automatable,,flows/updates_2_49/rate_limit_02_04_popup_dont_show_toast.yaml
+Updates,Updates,Rate limit 3,Submit again + 'Don't show again',Automatable,,flows/updates_2_49/rate_limit_02_04_popup_dont_show_toast.yaml
+Updates,Updates,Rate limit 4,Submit again + bottom-toast text,Automatable,,flows/updates_2_49/rate_limit_02_04_popup_dont_show_toast.yaml
+Updates,Updates,Rate limit 5,HQ App Preview blocks submission,Not automatable,"Tests CommCareHQ's own browser-based App Preview feature, not the mobile app",
+Updates,Updates,Rate limit 6,HQ Web Apps blocks submission,Not automatable,Same - browser-based HQ feature,
+Updates,Updates,Auto CC Update 1,Install lower version with Daily auto-update preset,Partial,HQ API: set Auto Updates = Daily,hq_setup/updates_2_49/auto_cc_update_daily_preset.json
+Updates,Updates,Auto CC Update 2,"Wait 15 min-8 hrs, verify new version downloaded",Not automatable,Open-ended real-time wait up to 8 hours,
+Updates,Updates,Auto CC Update 3,Relogin/sync/verify latest version,Automatable,,flows/updates_2_49/auto_cc_update_03_relogin_sync_latest_version.yaml
+Updates,Updates,Setup 1,Confirm Manage Update Options tab visible,Not automatable,Read-only HQ inspection,
+Updates,Updates,Setup 2,Set CommCare Version = test+1,Partial,HQ API,hq_setup/updates_2_49/setup_02_commcare_version_plus_one.json
+Updates,Updates,Prompted Update Scenario 1,Optional CommCare update prompt,Automatable,,flows/updates_2_49/prompted_update_scenario_01_ill_update_later.yaml
+Updates,Updates,Prompted Update Scenario 2,Forced CommCare update blocker,Partial,HQ API: toggle Forced,hq_setup/updates_2_49/prompted_update_scenario_02_forced.json + flows/updates_2_49/prompted_update_scenario_02_forced_commcare_update.yaml
+Updates,Updates,Prompted Update Scenario 3,Off setting + wait 5-10 min + verify no prompt,Not automatable,HQ config change + mandatory timed wait,
+Updates,Updates,In-App Update 1,Play Store internal-tester update chain,Not automatable,Depends on real Google Play internal-tester/app-sharing infrastructure that cloud device farms don't reliably support,
+Updates,Updates,In-App Update 2,Play Store internal-tester update chain,Not automatable,Depends on real Google Play internal-tester/app-sharing infrastructure that cloud device farms don't reliably support,
+Updates,Updates,In-App Update 3,Play Store internal-tester update chain,Not automatable,Depends on real Google Play internal-tester/app-sharing infrastructure that cloud device farms don't reliably support,
+Updates,Updates,In-App Update 4,Play Store internal-tester update chain,Not automatable,Depends on real Google Play internal-tester/app-sharing infrastructure that cloud device farms don't reliably support,
+Updates,Updates,In-App Update 5,Play Store internal-tester update chain,Not automatable,Depends on real Google Play internal-tester/app-sharing infrastructure that cloud device farms don't reliably support,
+Updates,Updates,In-App Update 6,Play Store internal-tester update chain,Not automatable,Depends on real Google Play internal-tester/app-sharing infrastructure that cloud device farms don't reliably support,
+Updates,Updates,In-App Update 7,Play Store internal-tester update chain,Not automatable,Depends on real Google Play internal-tester/app-sharing infrastructure that cloud device farms don't reliably support,
+Updates,Updates,In-App Update 8,Play Store internal-tester update chain,Not automatable,Depends on real Google Play internal-tester/app-sharing infrastructure that cloud device farms don't reliably support,
+Updates,Updates,In-App Update 9,Play Store internal-tester update chain,Not automatable,Depends on real Google Play internal-tester/app-sharing infrastructure that cloud device farms don't reliably support,
+Updates,Updates,In-App Update 10,Play Store internal-tester update chain,Not automatable,Depends on real Google Play internal-tester/app-sharing infrastructure that cloud device farms don't reliably support,

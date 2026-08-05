@@ -1,0 +1,22 @@
+appId: org.commcare.dalvik
+---
+# Reusable: from the home screen, trigger "Update App" and, if a CCZ update
+# prompt appears, click through "Update to the Latest App Version" and the
+# final "Update to version X & log out" confirmation.
+# Strings verified against android_translatable_strings.txt:
+#   home.menu.update = "Update App"
+#   ccz.update.available.title = "New version of the application is available"
+#   ccz.update.action = "Update to the Latest App Version"
+#   updates.staged.version = "Update to version ${0} & log out"
+- tapOn: "More options"
+- tapOn: "Update App"
+- extendedWaitUntil:
+    visible: "New version of the application is available"
+    timeout: 15000
+- tapOn: "Update to the Latest App Version"
+- extendedWaitUntil:
+    visible:
+      text: "Update to version.*log out"
+    timeout: 30000
+- tapOn:
+    text: "Update to version.*log out"

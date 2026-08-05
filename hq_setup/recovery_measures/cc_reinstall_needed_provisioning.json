@@ -1,0 +1,20 @@
+{
+  "_comment": "Master Mobile Plan (2026) > Recovery Measures > CC Reinstall Needed > Test Case ID 'CC Reinstall Needed 1' (maps to flows/recovery_measures/cc_reinstall_needed_flow.yaml's precondition, NOT to cc_update_needed_flow.yaml - see cc_update_needed_provisioning.json for that section's identical-looking but separate copy of this same gap). Summary per task: 'Uninstall the CommCare ccz, download and install 2.45'. THIS IS A DOCUMENTED GAP, NOT A RUNNABLE PRE-STEP - there is no HQ API action or Maestro flow that can produce a below-minimum-CC-version device state, because that requires an actual old CommCare *binary* (APK) installed on the device, not anything HQ-side or on-device-scriptable.",
+  "gap": "Needs a specific historical CommCare APK (v2.45.x) installed on the test device BEFORE any Maestro flow in this repo runs. No such flow exists or can exist without the APK already staged.",
+  "how_to_stage_it": [
+    "Run scripts/download_apk.py --tag <old-release-tag> to fetch the historical APK from GitHub releases (dimagi/commcare-android), e.g.:",
+    "  python scripts/download_apk.py --tag commcare_2.45.2 --out apks/commcare_2.45.2.apk",
+    "Then install it on the target device/emulator directly (adb install -r apks/commcare_2.45.2.apk) OUTSIDE this repo's Maestro/BrowserStack pipeline, since scripts/run_suite.py and browserstack_client.py only know how to upload/run ONE current-under-test APK per build - there's no wiring here to stage a second, older APK onto the same BrowserStack App Automate session before a Maestro run starts.",
+    "Once that old binary is installed and logged into the target CommCare app, cc_reinstall_needed_flow.yaml's precondition (device on an old CC binary, MEASURE_TYPE_CC_REINSTALL pending) is satisfied and that flow's Automatable rows (CC Reinstall Needed 3/4/5) can run."
+  ],
+  "tags_verified_via_gh_cli_2026_08_05": {
+    "command": "gh release list --repo dimagi/commcare-android --limit 200 | grep '2\\.45\\.'",
+    "result": [
+      "CommCare 2.45.2  commcare_2.45.2  2019-04-22",
+      "CommCare 2.45.1  commcare_2.45.1  2019-03-21",
+      "CommCare 2.45.0  commcare_2.45.0  2019-03-06"
+    ],
+    "note": "The task/sheet just says '2.45' without a patch digit. All three exist and have real GitHub release tags (confirmed live, not guessed) - commcare_2.45.0, commcare_2.45.1, commcare_2.45.2. Pick the specific patch the sheet's original author intended (not recorded anywhere in coverage_matrix.csv); commcare_2.45.2 (the last patch in that minor line) is the closest guess if no other guidance exists, but verify with QA before relying on that guess. Whichever tag is chosen must also actually have a usable .apk release asset for download_apk.py's --tag path to succeed (see download_apk.py's own asset-naming-inconsistency caveat) - not individually re-verified per-tag here."
+  },
+  "actions": []
+}

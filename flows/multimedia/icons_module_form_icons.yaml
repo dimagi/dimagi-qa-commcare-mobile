@@ -1,0 +1,60 @@
+appId: org.commcare.dalvik
+tags:
+  - multimedia
+  - partial
+---
+# Master Mobile Plan (2026) > Multimedia > "Icons" - View module and form
+# icons, verify icons + audio buttons present, tap audio buttons.
+#
+# PARTIAL DEPENDENCY (per coverage_matrix.csv: "Icon-visible assertions
+# automatable; audio-plays judgment skipped"): the icon-visible assertions
+# and audio-button taps below are fully automated; whether the audio
+# actually plays correctly is a human judgment call, deliberately skipped
+# (same caveat style as mm4_question_types.yaml).
+#
+# Selectors verified against commcare-android source (read-only reference,
+# not modified):
+#   app/src/org/commcare/adapters/MenuAdapter.java - the same adapter backs
+#     both the top-level module list (right after tapping "Start") and any
+#     form list one level in, since both are rendered via
+#     screen_suite_menu.xml -> id/screen_suite_menu_list using this adapter.
+#     setupImageView() (line 204) wires each row's icon ImageView; when a
+#     module/form has no custom icon it falls back to
+#     setupDefaultIcon()/avatar_module or avatar_form drawables (line
+#     293-303) - so the icon ImageView is expected to be present/VISIBLE
+#     either way. setupAudioButton() (line 164) wires each row's audio
+#     button, but only calls modifyButtonForNewView(..., true) when that
+#     specific module/form actually has a configured audioURI whose file
+#     exists (line 180); the button is otherwise left non-visible for that
+#     row's AudioPlaybackButton (see AudioPlaybackButtonBase.java:258-260 -
+#     modifyButtonForNewView toggles VISIBLE/GONE per this check). Since this
+#     app's specific set of modules/forms and whether any of them carry audio
+#     is unverified here, the audio-button tap is `optional: true`.
+#   app/res/layout/menu_list_item_modern.xml - the row's icon id/row_img
+#     (line 17) and audio button id/row_soundicon (line 62).
+#
+# NOTE: id-based selectors below match the FIRST matching row on screen (a
+# Maestro default) if a module/form list has more than one item - this
+# confirms "an icon is present" and "an audio button is present and
+# tappable" per the sheet's wording, but does not enumerate every row
+# individually (that would need this specific QA app's exact module/form
+# count, which is unverified here).
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- tapOn: "Start"
+# --- Module list icons/audio ---
+- assertVisible:
+    id: "org.commcare.dalvik:id/row_img"
+- tapOn:
+    id: "org.commcare.dalvik:id/row_soundicon"
+    optional: true
+# --- Drill into a module to check its form list icons/audio ---
+- tapOn: "Multimedia"
+- assertVisible:
+    id: "org.commcare.dalvik:id/row_img"
+- tapOn:
+    id: "org.commcare.dalvik:id/row_soundicon"
+    optional: true

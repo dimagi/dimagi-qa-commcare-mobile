@@ -1,0 +1,17 @@
+{
+  "_comment": "Master Mobile Plan (2026) > Recovery Measures > Heartbeat Request Improvement > Test Case ID 'Heartbeat Request Improvement 1' ('Install Test One (Released)/Test Two (In Test) via HQ, login, submit a form'). Only the HQ half is Partial; the on-device half (login + submit a form) is Automatable and lives in flows/recovery_measures/heartbeat_01_setup_and_submit.yaml. Run this pre-step BEFORE that flow: mark_build_status is the same, already-verified action reinstall_update_app_flow.json/update_app_flow.json use for this repo's other Recovery Measures HQ pre-steps (POST /a/<domain>/apps/view/<app_id>/releases/release/<saved_app_id>/ - corehq/apps/app_manager/views/releases.py:release_build()). app_id/saved_app_id values are placeholders - Recovery Measures apps get rebuilt each QA cycle per the sheet's own 'Dimagi must reconfigure setup here prior to each run' note, so fill these in fresh every run, don't reuse a prior run's IDs.",
+  "actions": [
+    {
+      "type": "mark_build_status",
+      "app_id": "REPLACE_WITH_HEARTBEAT_APP_ID",
+      "saved_app_id": "REPLACE_WITH_TEST_ONE_BUILD_ID",
+      "is_released": true
+    },
+    {
+      "type": "mark_build_status",
+      "app_id": "REPLACE_WITH_HEARTBEAT_APP_ID",
+      "saved_app_id": "REPLACE_WITH_TEST_TWO_BUILD_ID",
+      "is_released": false
+    }
+  ]
+}

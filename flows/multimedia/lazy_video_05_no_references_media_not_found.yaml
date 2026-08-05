@@ -1,0 +1,57 @@
+appId: org.commcare.dalvik
+tags:
+  - multimedia
+  - automatable
+---
+# Master Mobile Plan (2026) > Multimedia > "Lazy Video 5" - 'Media not
+# found' message for unreferenced videos.
+#
+# PARTIAL DEPENDENCY (kept tagged `automatable` to match
+# coverage_matrix.csv, but flagging this in the header comment per the
+# task): assumes the Multimedia/lazy-video QA test app's "Video Questions"
+# menu also has a "Videos with no references" form with exactly two video
+# questions (per the sheet), each referencing media the app's resource
+# table has no matching entry for at all (distinct from lazy_video_02's
+# "valid references" form, where the media exists but just hasn't been
+# downloaded locally yet). Navigation is tapOn-by-visible-text so it
+# matches regardless of list position, but hasn't been verified against
+# that specific CCZ.
+#
+# Verified against source: a question first shows the same
+# video_download_prompt / download-icon prompt as lazy_video_02 (the URI
+# itself still resolves, so allowDownload=true), but tapping the download
+# icon (res/layout/missing_media_view.xml -> id/download_media_icon) then
+# calls mediadownload/MissingMediaDownloadHelper.kt's
+# downloadMissingMediaResource(), which can't find any resource id matching
+# that URI at all and returns:
+#   res/values/strings.xml:331 -> media_not_found_error = "Media not found
+#   in the application"
+#   (MissingMediaDownloadHelper.kt:200-204). The result's message then
+#   replaces the prompt text in the same missing_media_tv TextView
+#   (views/media/MediaLayout.java:403).
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- tapOn: "Start"
+- tapOn: "Video Questions"
+- tapOn: "Videos with no references"
+# Question 1
+- assertVisible: "Video file is missing for this question, click the download button above to download"
+- tapOn:
+    id: "org.commcare.dalvik:id/download_media_icon"
+- assertVisible: "Media not found in the application"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+# Question 2
+- assertVisible: "Video file is missing for this question, click the download button above to download"
+- tapOn:
+    id: "org.commcare.dalvik:id/download_media_icon"
+- assertVisible: "Media not found in the application"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_finish"
+    timeout: 10000
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"

@@ -1,0 +1,107 @@
+appId: org.commcare.dalvik
+tags:
+  - updates_partial_failed
+  - partial
+---
+# Master Mobile Plan (2026) > Updates (partial and failed) > Test Case ID: 3
+# ("Update between reverted app versions"). App under test:
+# "Mobile Updates - Test 3" (per the tab's own "Apps" note). Per that tab's
+# notes column: Version 1 has Forms A and B, Version 2 removes Form A,
+# Version 3 reverts to Version 1, Version 4 changes Form A again.
+#
+# PARTIAL: Update 9 and Update 10 each need an HQ pre-step this repo does not
+# script - "On HQ, mark Version V2/V4 of the app as Released"
+# (HQ API: mark build released). Run the equivalent of
+# hq_setup/recovery_measures/reinstall_update_app_flow.json's
+# "mark_build_status" action (app_id/saved_app_id for this app's V2, then
+# again for V4) BETWEEN the marked sections below - i.e. split this into
+# three Maestro runs in practice, or extend run_suite.py to pause here. Not
+# authored as its own hq_setup/*.json in this task since building that JSON
+# was explicitly out of scope.
+#
+# "Setup" row (Automatable, per coverage_matrix.csv): "While on 2.45 version
+# of CommCare, install Version 1 of the app" - that CCZ install itself is a
+# harness/HQ-apps-list action outside a Maestro flow's scope (see
+# docs/FRAMEWORK.md's architecture diagram - APK/CCZ provisioning happens
+# before BrowserStack invokes any flow). This flow instead opens by asserting
+# the expected starting state (Version 1 seated) as a lightweight substitute
+# check.
+#
+# - Update 8: "Update CommCare from 2.45 to the version in test" - the sheet's
+#   own wording literally means swapping the CommCare BINARY, which (like
+#   Setup above) happens at the harness/BrowserStack-APK-upload level
+#   (scripts/run_suite.py), not via any in-app Maestro action. There IS a
+#   distinct in-app "Update CommCare" menu item (R.id.action_update_commcare /
+#   home.menu.update.commcare, StandardHomeActivity.startCommCareUpdate()) but
+#   it is gated behind repeated cancellations of a Play-Store-only in-app
+#   update prompt (FlexibleAppUpdateController, HomeScreenBaseActivity lines
+#   1725-1764) that does not apply to this sideloaded/BrowserStack context.
+#   Per this task's explicit direction, common/update_app_via_menu.yaml's
+#   "Update App" (CCZ) action is reused here as the closest on-device,
+#   Maestro-automatable proxy - treat the actual binary swap as already done
+#   by the harness before this flow runs.
+# - Update 9 / Update 10: same "Update App" action, each preceded by the HQ
+#   mark-released pre-step noted above.
+# - Update 11: Form One verification.
+# - Update 12: Form Two verification.
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- assertVisible: "Start"
+
+# --- Setup (substitute check): confirm Version 1 is the starting state. ---
+- runFlow:
+    file: ../common/check_app_version_via_about.yaml
+    env:
+      EXPECTED_VERSION: "1"
+
+# --- Update 8: CommCare update proxy (see header caveat). ---
+- runFlow: ../common/update_app_via_menu.yaml
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- assertVisible: "Start"
+
+# === HQ pre-step runs here in a real execution: mark Version V2 Released ===
+# --- Update 9 (Partial - HQ mark-released dependency, see header). ---
+- runFlow: ../common/update_app_via_menu.yaml
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- assertVisible: "Start"
+- runFlow:
+    file: ../common/check_app_version_via_about.yaml
+    env:
+      EXPECTED_VERSION: "2"
+
+# === HQ pre-step runs here in a real execution: mark Version V4 Released ===
+# --- Update 10 (Partial - HQ mark-released dependency, see header). ---
+- runFlow: ../common/update_app_via_menu.yaml
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- assertVisible: "Start"
+- runFlow:
+    file: ../common/check_app_version_via_about.yaml
+    env:
+      EXPECTED_VERSION: "4"
+
+# --- Update 11: Form One verification. ---
+- runFlow:
+    file: ../common/navigate_form_no_errors.yaml
+    env:
+      FORM_NAME: "Form One"
+
+# --- Update 12: Form Two verification. ---
+- runFlow:
+    file: ../common/navigate_form_no_errors.yaml
+    env:
+      FORM_NAME: "Form Two"

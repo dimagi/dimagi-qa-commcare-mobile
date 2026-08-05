@@ -1,0 +1,12 @@
+appId: org.commcare.dalvik
+tags:
+  - install
+  - automatable
+---
+# Master Mobile Plan (2026) > Install > "Install 4" - Verifying menu item
+# "See Apps for My User". Runs on a fresh install with no CCZ app yet, so this
+# is the top-level pre-install screen's options menu.
+# String verified against InstallFromListTest.kt: onView(withText("See Apps for My User"))
+- launchApp
+- tapOn: "More options"
+- assertVisible: "See Apps for My User"

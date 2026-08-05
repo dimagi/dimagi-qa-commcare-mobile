@@ -1,0 +1,44 @@
+appId: org.commcare.dalvik
+tags:
+  - mobile_pins
+  - automatable
+---
+# Master Mobile Plan (2026) > Mobile Pins > "Pin 4" - Set My Pin.
+# "Set My PIN" routes through PinAuthenticationActivity (password mode, since no
+# PIN exists yet) and then CreatePinActivity (enter + re-enter new PIN).
+# Strings/ids verified against:
+#   app/src/org/commcare/activities/PinAuthenticationActivity.java (password_entry, pin_confirm_button)
+#   app/src/org/commcare/activities/CreatePinActivity.java (pin_entry, pin_confirm_button)
+#   android_translatable_strings.txt (pin.auth.prompt.password / pin.directive.new / pin.directive.confirm / pin.set.success)
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- runFlow: ../common/dismiss_pin_prompt_dont_ask_again.yaml
+- tapOn: "More options"
+- tapOn: "Set My PIN"
+- assertVisible: "Enter your password"
+- tapOn:
+    id: "org.commcare.dalvik:id/password_entry"
+- inputText: "${CC_TEST_PASSWORD}"
+- hideKeyboard
+- tapOn:
+    id: "org.commcare.dalvik:id/pin_confirm_button"
+- assertVisible: "Enter a 4-digit PIN"
+- tapOn:
+    id: "org.commcare.dalvik:id/pin_entry"
+- inputText: "1234"
+- tapOn:
+    id: "org.commcare.dalvik:id/pin_confirm_button"
+- assertVisible: "Re-Enter the PIN you chose"
+- tapOn:
+    id: "org.commcare.dalvik:id/pin_entry"
+- inputText: "1234"
+- tapOn:
+    id: "org.commcare.dalvik:id/pin_confirm_button"
+- assertVisible:
+    text: "PIN set successfully"
+    timeout: 3000
+    optional: true # Toast may dismiss before Maestro's screenshot poll catches it
+- runFlow: ../common/logout.yaml

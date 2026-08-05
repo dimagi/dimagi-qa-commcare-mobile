@@ -1,0 +1,27 @@
+appId: org.commcare.dalvik
+tags:
+  - multimedia
+  - automatable
+---
+# Master Mobile Plan (2026) > Multimedia > "Logo 2" - Dimagi logo visible on
+# the CommCare Home Screen.
+#
+# Same toolbar/logo chain as logo_01 (see that flow's comment for the full
+# citation of CommCareActivity.java:165's
+# getSupportActionBar().setLogo(R.drawable.commcare_actionbar_logo_spacing)),
+# except here it's res/layout/home_screen.xml that includes
+# appbar_layout.xml (id/toolbar) as its first child, and
+# HomeScreenBaseActivity extends SyncCapableCommCareActivity ->
+# ... -> CommCareActivity, so the same onCreate()-set logo applies.
+#
+# Same CAVEAT as logo_01: the logo ImageView itself has no distinct
+# resource id, so id/toolbar (its container) is asserted as a best-effort
+# proxy, unconfirmed against a live device.
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- assertVisible: "Start"
+- assertVisible:
+    id: "org.commcare.dalvik:id/toolbar"

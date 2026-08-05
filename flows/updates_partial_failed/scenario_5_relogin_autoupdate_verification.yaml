@@ -1,0 +1,84 @@
+appId: org.commcare.dalvik
+tags:
+  - updates_partial_failed
+  - partial
+---
+# Master Mobile Plan (2026) > Updates (partial and failed) > Test Case ID: 5.
+# App under test: "Mobile Updates Test 4/5 Master" (per the tab's own "Apps"
+# note), same master/linked-app pair as Test Case ID 4.
+#
+# Preceding rows explicitly OUT of scope for this flow, per this task's scope
+# and coverage_matrix.csv:
+#   - Setup (Partial): "Install old CommCare version - 2.45" - needs a
+#     specific historical APK provisioned externally.
+#   - Update 16 (Not automatable): "Stage update to V6, interrupt with
+#     CommCare update mid-flow" - timing-critical interleaved binary update,
+#     same category as Test Case 1/2's Setup rows.
+#
+# This flow covers the remaining "Automatable" steps that follow those:
+#   - Installation 1: install linked app V2 (Version 18) as a mobile worker -
+#     reuses flows/install/install_07_install_as_mobile_user.yaml's verified
+#     selectors (InstallFromListTest.kt). PARTIAL: needs valid HQ
+#     mobile-worker credentials, same as install_07/install_08.
+#   - Update 17: re-login.
+#   - "Update verification": confirm the app auto-updated to V6 (Version 22)
+#     - this depends on Update 16's HQ mark-released step having happened
+#       upstream (out of scope here, per above).
+#   - Update 18: Form A verification (Registration Date + Age questions).
+#   - Update 19: Form B verification (photo-upload question).
+#
+# GENERIC/BEST-EFFORT: see flows/common/verify_form_a_questions.yaml and
+# flows/common/verify_form_b_photo_question.yaml for the caveats on
+# "Form A"/"Form B" naming and question order/wording in this pre-provisioned
+# QA app.
+- launchApp
+- tapOn: "More options"
+- tapOn: "See Apps for My User"
+- tapOn:
+    id: "org.commcare.dalvik:id/edit_username"
+- inputText: "${HQ_MOBILE_WORKER_USERNAME}"
+- tapOn:
+    id: "org.commcare.dalvik:id/edit_domain"
+- inputText: "${HQ_DOMAIN}"
+- tapOn:
+    id: "org.commcare.dalvik:id/edit_password"
+- inputText: "${HQ_MOBILE_WORKER_PASSWORD}"
+- hideKeyboard
+- tapOn:
+    id: "org.commcare.dalvik:id/get_apps_button"
+- assertVisible:
+    id: "org.commcare.dalvik:id/apps_list_view"
+- tapOn:
+    id: "org.commcare.dalvik:id/apps_list_view"
+- tapOn:
+    id: "org.commcare.dalvik:id/install_app_button"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/edit_username"
+    timeout: 30000
+
+# --- Update 17: re-login. ---
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- assertVisible: "Start"
+
+# --- "Update verification": confirm auto-update to V6 (Version 22) completed. ---
+- runFlow:
+    file: ../common/check_app_version_via_about.yaml
+    env:
+      EXPECTED_VERSION: "22"
+
+# --- Update 18: Form A verification (contains Registration Date + Age). ---
+- runFlow:
+    file: ../common/verify_form_a_questions.yaml
+    env:
+      FORM_NAME: "Form A"
+
+# --- Update 19: Form B verification (contains photo-upload question). ---
+- runFlow:
+    file: ../common/verify_form_b_photo_question.yaml
+    env:
+      FORM_NAME: "Form B"

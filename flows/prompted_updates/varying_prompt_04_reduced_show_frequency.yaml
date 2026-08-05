@@ -1,0 +1,37 @@
+appId: org.commcare.dalvik
+tags:
+  - prompted_updates
+  - automatable
+---
+# Master Mobile Plan (2026) > Prompted Updates > "Varying Prompt 4" - Reduced
+# Show Frequency. Self-contained: first replays varying_prompt_03's 3
+# dismissed-prompt logins (which is what actually reduces the frequency),
+# then verifies the prompt stays suppressed for 3 more logins and reappears
+# on the 4th.
+- repeat:
+    times: 3
+    commands:
+      - runFlow:
+          file: ../common/login.yaml
+          env:
+            USERNAME: ${CC_TEST2_USERNAME}
+            PASSWORD: ${CC_TEST2_PASSWORD}
+      - assertVisible: "New version of the application is available"
+      - tapOn: "I'll update later"
+      - runFlow: ../common/logout.yaml
+- repeat:
+    times: 3
+    commands:
+      - runFlow:
+          file: ../common/login.yaml
+          env:
+            USERNAME: ${CC_TEST2_USERNAME}
+            PASSWORD: ${CC_TEST2_PASSWORD}
+      - assertNotVisible: "New version of the application is available"
+      - runFlow: ../common/logout.yaml
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST2_USERNAME}
+      PASSWORD: ${CC_TEST2_PASSWORD}
+- assertVisible: "New version of the application is available"

@@ -1,0 +1,12 @@
+{
+  "_comment": "Master Mobile Plan (2026) > Recovery Measures > CC Reinstall Needed > Test Case ID 'CC Reinstall Needed 2' (maps to cc_reinstall_needed_flow.yaml's precondition). Summary per task: 'Navigate to Recovery: CC Reinstall Needed page, mark released, download the app' (via HQ).",
+  "IMPORTANT_CAVEAT": "This action uses mark_build_status because 'mark released' is the literal wording in the summary and mark_build_status is this repo's only verified action for releasing an app build (same one reinstall_update_app_flow.json/update_app_flow.json use). HOWEVER: getting the device into a MEASURE_TYPE_CC_REINSTALL-pending state is NOT actually driven by app-build release status - per RecoveryMeasure.java/RecoveryMeasuresRequester.java (read-only reference, commcare-android), CC Reinstall/Update Needed measures are gated on ccVersionMin/ccVersionMax fields that HQ serves through a SEPARATE 'recovery_measures' server endpoint (ServerUrls.PREFS_RECOVERY_MEASURES_URL_KEY), which is configured via whatever HQ admin surface backs the sheet's literal 'Recovery: CC Reinstall Needed page' - a page hq_client.py has NO wrapped action for, because its own provenance research (see hq_client.py's module docstring) only covers corehq/apps/app_manager/views/releases.py and settings.py, not whatever view serves that recovery-measures config. The commcare-hq source itself is not checked out in either local repo available to this task, so the exact URL/form fields for that page could not be verified the way every other hq_client.py action was. Treat the action below as a best-effort mapping of the 'mark released' half of the summary only - it does NOT by itself reproduce the CC-version-threshold half of the precondition. Flagging this as an open gap rather than guessing a fabricated endpoint; add a real action to hq_client.py once that HQ page's actual endpoint is confirmed (e.g. against a live HQ session or the commcare-hq source).",
+  "actions": [
+    {
+      "type": "mark_build_status",
+      "app_id": "REPLACE_WITH_CC_REINSTALL_APP_ID",
+      "saved_app_id": "REPLACE_WITH_TEST_BUILD_ID",
+      "is_released": true
+    }
+  ]
+}

@@ -1,0 +1,69 @@
+appId: org.commcare.dalvik
+tags:
+  - updates_partial_failed
+  - automatable
+---
+# Master Mobile Plan (2026) > Updates (partial and failed) > Test Case ID: 2.
+# App under test: "Mobile Updates - Test 1_2" (per the tab's own "Apps" note).
+#
+# The preceding Setup row is deliberately OUT of scope (Not automatable, per
+# coverage_matrix.csv): "Update CommCare while CCZ download in progress" -
+# the CCZ update must be interrupted mid-download (NOT let the update check
+# complete) and CommCare itself binary-updated in that window, by hand/harness,
+# before this flow runs.
+#
+# This flow covers the four "Automatable" verification steps that follow:
+#   - Update 4: log in and confirm the update did NOT auto-apply (app
+#     version should still read "Version 1").
+#   - Update 5: manually trigger "Update App" from the home screen and let
+#     it run to completion, then log back in and confirm it now reads
+#     "Version 2".
+#   - Update 6: Form 1 opens/navigates without error (should reflect
+#     Version 2's content).
+#   - Update 7: Form 2 (unchanged) opens/navigates without error.
+#
+# GENERIC/BEST-EFFORT: see flows/updates_partial_failed/
+# scenario_1_staged_update_auto_apply.yaml's header for the same caveat about
+# "Mobile Updates - Test 1_2"'s unverified on-screen form names
+# ("Form 1"/"Form 2").
+#
+# flows/common/update_app_via_menu.yaml's own "Update App" flow ends with the
+# device auto-logging out (its final "Update to version X & log out" tap), so
+# this flow logs back in before checking the post-update version and forms.
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- assertVisible: "Start"
+
+# --- Update 4: update did NOT auto-apply -> still on Version 1. ---
+- runFlow:
+    file: ../common/check_app_version_via_about.yaml
+    env:
+      EXPECTED_VERSION: "1"
+
+# --- Update 5: manually complete the update, then log back in and confirm. ---
+- runFlow: ../common/update_app_via_menu.yaml
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- assertVisible: "Start"
+- runFlow:
+    file: ../common/check_app_version_via_about.yaml
+    env:
+      EXPECTED_VERSION: "2"
+
+# --- Update 6: updated Form 1 verification. ---
+- runFlow:
+    file: ../common/navigate_form_no_errors.yaml
+    env:
+      FORM_NAME: "Form 1"
+
+# --- Update 7: unchanged Form 2 verification. ---
+- runFlow:
+    file: ../common/navigate_form_no_errors.yaml
+    env:
+      FORM_NAME: "Form 2"

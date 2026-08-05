@@ -1,0 +1,27 @@
+appId: org.commcare.dalvik
+tags:
+  - prompted_updates
+  - automatable
+---
+# Master Mobile Plan (2026) > Prompted Updates > "Varying Prompt 3" - Test
+# Number of Views before Reducing Frequency. Uses test2 (a different mobile
+# worker) and expects the "available" prompt on 3 consecutive login cycles,
+# each dismissed with "I'll update later", before it stops appearing.
+- repeat:
+    times: 3
+    commands:
+      - runFlow:
+          file: ../common/login.yaml
+          env:
+            USERNAME: ${CC_TEST2_USERNAME}
+            PASSWORD: ${CC_TEST2_PASSWORD}
+      - assertVisible: "New version of the application is available"
+      - tapOn: "I'll update later"
+      - assertVisible: "Start"
+      - runFlow: ../common/logout.yaml
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST2_USERNAME}
+      PASSWORD: ${CC_TEST2_PASSWORD}
+- assertNotVisible: "New version of the application is available"
