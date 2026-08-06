@@ -1,0 +1,46 @@
+appId: org.commcare.dalvik
+tags:
+  - login
+  - automatable
+---
+# Master Mobile Plan (2026) > Login > "CommCare ODK 1" - Login: enter
+# username/password, verify the "logging in" progress message appears, and
+# confirm the home screen is reached.
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: "Basic Tests") - a fresh
+# BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
+# null. Uses the same "[Master] Basic Tests" app (cdfa6c85eb594b23b0c08729cd2beff1)
+# this tab's own header cites, not LoginTest.kt's own "Test: List Searching"
+# companion app - that instrumentation test exercises generic login
+# mechanics with its own convenience app, but this Master Mobile Plan tab's
+# Domain/Application header specifically names "Basic Test", matching
+# Support Menus/Case Filters' shared app in this same repo.
+#
+# Verified against commcare-android source (read-only reference, not modified):
+#   app/src/org/commcare/activities/LoginActivity.java line 816-817: the
+#     "logging in" progress dialog uses Localization keys key.manage.title/
+#     key.manage.start, both = "Logging in" (android_translatable_strings.txt).
+#     Shown briefly during the real network/local login sequence - flagged
+#     optional since Maestro's screenshot poll may not catch a fast dialog.
+#   flows/common/login.yaml's own citation of edit_username/edit_password/
+#     login_button (LoginActivity.java field ids).
+#   android_translatable_strings.txt home.start=Start - the home-screen
+#     landmark asserted below (same as every other flow in this repo).
+- runFlow:
+    file: ../common/install_app_as_web_user.yaml
+    env:
+      APP_NAME: "Basic Tests"
+- tapOn:
+    id: "org.commcare.dalvik:id/edit_username"
+- inputText: "${CC_TEST_USERNAME}"
+- tapOn:
+    id: "org.commcare.dalvik:id/edit_password"
+- inputText: "${CC_TEST_PASSWORD}"
+- hideKeyboard
+- tapOn:
+    id: "org.commcare.dalvik:id/login_button"
+- assertVisible:
+    text: "Logging in"
+    optional: true
+- assertVisible: "Start"

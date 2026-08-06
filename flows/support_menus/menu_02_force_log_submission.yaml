@@ -1,0 +1,43 @@
+appId: org.commcare.dalvik
+tags:
+  - support_menus
+  - partial
+---
+# Master Mobile Plan (2026) > Support Menus > "Menu 2" - Force Log
+# Submission: tap Advanced > Force Log Submission, verify the "Device Logs
+# Pending" notification does NOT appear.
+#
+# PARTIAL: the sheet's own pre-requisite ("verify the app does NOT have the
+# custom property logenabled=on_demand") is an HQ app-builder settings check
+# on the currently-published build - this flow does not verify that setting
+# itself (no on-device way to introspect it), it only assumes whichever
+# build is under test already satisfies it and checks the on-device
+# consequence.
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: "Basic Tests") - a fresh
+# BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
+# null. Same "Basic Test" app as menu_01_report_problem.yaml - see that
+# file's header for why the Advanced menu itself is app-agnostic.
+#
+# Verified against commcare-android source (read-only reference, not modified):
+#   android_translatable_strings.txt: force.log.submit="Force Log
+#     Submission" (line 911), notification.logger.serialized.title="Device
+#     Logs Pending" (line 684) - the notification this flow asserts absent.
+- runFlow:
+    file: ../common/install_app_as_web_user.yaml
+    env:
+      APP_NAME: "Basic Tests"
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- assertVisible: "Start"
+- tapOn: "More options"
+- tapOn: "Advanced"
+- assertVisible: "CommCare > Advanced"
+- tapOn: "Force Log Submission"
+- openNotifications
+- assertNotVisible: "Device Logs Pending"
+- back

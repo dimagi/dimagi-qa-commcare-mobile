@@ -1,0 +1,45 @@
+appId: org.commcare.dalvik
+tags:
+  - login
+  - partial
+---
+# Master Mobile Plan (2026) > Login > "CommCare ODK 2" - Check Session:
+# after logging in, open the notification shade and verify the
+# "Logged Into Commcare Session Expires: ..." banner is present.
+#
+# PARTIAL: the sheet also asks to verify the expiration time reads exactly
+# 24 hours from login - Maestro has no way to read/compute a live countdown
+# timestamp inside a notification's text, so only the banner's presence is
+# asserted here, not the specific duration. Same caveat category as this
+# repo's other "element visible, exact judgment skipped" Partial rows.
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: "Basic Tests") - a fresh
+# BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
+# null.
+#
+# Verified against commcare-android source (read-only reference, not modified):
+#   Same "Logged Into ..." / "Session Expires:" notification text and
+#   Maestro `openNotifications` mechanism already confirmed in
+#   flows/session_expiration/setup_02_restore_user_session_expires.yaml's
+#   header (SessionExpirationTests.kt) - this is CommCare's own core
+#   session-notification feature (app-agnostic), just with a much longer
+#   (24h, per this tab's own note) expiration window than Session
+#   Expiration Test's 45-second one, so only presence is checked here, not
+#   an actual wait-for-expiry.
+- runFlow:
+    file: ../common/install_app_as_web_user.yaml
+    env:
+      APP_NAME: "Basic Tests"
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- assertVisible: "Start"
+- openNotifications
+- assertVisible:
+    text: "(?i)Logged Into.*"
+- assertVisible:
+    text: "Session Expires:.*"
+- back

@@ -1,0 +1,29 @@
+appId: org.commcare.dalvik
+tags:
+  - login
+  - automatable
+---
+# Master Mobile Plan (2026) > Login > "CommCare ODK 3" - Logout: select
+# "Logout of CommCare", verify redirected to the login page.
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: "Basic Tests") - a fresh
+# BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
+# null.
+#
+# Reuses flows/common/logout.yaml verbatim - see that file's header for the
+# "Log out of CommCare" selector citation (InstrumentationUtility.kt
+# logout(), swipes the home NestedScrollView into view first).
+- runFlow:
+    file: ../common/install_app_as_web_user.yaml
+    env:
+      APP_NAME: "Basic Tests"
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- assertVisible: "Start"
+- runFlow: ../common/logout.yaml
+- assertVisible:
+    id: "org.commcare.dalvik:id/edit_username"

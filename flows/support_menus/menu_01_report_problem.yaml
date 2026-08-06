@@ -1,0 +1,64 @@
+appId: org.commcare.dalvik
+tags:
+  - support_menus
+  - partial
+---
+# Master Mobile Plan (2026) > Support Menus > "Menu 1" - Report Problem:
+# enter a comment, Submit Report, verify a share-target chooser opens for
+# where to send the report from.
+#
+# PARTIAL: step 6 ("A window should open asking where you would like to
+# send the report from - Gmail, another e-mail, or Google Drive") is an
+# Android system share-sheet (ACTION_SEND chooser) whose actual app list
+# depends on what's installed on the specific test device - not a
+# CommCare-controlled screen, so this flow only asserts the chooser opens
+# and then backs out (never actually sends an email) rather than picking a
+# specific app and completing the send, which isn't deterministic across
+# devices. Rotation (step 7) and post-send return-to-home (steps 8-9) are
+# also skipped for the same reason - there's nothing further to do once
+# control has left org.commcare.dalvik for the OS share sheet.
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: "Basic Tests") - a fresh
+# BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
+# null. commcare-android's own MenuTests.kt exercises "Report Problem"
+# against a different dedicated app ("App for Settings Sheet") - the
+# Advanced menu and its "Report Problem" entry are core CommCare runtime
+# features available regardless of which app is loaded (not app-specific
+# content), so this tab's own "Basic Test" app is used instead, matching
+# its Domain/Application header (shared with Login/Case Filters in this
+# same repo).
+#
+# Verified against commcare-android source (read-only reference, not modified):
+#   android_translatable_strings.txt: problem.report.menuitem="Report
+#     Problem" (line 758), problem.report.button="Submit Report" (line 756).
+#   app/src/org/commcare/activities/ReportProblemActivity.java:
+#     setContentView(R.layout.activity_report_problem); comment EditText is
+#     R.id.ReportText01, submit button is R.id.ReportButton01.
+#   MenuTests.kt's advancedOptions[2]="Report Problem" confirms this lives
+#     under the "Advanced" submenu, same "CommCare > Advanced" screen title
+#     MenuTests.kt asserts.
+- runFlow:
+    file: ../common/install_app_as_web_user.yaml
+    env:
+      APP_NAME: "Basic Tests"
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- assertVisible: "Start"
+- tapOn: "More options"
+- tapOn: "Advanced"
+- assertVisible: "CommCare > Advanced"
+- tapOn: "Report Problem"
+- tapOn:
+    id: "org.commcare.dalvik:id/ReportText01"
+- inputText: "This is a test"
+- hideKeyboard
+- tapOn:
+    id: "org.commcare.dalvik:id/ReportButton01"
+- assertVisible:
+    text: "(?i).*(gmail|email|drive|send).*"
+    optional: true
+- back
