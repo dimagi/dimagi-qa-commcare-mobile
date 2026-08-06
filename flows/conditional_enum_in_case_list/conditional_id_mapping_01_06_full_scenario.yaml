@@ -1,0 +1,146 @@
+appId: org.commcare.dalvik
+tags:
+  - conditional_enum_in_case_list
+  - partial
+---
+# Master Mobile Plan (2026) > Conditional Enum in Case List > "Conditional ID
+# Mapping 1" through "6", run as one sequential flow since the sheet's rows
+# are clearly a single narrative (same convention as
+# flows/updates_2_49/rate_limit_02_04_popup_dont_show_toast.yaml): create
+# two cases (Test One - age 16, appointment today; Test Two - age 21,
+# appointment yesterday), verify each's computed case-detail properties,
+# answer the follow-up question for each, then verify the final computed
+# property.
+#
+# Setup 1 ("Enable Feature Preview") and Setup 2 ("Verify Feature Preview")
+# are deliberately OUT of scope - both are pure HQ app-builder web UI
+# actions (enabling the "Conditional ID Mapping in Case List" Add-on,
+# checking a Display Property's Format dropdown), nothing to automate here
+# via Maestro. See coverage_matrix.csv for those rows.
+#
+# PARTIAL: "Test Two"'s appointment date must be set to YESTERDAY in a
+# native DatePicker (spinner mode - see DateWidget below) that defaults to
+# TODAY. There is no Maestro-native "set date" action for a spinner
+# DatePicker (unlike a plain text field); the swipe gesture below is a
+# best-effort, UNVERIFIED-against-a-live-run attempt to decrement the day
+# column by one - flag for correction once actually run on a real device.
+# "Test One" needs no date interaction at all (the widget already defaults
+# to today), so that half is fully Automatable.
+#
+# Verified against commcare-android source (read-only reference, not modified):
+#   app/src/org/commcare/views/widgets/DateWidget.java: wraps a plain
+#     android.widget.DatePicker inflated from R.layout.date_widget, which
+#     the fresh CCZ extracted for this app confirms is
+#     android:datePickerMode="spinner" (day/month/year NumberPicker
+#     columns, not a calendar grid) - initializes to the current date
+#     unless otherwise set.
+#   The CCZ's own default/app_strings.txt + modules-0/forms-{0,1}.xml
+#     (extracted read-only from resources/qateam - Conditional Enum in Case
+#     List - v48.ccz, never committed/modified): modules.m0="Case List",
+#     forms.m0f0="Register form" (questions in order: Case Name,
+#     Appointment Date, Case Age), forms.m0f1="Followup" (case-detail
+#     screen with "Case Age"/"Case Age Even/Odd"/"Appointment Date" headers
+#     per m0.case_long.* keys, a "Continue" button - m0_select_text -, then
+#     a "Did patient show up to their appointment?" yes/no question,
+#     relevant-only "Illness, injury or checkup?" question when yes).
+#   ConditionalEnumInCaseListTests.kt confirms test1/123 as valid
+#     credentials and the exact case-property verification sequence this
+#     flow mirrors (though that instrumentation test computes today's/
+#     yesterday's actual day-of-month via java.util.Calendar and drives a
+#     real PickerActions.setDate - Maestro has no equivalent structured
+#     date-set action, hence the swipe-based best-effort here instead).
+- runFlow:
+    file: ../common/install_app_as_web_user.yaml
+    env:
+      APP_NAME: "Conditional Enum in Case List"
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- assertVisible: "Start"
+
+# === Conditional ID Mapping 1 (part 1): create "Test One" (age 16, today). ===
+- tapOn: "Start"
+- tapOn: "Case List"
+- tapOn: "Register form"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+    optional: true
+- inputText: "Test One"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+# Appointment Date - defaults to today already, no interaction needed.
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+- inputText: "16"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"
+- assertVisible: "Start"
+
+# === Conditional ID Mapping 1 (part 2): create "Test Two" (age 21, yesterday). ===
+- tapOn: "Start"
+- tapOn: "Case List"
+- tapOn: "Register form"
+- inputText: "Test Two"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+# BEST-EFFORT/UNVERIFIED: decrement the day-of-month NumberPicker column by
+# one to reach yesterday. Swiping downward on a NumberPicker typically
+# decrements its value by one tick - not confirmed against a live run.
+- swipe:
+    start: "50%, 45%"
+    end: "50%, 60%"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+- inputText: "21"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"
+- assertVisible: "Start"
+
+# === Conditional ID Mapping 2: update Test One, verify computed properties. ===
+- tapOn: "Start"
+- tapOn: "Case List"
+- tapOn: "Followup"
+- tapOn: "Test One"
+- assertVisible: "Child"
+- assertVisible: "Even"
+- assertVisible: "Today"
+- tapOn: "Continue"
+
+# === Conditional ID Mapping 3: answer "yes", pick "Checkup". ===
+- assertVisible: "Did patient show up to their appointment?"
+- tapOn: "yes"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+- tapOn: "Checkup"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"
+- assertVisible: "Start"
+
+# === Conditional ID Mapping 4: update Test Two, verify computed properties. ===
+- tapOn: "Start"
+- tapOn: "Case List"
+- tapOn: "Followup"
+- tapOn: "Test Two"
+- assertVisible: "Adult"
+- assertVisible: "Odd"
+- assertVisible: "Not Today"
+- tapOn: "Continue"
+
+# === Conditional ID Mapping 5: answer "no". ===
+- assertVisible: "Did patient show up to their appointment?"
+- tapOn: "no"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"
+- assertVisible: "Start"
+
+# === Conditional ID Mapping 6: verify final "Appointment Attended?" values. ===
+- tapOn: "Start"
+- tapOn: "Case List"
+- tapOn: "Followup"
+- tapOn: "Test One"
+- assertVisible: "Seen by doctor"
+- back
+- tapOn: "Test Two"
+- assertVisible: "Needs followup"
