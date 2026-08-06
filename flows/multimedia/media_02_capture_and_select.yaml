@@ -56,6 +56,14 @@ tags:
 # flows/updates_2_49/auto_cc_update_03_relogin_sync_latest_version.yaml.
 - addMedia:
     - "./assets/sample_image.png"
+# Prepends install_app_as_web_user.yaml (APP_NAME: Multimedia) - a fresh
+# BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
+# null.
+- runFlow:
+    file: ../common/install_app_as_web_user.yaml
+    env:
+      APP_NAME: "Multimedia"
 - runFlow:
     file: ../common/login.yaml
     env:

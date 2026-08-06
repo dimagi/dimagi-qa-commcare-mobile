@@ -1,0 +1,25 @@
+appId: org.commcare.dalvik
+tags:
+  - session_expiration
+  - partial
+---
+# Master Mobile Plan (2026) > Session Expiration > "Setup 1" - Install
+# Application.
+#
+# PARTIAL: needs a valid HQ web-user email/password (same dependency as
+# flows/install/install_08_install_as_web_user.yaml). Installs "Session
+# Expiration Test" specifically (not the default Basic Tests app every other
+# workflow's flows assume) via ../common/install_app_as_web_user.yaml -
+# see that file's header for why targeting the app by name is safe.
+#
+# Verified against commcare-android source (read-only reference, not modified):
+#   app/instrumentation-tests/src/org/commcare/androidTests/SessionExpirationTest.kt
+#     and SessionExpirationTests.kt: both companion objects declare
+#     APP_NAME = "Session Expiration Test" - the exact string this flow
+#     passes through to the shared subflow.
+- runFlow:
+    file: ../common/install_app_as_web_user.yaml
+    env:
+      APP_NAME: "Session Expiration Test"
+- assertVisible:
+    id: "org.commcare.dalvik:id/edit_username"

@@ -3,6 +3,10 @@ tags:
   - multimedia
   - automatable
 ---
+- runFlow:
+    file: ../common/install_app_as_web_user.yaml
+    env:
+      APP_NAME: "Multimedia"
 # Master Mobile Plan (2026) > Multimedia > "Lazy Video 2" - 'Missing video'
 # popup shown per question.
 #
@@ -31,6 +35,9 @@ tags:
 #   nav_btn_next / nav_btn_finish ids verified against
 #   res/layout/screen_form_entry.xml and
 #   FormAttachmentUploadTest.java's use of R.id.nav_btn_next/nav_btn_finish.
+# Prepends install_app_as_web_user.yaml (APP_NAME: Multimedia) - a fresh
+# BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp == null.
 - runFlow:
     file: ../common/login.yaml
     env:

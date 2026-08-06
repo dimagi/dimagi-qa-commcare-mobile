@@ -4,9 +4,17 @@ tags:
   - automatable
 ---
 # Master Mobile Plan (2026) > Mobile Pins > "Pin 14" - Reset your PIN Verification.
+# NOTE: Prepends install_app_as_web_user.yaml (APP_NAME: "[Master] Basic
+# Tests") - a fresh BrowserStack session has no app installed until this
+# runs; see DispatchActivity.java's CommCareSetupActivity routing when
+# currentApp == null.
 # Declining the "Reset your PIN?" prompt (either "no, ask again" option) should
 # not let the user escape it - since they can now only reach the app via
 # Forgot PIN -> password, they'll be re-prompted every time.
+- runFlow:
+    file: ../common/install_app_as_web_user.yaml
+    env:
+      APP_NAME: "Basic Tests"
 - runFlow:
     file: ../common/login.yaml
     env:

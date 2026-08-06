@@ -1,0 +1,71 @@
+appId: org.commcare.dalvik
+---
+# Reusable "install a specific named app via HQ web user" subflow. Params:
+# APP_NAME (exact display name as it appears in the app list, e.g. "Session
+# Expiration Test").
+#
+# CAVEAT - Maestro's tapOn text matching is a REGEX by default, not a literal
+# string match (confirmed against Maestro's own docs: text/id selectors are
+# regex unless escaped). If an app's real HQ name contains regex
+# metacharacters (e.g. "[Master] Basic Tests" - the brackets form a
+# character class), pass a bracket/metacharacter-free SUBSTRING instead
+# (e.g. "Basic Tests") rather than the full literal name - tapOn matches
+# anywhere in the row's visible text by default, so a plain substring still
+# selects the right row without the escaping risk. Learned the hard way:
+# every flow originally using the literal "[Master] Basic Tests" here had
+# to be corrected to "Basic Tests" for this exact reason.
+#
+# Same "See Apps for My User" -> web-user-mode -> Get Apps mechanism as
+# flows/install/install_08_install_as_web_user.yaml (verified against
+# InstallFromListTest.kt's testAppInstall_usingWebWorkerDetails), except
+# that flow blindly taps the whole apps_list_view container (fine when the
+# domain only surfaces one app to select); this one selects a SPECIFIC row
+# by its visible app-name text instead, so it can install any of the
+# qateam domain's several QA apps on demand.
+#
+# Verified against commcare-android source (read-only reference, not modified):
+#   InstallFromListActivity.java line 394-408: each row is inflated from
+#     R.layout.single_available_app_view with its app_name TextView set to
+#     app.getAppName() - i.e. the app's real display name is the row's own
+#     visible text, not a synthetic index - and the list is sorted
+#     alphabetically by that same name (line 419), so this doesn't depend on
+#     row order.
+#   InstallFromListActivity.java line 133-141 (setOnItemClickListener):
+#     tapping a row immediately finishes this activity with RESULT_OK,
+#     carrying the selected app's media profile ref back to the caller - no
+#     separate per-row confirm step, same as install_08's single blind tap.
+- tapOn: "More options"
+- tapOn: "See Apps for My User"
+- tapOn:
+    id: "org.commcare.dalvik:id/switch_button"
+- tapOn:
+    id: "org.commcare.dalvik:id/edit_email"
+- tapOn:
+    text: "Skip"
+    optional: true
+- inputText: "${HQ_WEB_USER_EMAIL}"
+- tapOn:
+    id: "org.commcare.dalvik:id/edit_password"
+- inputText: "${HQ_WEB_USER_PASSWORD}"
+- hideKeyboard
+- tapOn:
+    text: "Skip"
+    optional: true
+- tapOn:
+    id: "org.commcare.dalvik:id/get_apps_button"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/apps_list_view"
+    timeout: 30000
+- tapOn: "${APP_NAME}"
+- tapOn:
+    id: "org.commcare.dalvik:id/install_app_button"
+    retryTapIfNoChange: false
+    optional: true
+- extendedWaitUntil:
+    visible: "Setting Up App"
+    timeout: 60000
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/edit_username"
+    timeout: 90000

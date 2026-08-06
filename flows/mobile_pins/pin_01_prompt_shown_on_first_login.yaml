@@ -4,6 +4,10 @@ tags:
   - automatable
 ---
 # Master Mobile Plan (2026) > Mobile Pins > "Pin 1" - Prompt.
+# NOTE: Prepends install_app_as_web_user.yaml (APP_NAME: "[Master] Basic
+# Tests") - a fresh BrowserStack session has no app installed until this
+# runs; see DispatchActivity.java's CommCareSetupActivity routing when
+# currentApp == null.
 # Strings verified against app/assets/locales/android_translatable_strings.txt
 # (pin.dialog.prompt.set / pin.dialog.yes / pin.dialog.not.now / pin.dialog.never)
 # and app/src/org/commcare/views/dialogs/PaneledChoiceDialog.java (extra_info_button).
@@ -21,6 +25,10 @@ tags:
 # in isolation"). Deliberately NOT duplicated into a second
 # pin_01_prompt_after_reinstall.yaml file for that reason - point
 # coverage_matrix.csv's second "Pin 1" row at this same file.
+- runFlow:
+    file: ../common/install_app_as_web_user.yaml
+    env:
+      APP_NAME: "Basic Tests"
 - runFlow:
     file: ../common/login.yaml
     env:

@@ -4,6 +4,10 @@ tags:
   - partial
   - blocked_missing_asset
 ---
+- runFlow:
+    file: ../common/install_app_as_web_user.yaml
+    env:
+      APP_NAME: "Multimedia"
 # Master Mobile Plan (2026) > Multimedia > "Filesize 1" - Trigger the
 # oversized-file warning.
 #
@@ -52,6 +56,10 @@ tags:
 # (FileUtil.java:833-835), so the rendered max is actually "14 mb", NOT "15
 # mb" (a real off-by-one in the app's own math, not a typo here) - the regex
 # below tolerates either value in case that's ever fixed upstream.
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: Multimedia) - a fresh
+# BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp == null.
 - addMedia:
     - "./assets/oversized_test_video.mp4"
 - runFlow:

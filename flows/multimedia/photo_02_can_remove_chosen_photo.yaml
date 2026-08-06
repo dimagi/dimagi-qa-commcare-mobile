@@ -37,6 +37,14 @@ tags:
 # the specific CCZ's form definition and couldn't be verified here.
 - addMedia:
     - "./assets/sample_image.png"
+# Prepends install_app_as_web_user.yaml (APP_NAME: Multimedia) - a fresh
+# BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
+# null.
+- runFlow:
+    file: ../common/install_app_as_web_user.yaml
+    env:
+      APP_NAME: "Multimedia"
 - runFlow:
     file: ../common/login.yaml
     env:

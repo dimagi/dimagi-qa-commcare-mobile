@@ -4,6 +4,10 @@ tags:
   - partial
   - blocked_missing_asset
 ---
+- runFlow:
+    file: ../common/install_app_as_web_user.yaml
+    env:
+      APP_NAME: "Multimedia"
 # Master Mobile Plan (2026) > Multimedia > "Filesize 2" - update the app to
 # the "No Warning" release-note build, upload the two specifically-named
 # large-but-allowed files, verify no size warning appears.
@@ -47,6 +51,10 @@ tags:
 # same attachment_above_size_limit-derived message text cited in
 # filesize_01_trigger_warning.yaml (the one this flow is contrasting
 # against), immediately after each choose+pick.
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: Multimedia) - a fresh
+# BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp == null.
 - runFlow:
     file: ../common/login.yaml
     env:

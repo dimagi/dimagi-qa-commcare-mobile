@@ -24,6 +24,13 @@ tags:
 #    InstrumentationUtility.kt's openFirstIncompleteForm()/
 #    searchCaseAndSelect() click into via
 #    clickListItem(R.id.screen_entity_select_list, position)).
+# Prepends install_app_as_web_user.yaml (APP_NAME: "Right to Left Tests!") - a
+# fresh BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp == null.
+- runFlow:
+    file: ../common/install_app_as_web_user.yaml
+    env:
+      APP_NAME: "Right to Left Tests!"
 - runFlow:
     file: ../common/login.yaml
     env:

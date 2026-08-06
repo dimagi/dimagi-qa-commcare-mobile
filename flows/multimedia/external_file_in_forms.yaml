@@ -3,6 +3,10 @@ tags:
   - multimedia
   - partial
 ---
+- runFlow:
+    file: ../common/install_app_as_web_user.yaml
+    env:
+      APP_NAME: "Multimedia"
 # Master Mobile Plan (2026) > Multimedia > "External File in Forms" -
 # Linking to External Files: open menu "External File in Forms" > form
 # "Access File", click the in-form hyperlink "This link", verify the video
@@ -63,6 +67,10 @@ tags:
 # NOT surface the app's own "no handler" error - i.e. some external
 # activity actually took over - which is the best on-device signal available
 # short of a screenshot-diff.
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: Multimedia) - a fresh
+# BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp == null.
 - runFlow:
     file: ../common/login.yaml
     env:

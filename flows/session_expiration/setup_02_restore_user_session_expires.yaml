@@ -1,0 +1,61 @@
+appId: org.commcare.dalvik
+tags:
+  - session_expiration
+  - partial
+---
+# Master Mobile Plan (2026) > Session Expiration > "Setup 2" - Restore User:
+# log in, verify the session-expiration notification appears, and confirm
+# the app actually logs out (back to the login screen) once the session's
+# 45-second window elapses (per this tab's own "Test Area" note: "This
+# application is set up to log you out automatically after 45 seconds").
+#
+# PARTIAL: same HQ web-user dependency as setup_01_install_application.yaml
+# (this flow re-installs rather than assuming setup_01 ran first in the same
+# session, per this repo's "each flow runnable in isolation" convention).
+#
+# Verified against commcare-android source (read-only reference, not modified):
+#   app/instrumentation-tests/src/org/commcare/androidTests/SessionExpirationTests.kt
+#     testRestoreUser(): logs in as test_session_1/123 (this app's own test
+#     user, distinct from the shared CC_TEST_USERNAME used elsewhere in this
+#     repo), then uiDevice.openNotification() + waits for text starting
+#     "Logged Into Commcare"/"Logged Into Session Expiration Test" and
+#     "Session Expires:", clicks that notification, waits up to 45000ms for
+#     "Welcome" (the login screen re-appearing), then re-opens notifications
+#     and waits for text ending "Login Expire".
+#   app/res/values/strings.xml line 63: session_expire_notification =
+#     "CommCare Login Expired" - the string behind that final "Login Expire"
+#     substring check.
+#   Maestro's `openNotifications` command (not a swipe gesture) is Maestro's
+#     own documented way to reach the system notification tray - it talks to
+#     the device, not just the org.commcare.dalvik app, the same way this
+#     repo's recovery_measures flows already reach the separate system file
+#     picker (SAF) via plain text selectors.
+- runFlow:
+    file: ../common/install_app_as_web_user.yaml
+    env:
+      APP_NAME: "Session Expiration Test"
+- tapOn:
+    id: "org.commcare.dalvik:id/edit_username"
+- inputText: "test_session_1"
+- tapOn:
+    id: "org.commcare.dalvik:id/edit_password"
+- inputText: "123"
+- hideKeyboard
+- tapOn:
+    id: "org.commcare.dalvik:id/login_button"
+- assertVisible: "Start"
+- openNotifications
+- assertVisible:
+    text: "(?i)Logged Into.*"
+- assertVisible:
+    text: "Session Expires:.*"
+- tapOn:
+    text: "Session Expires:.*"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/edit_username"
+    timeout: 50000
+- openNotifications
+- assertVisible:
+    text: ".*Login Expire.*"
+- back

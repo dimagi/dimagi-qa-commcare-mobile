@@ -27,6 +27,14 @@ tags:
 # flows/multimedia/image_resize_01_04_default_setting.yaml - see that file's
 # header for the full citation and caveats, not repeated here to avoid
 # drift between the two copies.
+# Prepends install_app_as_web_user.yaml (APP_NAME: Multimedia) - a fresh
+# BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
+# null.
+- runFlow:
+    file: ../common/install_app_as_web_user.yaml
+    env:
+      APP_NAME: "Multimedia"
 - runFlow:
     file: ../common/login.yaml
     env:

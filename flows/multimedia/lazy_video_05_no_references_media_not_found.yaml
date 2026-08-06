@@ -3,6 +3,10 @@ tags:
   - multimedia
   - automatable
 ---
+- runFlow:
+    file: ../common/install_app_as_web_user.yaml
+    env:
+      APP_NAME: "Multimedia"
 # Master Mobile Plan (2026) > Multimedia > "Lazy Video 5" - 'Media not
 # found' message for unreferenced videos.
 #
@@ -29,6 +33,10 @@ tags:
 #   (MissingMediaDownloadHelper.kt:200-204). The result's message then
 #   replaces the prompt text in the same missing_media_tv TextView
 #   (views/media/MediaLayout.java:403).
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: Multimedia) - a fresh
+# BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp == null.
 - runFlow:
     file: ../common/login.yaml
     env:

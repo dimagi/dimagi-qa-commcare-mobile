@@ -29,6 +29,14 @@ tags:
 # ../common/view_form_no_errors_from_menu.yaml (see that file for the full
 # selector citation) so it lands back on the "Image Resize" menu ready for
 # the next form, without re-navigating "Start" -> "Image Resize" four times over.
+# Prepends install_app_as_web_user.yaml (APP_NAME: Multimedia) - a fresh
+# BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
+# null.
+- runFlow:
+    file: ../common/install_app_as_web_user.yaml
+    env:
+      APP_NAME: "Multimedia"
 - runFlow:
     file: ../common/login.yaml
     env:

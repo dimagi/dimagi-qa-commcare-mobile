@@ -4,8 +4,16 @@ tags:
   - automatable
 ---
 # Master Mobile Plan (2026) > Mobile Pins > "Pin 11" - Forgot PIN.
+# NOTE: Prepends install_app_as_web_user.yaml (APP_NAME: "[Master] Basic
+# Tests") - a fresh BrowserStack session has no app installed until this
+# runs; see DispatchActivity.java's CommCareSetupActivity routing when
+# currentApp == null.
 # "Forgot PIN?" (login.menu.password.mode) lives in the login screen's own
 # options menu and toggles the field back to password mode in place.
+- runFlow:
+    file: ../common/install_app_as_web_user.yaml
+    env:
+      APP_NAME: "Basic Tests"
 - runFlow:
     file: ../common/login.yaml
     env:

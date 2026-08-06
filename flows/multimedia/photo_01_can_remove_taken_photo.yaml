@@ -50,6 +50,14 @@ tags:
 # comment already flags that whether this specific CCZ allows submitting
 # with the image question left blank after removal is unverified, and the
 # sheet's own wording for Photo 1 doesn't call for a submit step.
+# Prepends install_app_as_web_user.yaml (APP_NAME: Multimedia) - a fresh
+# BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
+# null.
+- runFlow:
+    file: ../common/install_app_as_web_user.yaml
+    env:
+      APP_NAME: "Multimedia"
 - runFlow:
     file: ../common/login.yaml
     env:

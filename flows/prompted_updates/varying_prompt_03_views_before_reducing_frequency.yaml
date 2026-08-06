@@ -7,6 +7,16 @@ tags:
 # Number of Views before Reducing Frequency. Uses test2 (a different mobile
 # worker) and expects the "available" prompt on 3 consecutive login cycles,
 # each dismissed with "I'll update later", before it stops appearing.
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: "Basic Tests") -
+# a fresh BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
+# null. Only needed once, before the first login below - the later
+# re-logins in this same flow reuse the app that's still installed.
+- runFlow:
+    file: ../common/install_app_as_web_user.yaml
+    env:
+      APP_NAME: "Basic Tests"
 - repeat:
     times: 3
     commands:

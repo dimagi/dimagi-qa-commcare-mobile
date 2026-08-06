@@ -4,6 +4,14 @@ tags:
   - automatable
 ---
 # Master Mobile Plan (2026) > Mobile Pins > "Pin 10" - Login using changed PIN 1.
+# NOTE: Prepends install_app_as_web_user.yaml (APP_NAME: "[Master] Basic
+# Tests") - a fresh BrowserStack session has no app installed until this
+# runs; see DispatchActivity.java's CommCareSetupActivity routing when
+# currentApp == null.
+- runFlow:
+    file: ../common/install_app_as_web_user.yaml
+    env:
+      APP_NAME: "Basic Tests"
 - runFlow:
     file: ../common/login.yaml
     env:

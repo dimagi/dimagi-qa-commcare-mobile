@@ -63,8 +63,35 @@ tags:
 #   flows/mobile_pins/setup_05_uninstall_app.yaml - same "Go To App Manager" >
 #     select app > "Uninstall" sequence reused below for the
 #     "uninstall Basic Tests" step.
+#
+# UPDATE: a fresh BrowserStack session has no app installed at all until
+# something installs one (see DispatchActivity.java's CommCareSetupActivity
+# routing when currentApp == null) - the "ASSUMES both ... already installed
+# & seated side-by-side" note above is no longer an out-of-scope
+# precondition; the two runFlow calls below actually establish it via
+# ../common/install_app_as_web_user.yaml, installing each app in turn
+# without uninstalling the other (CommCare's "multiple apps" feature keeps
+# both seated side-by-side once installed this way). Real app names are
+# "Basic Tests" (substring of the exact HQ name "[Master] Basic Tests" -
+# see that subflow's own CAVEAT on why a bracket-free substring is used
+# instead of the literal bracketed name) and "Case Managements!" (the exact
+# HQ name per resources/qateam - Case Managements! - v232.ccz - this flow's
+# original "Case Management" guess below is a safe substring match of that
+# real name, not a separate app).
 
 # --- "login as test1/123 on Basic Tests and set PIN" ---
+# Install Case Managements! FIRST, Basic Tests SECOND - the immediately
+# following login step expects Basic Tests to be the active/seated app, and
+# whichever app is installed most recently is the one DispatchActivity lands
+# on afterward.
+- runFlow:
+    file: ../common/install_app_as_web_user.yaml
+    env:
+      APP_NAME: "Case Managements!"
+- runFlow:
+    file: ../common/install_app_as_web_user.yaml
+    env:
+      APP_NAME: "Basic Tests"
 - runFlow:
     file: ../common/login.yaml
     env:

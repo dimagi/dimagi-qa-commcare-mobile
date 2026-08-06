@@ -31,6 +31,13 @@ tags:
 #    from FormEntryActivity's back-press handler) ->
 #    quit_form_title="Exit Form?", do_not_save="EXIT WITHOUT SAVING"
 #    (app/res/values/strings.xml).
+# Prepends install_app_as_web_user.yaml (APP_NAME: "Right to Left Tests!") - a
+# fresh BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp == null.
+- runFlow:
+    file: ../common/install_app_as_web_user.yaml
+    env:
+      APP_NAME: "Right to Left Tests!"
 - runFlow:
     file: ../common/login.yaml
     env:

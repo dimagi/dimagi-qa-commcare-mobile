@@ -5,6 +5,10 @@ tags:
 ---
 # Master Mobile Plan (2026) > Mobile Pins > "Setup 3" - Enable Developer
 # Options (tap About CommCare 4x from the home screen).
+# NOTE: Prepends install_app_as_web_user.yaml (APP_NAME: "[Master] Basic
+# Tests") - a fresh BrowserStack session has no app installed until this
+# runs; see DispatchActivity.java's CommCareSetupActivity routing when
+# currentApp == null.
 # No reusable dev-options-enable subflow exists yet in flows/common/ (checked
 # first, per this task's instructions) - the only other place this exact tap
 # sequence appears is inlined at the top of
@@ -32,6 +36,10 @@ tags:
 #       is true (app/src/org/commcare/preferences/MainConfigurablePreferences.java
 #       findPreference(DEVELOPER_SETTINGS)).
 #     dialog.ok=OK (About CommCare dialog's positive button).
+- runFlow:
+    file: ../common/install_app_as_web_user.yaml
+    env:
+      APP_NAME: "Basic Tests"
 - runFlow:
     file: ../common/login.yaml
     env:

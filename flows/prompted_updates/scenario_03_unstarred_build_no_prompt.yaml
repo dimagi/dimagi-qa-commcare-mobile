@@ -12,6 +12,16 @@ tags:
 # Setup 2/3 have already run (latest build In Test + prior build Released,
 # Prompt Updates to CommCare/App = On), so the device is currently on the
 # prior released version with no prompt pending.
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: "Basic Tests") -
+# a fresh BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
+# null. Only needed once, before the first login below - the later
+# re-logins in this same flow reuse the app that's still installed.
+- runFlow:
+    file: ../common/install_app_as_web_user.yaml
+    env:
+      APP_NAME: "Basic Tests"
 - runFlow:
     file: ../common/login.yaml
     env:

@@ -4,12 +4,20 @@ tags:
   - automatable
 ---
 # Master Mobile Plan (2026) > Mobile Pins > "Pin 4" - Set My Pin.
+# NOTE: Prepends install_app_as_web_user.yaml (APP_NAME: "[Master] Basic
+# Tests") - a fresh BrowserStack session has no app installed until this
+# runs; see DispatchActivity.java's CommCareSetupActivity routing when
+# currentApp == null.
 # "Set My PIN" routes through PinAuthenticationActivity (password mode, since no
 # PIN exists yet) and then CreatePinActivity (enter + re-enter new PIN).
 # Strings/ids verified against:
 #   app/src/org/commcare/activities/PinAuthenticationActivity.java (password_entry, pin_confirm_button)
 #   app/src/org/commcare/activities/CreatePinActivity.java (pin_entry, pin_confirm_button)
 #   android_translatable_strings.txt (pin.auth.prompt.password / pin.directive.new / pin.directive.confirm / pin.set.success)
+- runFlow:
+    file: ../common/install_app_as_web_user.yaml
+    env:
+      APP_NAME: "Basic Tests"
 - runFlow:
     file: ../common/login.yaml
     env:
