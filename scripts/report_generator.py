@@ -24,7 +24,8 @@ REPORTS_DIR = REPO_ROOT / "reports"
 HISTORY_PATH = REPORTS_DIR / "history.json"
 HISTORY_LIMIT = 30  # older runs roll off so the trend chart stays readable
 
-STATUS_ORDER = ("passed", "rerun", "failed", "skipped")
+STATUS_ORDER = ("passed", "rerun", "failed", "skipped")  # KPI cards / donut order
+ROW_SORT_ORDER = ("failed", "rerun", "passed", "skipped")  # table default order - failures first
 STATUS_COLORS = {
     "passed": "#15924d",
     "rerun": "#8b3fd4",
@@ -42,8 +43,10 @@ class TestResult:
     duration_ms: int = 0
     device: str = ""
     error: str = ""
+    failed_step: str = ""
     video_url: str = ""
     screenshot_url: str = ""
+    maestro_commands_url: str = ""
 
 
 # ---------------------------------------------------------------- normalize --
@@ -83,10 +86,24 @@ def normalize_build(build):
                         status=status,
                         duration_ms=_parse_duration_ms(tc.get("duration")),
                         device=device_name,
+                        error=_extract_error(tc),
                         video_url=tc.get("video", ""),
                         screenshot_url=tc.get("screenshots", ""),
+                        maestro_commands_url=tc.get("maestro_commands", ""),
                     ))
     return results
+
+
+def _extract_error(tc):
+    """BrowserStack's documented testcase schema doesn't list an error/reason
+    field, but other App Automate frameworks (Appium) do carry one - check
+    the plausible key names opportunistically rather than assuming none of
+    them will ever show up here."""
+    for key in ("message", "reason", "error", "failure_reason", "error_message"):
+        val = tc.get(key)
+        if val:
+            return str(val)
+    return ""
 
 
 def _infer_workflow(class_name):
@@ -100,6 +117,73 @@ def _infer_workflow(class_name):
         if idx + 1 < len(parts):
             return parts[idx + 1]
     return parts[0] if parts else "uncategorized"
+
+
+def fetch_failed_step(commands_url, timeout=8):
+    """Best-effort only: BrowserStack doesn't publicly document the
+    maestro_commands JSON shape, so this defensively looks for a list of
+    {command/name/label, status/result} entries and returns the last one
+    that looks failed. Returns None - never raises - if the request fails,
+    times out, or the shape doesn't match anything recognizable; callers
+    fall back to linking the raw URL instead of showing a guessed step."""
+    if not commands_url:
+        return None
+    try:
+        import requests
+        resp = requests.get(commands_url, timeout=timeout)
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception:
+        return None
+
+    entries = data if isinstance(data, list) else (data.get("commands") or data.get("steps") or [])
+    if not isinstance(entries, list):
+        return None
+
+    for entry in reversed(entries):
+        if not isinstance(entry, dict):
+            continue
+        status = str(entry.get("status") or entry.get("result") or "").lower()
+        if "fail" in status or "error" in status:
+            step = entry.get("command") or entry.get("name") or entry.get("label") or entry.get("description")
+            detail = entry.get("error") or entry.get("reason") or entry.get("message")
+            if step and detail:
+                return f"{step} — {detail}"
+            return step or detail
+    return None
+
+
+def enrich_failures(results):
+    """Best-effort fill-in of failed_step for every failed result by
+    fetching its maestro_commands log. A fetch/parse failure just leaves
+    failed_step blank - the report falls back to the raw log link, nothing
+    fabricated."""
+    enriched = []
+    for r in results:
+        if r.status == "failed" and not r.failed_step and r.maestro_commands_url:
+            step = fetch_failed_step(r.maestro_commands_url)
+            if step:
+                r = dataclasses.replace(r, failed_step=step)
+        enriched.append(r)
+    return enriched
+
+
+def match_flow_files(failed_results, candidate_files, flows_dir):
+    """Map failed TestResults back to their .yaml flow files so a caller can
+    re-trigger just those. Every response seen so far has reported the
+    testcase `name` as exactly its relative "flows/<workflow>/<file>.yaml"
+    execute[] path, but that's not documented anywhere as guaranteed - if
+    BrowserStack ever reports a bare filename instead, this falls back to
+    matching by filename stem. A failed name matching neither is skipped
+    (not retried); the caller is responsible for surfacing that."""
+    failed_names = {r.name for r in failed_results}
+    failed_stems = {n.rsplit("/", 1)[-1].rsplit(".", 1)[0] for n in failed_names}
+    matched = []
+    for f in candidate_files:
+        rel = f.relative_to(flows_dir).as_posix()
+        if rel in failed_names or f.stem in failed_stems:
+            matched.append(f)
+    return matched
 
 
 def merge_rerun(first_attempt, retry_attempt):
@@ -257,8 +341,13 @@ td,th{border-bottom:1px solid var(--line);padding:7px 8px;text-align:left;vertic
 th{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)}
 .badge{font-size:10px;font-weight:700;text-transform:uppercase;border-radius:4px;padding:2px 7px;color:#fff}
 .badge-passed{background:#15924d}.badge-failed{background:#d33030}.badge-skipped{background:#9aa3b5}.badge-rerun{background:#8b3fd4}
+.muted{color:var(--muted)}
 .err{background:#2c1416;color:#f7c9c9;padding:6px 8px;border-radius:6px;font-size:12px;margin-top:4px;overflow:auto}
 .links a{font-size:12px;margin-right:10px}
+.fail-step{font-size:12px;margin-top:4px;color:var(--muted)}
+.fail-step b{color:#d33030;font-weight:600}
+.fail-shot{margin-top:6px}
+.fail-shot img{max-width:220px;max-height:160px;border:1px solid var(--line);border-radius:6px;display:block}
 @media(max-width:720px){.kpis{grid-template-columns:repeat(2,1fr)}}
 """
 
@@ -268,11 +357,12 @@ setTheme(localStorage.getItem('report-theme')||(matchMedia('(prefers-color-schem
 function toggleTheme(){setTheme(document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark')}
 function applyFilters(){
   var q=document.getElementById('search').value.toLowerCase();
-  var active=[...document.querySelectorAll('.chip.on')].map(c=>c.dataset.status);
+  var activeChip=document.querySelector('.chip.on');
+  var status=activeChip?activeChip.dataset.status:'all';
   var shown=0;
   document.querySelectorAll('tbody tr').forEach(function(row){
     var matchesText=row.dataset.text.includes(q);
-    var matchesStatus=active.length===0||active.includes(row.dataset.status);
+    var matchesStatus=status==='all'||row.dataset.status===status;
     var show=matchesText&&matchesStatus;
     row.style.display=show?'':'none';
     if(show)shown++;
@@ -280,7 +370,14 @@ function applyFilters(){
   document.getElementById('count').textContent=shown+' shown';
 }
 document.getElementById('search').addEventListener('input',applyFilters);
-document.querySelectorAll('.chip').forEach(function(c){c.addEventListener('click',function(){c.classList.toggle('on');applyFilters()})});
+document.querySelectorAll('.chip').forEach(function(c){
+  c.addEventListener('click',function(){
+    document.querySelectorAll('.chip').forEach(function(x){x.classList.remove('on')});
+    c.classList.add('on');
+    applyFilters();
+  });
+});
+applyFilters();
 """
 
 
@@ -301,18 +398,33 @@ def render_html(build_meta, results, counts, history):
     trend_html = trend_svg if trend_svg else '<p class="muted">Not enough runs yet - the trend line needs at least 2 entries in reports/history.json.</p>'
 
     rows = []
-    for r in sorted(results, key=lambda r: (r.workflow, r.name)):
+    for r in sorted(results, key=lambda r: (ROW_SORT_ORDER.index(r.status), r.workflow, r.name)):
         text = f"{r.workflow} {r.name}".lower()
-        error_html = f'<div class="err">{_escape(r.error)}</div>' if r.error else ""
+        detail_parts = []
+        if r.error:
+            detail_parts.append(f'<div class="err">{_escape(r.error)}</div>')
+        if r.status == "failed":
+            if r.failed_step:
+                detail_parts.append(f'<div class="fail-step">Failed at: <b>{_escape(r.failed_step)}</b></div>')
+            elif r.maestro_commands_url:
+                detail_parts.append(
+                    f'<div class="fail-step muted">Step unavailable - '
+                    f'<a href="{_escape(r.maestro_commands_url)}" target="_blank" rel="noopener">see the raw Maestro commands log</a>.</div>'
+                )
+            if r.screenshot_url:
+                detail_parts.append(
+                    f'<div class="fail-shot"><a href="{_escape(r.screenshot_url)}" target="_blank" rel="noopener">'
+                    f'<img src="{_escape(r.screenshot_url)}" alt="failure screenshot" loading="lazy"></a></div>'
+                )
         links = []
         if r.video_url:
-            links.append(f'<a href="{_escape(r.video_url)}">video</a>')
+            links.append(f'<a href="{_escape(r.video_url)}" target="_blank" rel="noopener">video</a>')
         if r.screenshot_url:
-            links.append(f'<a href="{_escape(r.screenshot_url)}">screenshots</a>')
+            links.append(f'<a href="{_escape(r.screenshot_url)}" target="_blank" rel="noopener">screenshot</a>')
         rows.append(
             f'<tr data-status="{r.status}" data-text="{_escape(text)}">'
             f'<td>{_escape(r.workflow)}</td>'
-            f'<td>{_escape(r.name)}<div class="links">{"".join(links)}</div>{error_html}</td>'
+            f'<td>{_escape(r.name)}<div class="links">{"".join(links)}</div>{"".join(detail_parts)}</td>'
             f'<td><span class="badge badge-{r.status}">{r.status}</span></td>'
             f'<td class="n">{r.duration_ms}ms</td>'
             f'<td>{_escape(r.device)}</td></tr>'
@@ -335,10 +447,11 @@ def render_html(build_meta, results, counts, history):
   <h2>Test results</h2>
   <div class="toolbar">
     <input type="search" id="search" placeholder="Filter by name or workflow...">
-    <span class="chip" data-status="passed">Passed</span>
+    <span class="chip on" data-status="all">All</span>
     <span class="chip" data-status="failed">Failed</span>
-    <span class="chip" data-status="skipped">Skipped</span>
     <span class="chip" data-status="rerun">Rerun</span>
+    <span class="chip" data-status="passed">Passed</span>
+    <span class="chip" data-status="skipped">Skipped</span>
     <span class="count" id="count"></span>
   </div>
   <div class="table-scroll"><table><thead><tr><th>Workflow</th><th>Test</th><th>Status</th><th>Duration</th><th>Device</th></tr></thead>
@@ -356,10 +469,14 @@ def _escape(text):
 
 # --------------------------------------------------------------------- CLI --
 
-def generate_report(build_id, results):
+def generate_report(build_id, results, enrich=True):
     """Write reports/<build_id>/index.html, refresh reports/latest.html, and
     append this run's summary to reports/history.json. Returns the path to
-    the per-run report."""
+    the per-run report. `enrich` fetches each failed test's Maestro commands
+    log to fill in failed_step - set False to skip the network calls (e.g.
+    when regenerating offline from a saved build JSON)."""
+    if enrich:
+        results = enrich_failures(results)
     counts = summarize(results)
     timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat()
     history = append_history({
@@ -389,9 +506,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate an HTML report from a saved BrowserStack build JSON.")
     parser.add_argument("--from-json", required=True, help="Path to a saved `GET .../builds/<id>` response.")
     parser.add_argument("--build-id", default=None, help="Overrides the build id used for the report folder name.")
+    parser.add_argument("--no-enrich", action="store_true", help="Skip fetching failed_step from maestro_commands logs.")
     args = parser.parse_args()
 
     build = json.loads(pathlib.Path(args.from_json).read_text(encoding="utf-8"))
     results = normalize_build(build)
-    path = generate_report(args.build_id or build.get("id", "manual"), results)
+    path = generate_report(args.build_id or build.get("id", "manual"), results, enrich=not args.no_enrich)
     print(f"Report written to {path}")

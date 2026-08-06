@@ -86,6 +86,45 @@ def build_flows_zip(flow_files, out_dir):
     return zip_path
 
 
+def run_build(bs, flow_files, app_url, args, env_variables, other_app_urls, tmp_dir, build_name=None):
+    """Zip the given flow files, upload as a test suite, trigger a build, and
+    wait for it. Shared by the main run and the --retry-failed re-run so both
+    go through the exact same upload/trigger/poll path."""
+    zip_path = build_flows_zip(flow_files, tmp_dir)
+    print(f"Uploading test suite ({len(flow_files)} flow file(s)) to BrowserStack ...")
+    suite_resp = bs.upload_test_suite(str(zip_path))
+
+    # BrowserStack only auto-discovers flows at the zip's root by default;
+    # ours live under flows/<workflow>/*.yaml, so pass explicit paths
+    # (relative to the zip's root "flows/" folder) for everything that isn't
+    # a flows/common/*.yaml helper (those are only reachable via runFlow,
+    # never meant to be executed directly as top-level tests).
+    execute = [f.relative_to(FLOWS_DIR).as_posix() for f in flow_files if f.parent.name != "common"]
+
+    build_resp = bs.trigger_build(
+        app_url=app_url,
+        test_suite_url=suite_resp["test_suite_url"],
+        devices=[d.strip() for d in args.devices.split(",")],
+        project=args.project,
+        build_name=build_name,
+        execute=execute,
+        env_variables=env_variables,
+        other_apps=other_app_urls,
+    )
+    print(f"Build triggered: {json.dumps(build_resp, indent=2)}")
+
+    build_id = build_resp.get("build_id") or build_resp.get("id")
+    if not build_id:
+        print("No build_id in response - can't poll for status.")
+        return None, None
+    if args.no_wait:
+        return build_id, None
+    print(f"Waiting for build {build_id} ...")
+    result = bs.wait_for_build(build_id)
+    print(json.dumps(result, indent=2))
+    return build_id, result
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--tag", action="append", dest="tags",
@@ -105,6 +144,11 @@ def main():
     parser.add_argument("--other-app", action="append", dest="other_apps",
                          help="Path to a companion APK to pre-install alongside the main app "
                               "(repeatable, max 3 - e.g. the ExternalApp Tests companion app).")
+    parser.add_argument("--retry-failed", action="store_true",
+                         help="If any flow fails, re-trigger a second build containing only the failed "
+                              "flows and merge the result - a test that passes on retry is reported as "
+                              "'rerun' (flaky) instead of 'failed'. Relies on report_generator.match_flow_files' "
+                              "name-matching heuristic - see its docstring caveat.")
     args = parser.parse_args()
 
     load_dotenv(REPO_ROOT / ".env")
@@ -131,26 +175,9 @@ def main():
         print(f"  {f.relative_to(REPO_ROOT)}")
 
     with tempfile.TemporaryDirectory() as tmp:
-        zip_path = build_flows_zip(flow_files, tmp)
-
         bs = BrowserStackClient()
         print("Uploading app to BrowserStack ...")
         app_resp = bs.upload_app(apk_path)
-        print("Uploading test suite to BrowserStack ...")
-        suite_resp = bs.upload_test_suite(str(zip_path))
-
-        # BrowserStack only auto-discovers flows at the zip's root by
-        # default; ours live under flows/<workflow>/*.yaml, so pass explicit
-        # paths (relative to the zip's root "flows/" folder) for everything
-        # that isn't a flows/common/*.yaml helper (those are only reachable
-        # via runFlow, never meant to be executed directly as top-level tests).
-        execute = [
-            f.relative_to(FLOWS_DIR).as_posix()
-            for f in flow_files
-            if f.parent.name != "common"
-        ]
-
-        env_variables = {k: v for k in FLOW_ENV_VARS if (v := os.environ.get(k))}
 
         other_app_urls = None
         if args.other_apps:
@@ -159,34 +186,34 @@ def main():
                 print(f"Uploading companion app {other_apk} to BrowserStack ...")
                 other_app_urls.append(bs.upload_app(other_apk)["app_url"])
 
-        build_resp = bs.trigger_build(
-            app_url=app_resp["app_url"],
-            test_suite_url=suite_resp["test_suite_url"],
-            devices=[d.strip() for d in args.devices.split(",")],
-            project=args.project,
-            build_name=args.build_name,
-            execute=execute,
-            env_variables=env_variables,
-            other_apps=other_app_urls,
-        )
-        print(f"Build triggered: {json.dumps(build_resp, indent=2)}")
+        env_variables = {k: v for k in FLOW_ENV_VARS if (v := os.environ.get(k))}
 
-        if args.no_wait:
+        build_id, result = run_build(bs, flow_files, app_resp["app_url"], args,
+                                      env_variables, other_app_urls, tmp, build_name=args.build_name)
+        if build_id is None or args.no_wait:
             return
-
-        build_id = build_resp.get("build_id") or build_resp.get("id")
-        if not build_id:
-            print("No build_id in response - can't poll for status.")
-            return
-        print(f"Waiting for build {build_id} ...")
-        result = bs.wait_for_build(build_id)
-        print(json.dumps(result, indent=2))
 
         test_results = report_generator.normalize_build(result)
+
+        failed = [r for r in test_results if r.status == "failed"]
+        if args.retry_failed and failed:
+            retry_files = report_generator.match_flow_files(failed, flow_files, FLOWS_DIR)
+            if not retry_files:
+                print("No flow files matched the failed test names - skipping retry "
+                      "(see report_generator.match_flow_files' name-matching caveat).")
+            else:
+                print(f"Retrying {len(retry_files)} failed flow(s) ...")
+                retry_build_name = f"{args.build_name}-retry" if args.build_name else None
+                _, retry_result = run_build(bs, retry_files, app_resp["app_url"], args,
+                                             env_variables, other_app_urls, tmp, build_name=retry_build_name)
+                if retry_result is not None:
+                    retry_test_results = report_generator.normalize_build(retry_result)
+                    test_results = report_generator.merge_rerun(test_results, retry_test_results)
+
         report_path = report_generator.generate_report(build_id, test_results)
         print(f"HTML report: {report_path}")
 
-        if result.get("status") not in ("passed", "done"):
+        if any(r.status == "failed" for r in test_results):
             sys.exit(1)
 
 

@@ -68,9 +68,17 @@ Every `run_suite.py` invocation ends by writing `reports/<build_id>/index.html`
 Maestro itself has no built-in report for BrowserStack (cloud) runs - this
 turns BrowserStack's build/session JSON into KPI cards (Total, Passed, Failed,
 Skipped, Rerun), a pass/fail/skip/rerun donut, and a trend line across past
-runs, filterable by status or free-text search. No chart library: the donut is
-a stroke-dasharray trick on stacked `<circle>`s and the trend is a hand-built
-`<polyline>` + `<circle>` markers, both self-contained SVG in the page.
+runs. No chart library: the donut is a stroke-dasharray trick on stacked
+`<circle>`s and the trend is a hand-built `<polyline>` + `<circle>` markers,
+both self-contained SVG in the page.
+
+The test table defaults to the **All** filter with rows ordered Failed →
+Rerun → Passed → Skipped, so whatever needs attention is at the top without
+clicking anything. The status chips (All/Failed/Rerun/Passed/Skipped) are
+exclusive - click one to isolate it, plus a free-text search box. Failed rows
+show their failure inline: the specific step Maestro failed on (best-effort,
+see the caveat below) and the failure screenshot, plus links to the full
+video/screenshot/log artifacts.
 
 The trend is drawn from `reports/history.json`, which every run appends one
 entry to (capped at the last 30 runs). That file is the one thing under
@@ -79,10 +87,23 @@ anything across runs. In CI, `reports/history.json` survives between workflow
 runs via an `actions/cache` step (see `.github/workflows/maestro-browserstack.yml`)
 rather than being committed back automatically.
 
-"Rerun" only gets populated once a failed flow has actually been re-triggered
-and passed the second time (`report_generator.merge_rerun`) - nothing does
-that automatically yet, so today it'll read 0 for every run unless you wire a
-retry step into `run_suite.py` yourself.
+**Retrying failed flows.** Pass `--retry-failed` to `run_suite.py` and, if
+anything fails, it re-triggers a second BrowserStack build containing only
+the failed flows; anything that passes on that second attempt is reported as
+**Rerun** (flaky) instead of **Failed**
+(`report_generator.merge_rerun`/`match_flow_files`). The failed-name-to-flow-
+file mapping is a heuristic - BrowserStack has, in every response seen so
+far, reported a testcase's `name` as exactly its `flows/<workflow>/<file>.yaml`
+path, but that's not documented as guaranteed anywhere, so `match_flow_files`
+falls back to matching by filename if that ever changes. Without
+`--retry-failed`, "Rerun" stays at 0.
+
+**Failure step detail is also best-effort.** BrowserStack doesn't publicly
+document the `maestro_commands` JSON shape, so `report_generator.fetch_failed_step`
+defensively looks for a list of step entries and picks out the last failed
+one - if the shape doesn't match what it expects (or the request fails), the
+report falls back to a plain link to the raw commands log instead of
+guessing at a step description.
 
 To preview the report format without running BrowserStack:
 ```bash
