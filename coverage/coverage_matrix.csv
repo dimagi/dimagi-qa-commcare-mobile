@@ -276,3 +276,8 @@ Conditional Enum in Case List,Conditional Enum in Case List,Conditional ID Mappi
 Conditional Enum in Case List,Conditional Enum in Case List,Conditional ID Mapping 4,Update Case 3,Automatable,,flows/conditional_enum_in_case_list/conditional_id_mapping_01_06_full_scenario.yaml
 Conditional Enum in Case List,Conditional Enum in Case List,Conditional ID Mapping 5,Update Case 4,Automatable,,flows/conditional_enum_in_case_list/conditional_id_mapping_01_06_full_scenario.yaml
 Conditional Enum in Case List,Conditional Enum in Case List,Conditional ID Mapping 6,Update Case 5,Automatable,,flows/conditional_enum_in_case_list/conditional_id_mapping_01_06_full_scenario.yaml
+Menu Badges,Menu Badges,Menu Badges 1,Install,Automatable,Handled by run_suite.py APK install + install_app_as_web_user.yaml - no dedicated flow needed,"(handled by ../common/install_app_as_web_user.yaml, APP_NAME: Performance Testing)"
+Menu Badges,Menu Badges,Menu Badges 2,Login,Automatable,Handled by the shared login step in menu_badges_03_04_badge_loads.yaml - no dedicated flow needed,flows/menu_badges/menu_badges_03_04_badge_loads.yaml
+Menu Badges,Menu Badges,Menu Badges 3,Confirm page with module badges loads immediately,Partial,Needs HQ web-user install (install_app_as_web_user.yaml),flows/menu_badges/menu_badges_03_04_badge_loads.yaml
+Menu Badges,Menu Badges,Menu Badges 4,Menu Badge Load,Partial,Same HQ web-user dependency as Menu Badges 3; waits up to 2 minutes for the badge count to populate,flows/menu_badges/menu_badges_03_04_badge_loads.yaml
+Menu Badges,Menu Badges,Menu Badges 5,Check badge appearance,Not automatable,Visual-rendering judgment (legible / not cut off / not fuzzy) - outside Maestro structural assertions,

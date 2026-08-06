@@ -1,0 +1,52 @@
+appId: org.commcare.dalvik
+tags:
+  - menu_badges
+  - partial
+---
+# Master Mobile Plan (2026) > Menu Badges > "Menu Badges 3" (confirm the
+# module list loads immediately, showing "Child Management, (Update)" among
+# four menus) and "Menu Badges 4" (stay on that screen, wait up to two
+# minutes for the badge to load, confirm it reads "553").
+#
+# "Menu Badges 1" (Install) and "Menu Badges 2" (Login) have no dedicated
+# on-device action beyond the shared install/login steps below - no
+# separate flow needed for them, same convention as this repo's other
+# Setup-row entries in coverage_matrix.csv.
+#
+# PARTIAL: needs a valid HQ web-user email/password (install_app_as_web_
+# user.yaml). "Menu Badges 5" (badge legible/not cut off/not fuzzy) is a
+# visual-rendering judgment call, deliberately NOT attempted here - see its
+# own coverage_matrix.csv row (Not automatable).
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: "Performance Testing") -
+# a fresh BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
+# null. Real HQ name confirmed from resources/'s committed CCZ filename
+# "qateam - Performance Testing - v38.ccz" (HQ's own Content-Disposition
+# download filename) - MenuBadgeTests.kt's own APP_NAME constant ("App for
+# Menu Badge testing") is that instrumentation test's own label, not
+# necessarily the exact HQ display name.
+#
+# Verified against commcare-android source (read-only reference, not modified):
+#   MenuBadgeTests.kt: credentials "case_load"/"123" (matches this tab's own
+#     "Menu Badges 2" step exactly), the "Child Management (Update)" menu
+#     text, and the "553" badge count waited for via Espresso's
+#     waitForView - the on-device basis for this flow's extendedWaitUntil.
+- runFlow:
+    file: ../common/install_app_as_web_user.yaml
+    env:
+      APP_NAME: "Performance Testing"
+- tapOn:
+    id: "org.commcare.dalvik:id/edit_username"
+- inputText: "case_load"
+- tapOn:
+    id: "org.commcare.dalvik:id/edit_password"
+- inputText: "123"
+- hideKeyboard
+- tapOn:
+    id: "org.commcare.dalvik:id/login_button"
+- tapOn: "Start"
+- assertVisible: "Child Management (Update)"
+- extendedWaitUntil:
+    visible: "553"
+    timeout: 120000
