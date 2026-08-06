@@ -25,8 +25,9 @@ appId: org.commcare.dalvik
 #     quit_form_title="Exit Form?", do_not_save="EXIT WITHOUT SAVING".
 - tapOn: "Start"
 - tapOn: "${FORM_NAME}"
-- assertVisible:
-    id: "org.commcare.dalvik:id/nav_btn_next"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_next"
     timeout: 5000
 - assertVisible:
     text: "(?i).*registration date.*"
@@ -43,6 +44,7 @@ appId: org.commcare.dalvik
     text: "(?i).*exit without saving.*"
     optional: true
 - back
-- assertVisible:
-    text: "Start"
+- extendedWaitUntil:
+    visible:
+      text: "Start"
     timeout: 5000

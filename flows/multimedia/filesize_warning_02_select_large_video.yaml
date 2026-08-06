@@ -2,6 +2,7 @@ appId: org.commcare.dalvik
 tags:
   - multimedia
   - partial
+  - blocked_missing_asset
 ---
 # Master Mobile Plan (2026) > Multimedia > "Filesize Warning 2" - continuing
 # from a video-capture question, select a previously-recorded large video

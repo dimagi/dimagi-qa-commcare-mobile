@@ -2,6 +2,7 @@ appId: org.commcare.dalvik
 tags:
   - multimedia
   - partial
+  - blocked_missing_asset
 ---
 # Master Mobile Plan (2026) > Multimedia > "Filesize 1" - Trigger the
 # oversized-file warning.
@@ -63,8 +64,9 @@ tags:
 - tapOn: "Filesize Warning"
 - tapOn: "Choose Video"
 - runFlow: ../common/pick_first_gallery_image.yaml
-- assertVisible:
-    text: "(?i)Media attachment too large.*Max allowed size is (14|15) mb"
+- extendedWaitUntil:
+    visible:
+      text: "(?i)Media attachment too large.*Max allowed size is (14|15) mb"
     timeout: 10000
 # UNVERIFIED whether this specific CCZ's form actually lets navigation past
 # an InvalidData (oversized) answer proceed to nav_btn_finish, or blocks it -

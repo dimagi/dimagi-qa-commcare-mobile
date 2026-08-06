@@ -42,7 +42,16 @@ FLOW_ENV_VARS = [
 
 def select_flow_files(tags=None, explicit_flows=None):
     """Return the set of flow .yaml files to run, always including flows/common/
-    (needed by runFlow references) regardless of tag filtering."""
+    (needed by runFlow references) regardless of tag filtering.
+
+    Flows tagged `blocked_missing_asset` (an addMedia reference to a local
+    file that doesn't exist yet - filesize_01/02, filesize_warning_02 as of
+    this writing) are excluded from an unfiltered/default run: BrowserStack
+    rejects the WHOLE build's parse if even one addMedia target is missing
+    from the zip (confirmed live), so leaving one of these in a chunk
+    silently zeroes out every other flow sharing that chunk. Pass
+    --tag blocked_missing_asset or --flow explicitly to run them anyway once
+    their assets exist."""
     if explicit_flows:
         selected = {pathlib.Path(f).resolve() for f in explicit_flows}
     else:
@@ -50,12 +59,13 @@ def select_flow_files(tags=None, explicit_flows=None):
         for path in FLOWS_DIR.rglob("*.yaml"):
             if path.parent.name == "common":
                 continue
-            if not tags:
-                selected.add(path)
-                continue
             with open(path, encoding="utf-8") as fh:
                 doc = next(yaml.safe_load_all(fh))
             flow_tags = set((doc or {}).get("tags") or [])
+            if not tags:
+                if "blocked_missing_asset" not in flow_tags:
+                    selected.add(path)
+                continue
             if flow_tags & set(tags):
                 selected.add(path)
 
@@ -84,6 +94,54 @@ def build_flows_zip(flow_files, out_dir):
             if path.is_file():
                 zf.write(path, path.relative_to(staging.parent))
     return zip_path
+
+
+def chunk_flows_by_execute_length(non_common_files, flows_dir, limit=900):
+    """BrowserStack rejects a build whose `execute` array serializes past
+    1000 characters - discovered via a real 422 running the full suite in
+    one build: BROWSERSTACK_INVALID_SYNTAX, "'[execute]' length must be less
+    than 1000 characters." Undocumented anywhere, so chunk conservatively
+    (limit defaults well under the real 1000 cutoff) rather than assume the
+    exact boundary never shifts."""
+    chunks, current, current_len = [], [], 0
+    for f in non_common_files:
+        rel_len = len(f.relative_to(flows_dir).as_posix()) + 1  # +1 for the joining comma
+        if current and current_len + rel_len > limit:
+            chunks.append(current)
+            current, current_len = [], 0
+        current.append(f)
+        current_len += rel_len
+    if current:
+        chunks.append(current)
+    return chunks
+
+
+def run_all_builds(bs, flow_files, app_url, args, env_variables, other_app_urls, tmp_dir, build_name=None):
+    """Runs flow_files as one or more BrowserStack builds - chunked per
+    chunk_flows_by_execute_length when the execute list would be too long for
+    a single build - and returns (build_ids, combined normalized test
+    results). A logical "run" can be >1 real BrowserStack build; callers
+    report/retry against the combined list, not per-chunk. common/ subflows
+    are always pulled in fresh here (not from flow_files) since every chunk
+    needs the full set for runFlow references, independent of which
+    top-level flows that chunk executes."""
+    non_common_files = [f for f in flow_files if f.parent.name != "common"]
+    common_files = list((FLOWS_DIR / "common").glob("*.yaml"))
+    chunks = chunk_flows_by_execute_length(non_common_files, FLOWS_DIR)
+
+    build_ids, test_results = [], []
+    for i, chunk in enumerate(chunks):
+        chunk_name = f"{build_name}-part{i + 1}" if build_name and len(chunks) > 1 else build_name
+        if len(chunks) > 1:
+            print(f"Build part {i + 1}/{len(chunks)}: {len(chunk)} flow file(s)")
+        build_id, result = run_build(bs, chunk + common_files, app_url, args,
+                                      env_variables, other_app_urls, tmp_dir, build_name=chunk_name)
+        if build_id is None:
+            continue
+        build_ids.append(build_id)
+        if result is not None:
+            test_results.extend(report_generator.normalize_build(result, bs_client=bs))
+    return build_ids, test_results
 
 
 def run_build(bs, flow_files, app_url, args, env_variables, other_app_urls, tmp_dir, build_name=None):
@@ -139,7 +197,9 @@ def main():
     parser.add_argument("--devices", default="Samsung Galaxy S20-10.0",
                          help="Comma-separated BrowserStack device names.")
     parser.add_argument("--project", default="CommCare QA")
-    parser.add_argument("--build-name", default=None)
+    parser.add_argument("--build-name", default="QA-COMMCARE-MOBILE",
+                         help="Sent as BrowserStack's customBuildName - shows up in the App "
+                              "Automate dashboard in place of the generic 'Build #N' label.")
     parser.add_argument("--no-wait", action="store_true", help="Trigger the build but don't poll for results.")
     parser.add_argument("--other-app", action="append", dest="other_apps",
                          help="Path to a companion APK to pre-install alongside the main app "
@@ -188,12 +248,10 @@ def main():
 
         env_variables = {k: v for k in FLOW_ENV_VARS if (v := os.environ.get(k))}
 
-        build_id, result = run_build(bs, flow_files, app_resp["app_url"], args,
-                                      env_variables, other_app_urls, tmp, build_name=args.build_name)
-        if build_id is None or args.no_wait:
+        build_ids, test_results = run_all_builds(bs, flow_files, app_resp["app_url"], args,
+                                                  env_variables, other_app_urls, tmp, build_name=args.build_name)
+        if not build_ids or args.no_wait:
             return
-
-        test_results = report_generator.normalize_build(result)
 
         failed = [r for r in test_results if r.status == "failed"]
         if args.retry_failed and failed:
@@ -204,13 +262,12 @@ def main():
             else:
                 print(f"Retrying {len(retry_files)} failed flow(s) ...")
                 retry_build_name = f"{args.build_name}-retry" if args.build_name else None
-                _, retry_result = run_build(bs, retry_files, app_resp["app_url"], args,
-                                             env_variables, other_app_urls, tmp, build_name=retry_build_name)
-                if retry_result is not None:
-                    retry_test_results = report_generator.normalize_build(retry_result)
+                _, retry_test_results = run_all_builds(bs, retry_files, app_resp["app_url"], args,
+                                                        env_variables, other_app_urls, tmp, build_name=retry_build_name)
+                if retry_test_results:
                     test_results = report_generator.merge_rerun(test_results, retry_test_results)
 
-        report_path = report_generator.generate_report(build_id, test_results)
+        report_path = report_generator.generate_report(build_ids[0], test_results)
         print(f"HTML report: {report_path}")
 
         if any(r.status == "failed" for r in test_results):

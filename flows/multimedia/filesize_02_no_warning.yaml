@@ -2,6 +2,7 @@ appId: org.commcare.dalvik
 tags:
   - multimedia
   - partial
+  - blocked_missing_asset
 ---
 # Master Mobile Plan (2026) > Multimedia > "Filesize 2" - update the app to
 # the "No Warning" release-note build, upload the two specifically-named

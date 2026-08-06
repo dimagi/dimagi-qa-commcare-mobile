@@ -17,12 +17,16 @@ tags:
 # the full caveat. Only feasible if the BrowserStack device supports an
 # injected camera image.
 #
-# PARTIAL DEPENDENCY: assumes a "Basic Tests" QA test app module containing
-# a "Multimedia Only" form (names taken verbatim from the task description -
-# unverified against any source in this repo, since it's a QA-only app) with
-# an Image question reachable directly (no Next taps assumed before it,
-# analogous to photo_02_can_remove_chosen_photo.yaml's "Choose Image" being
-# question 1 of ITS form) via Start > Basic Tests > Multimedia Only.
+# NAVIGATION CORRECTED (previously wrong, now source-verified): extracted
+# basic_tests.ccz (commcare-android/app/instrumentation-tests/resources - not
+# committed here) shows the app's module list is "Basic Form Tests"
+# (en/app_strings.txt: modules.m0), NOT "Basic Tests" - that's only the app's
+# display name, not a menu item, so the original `tapOn: "Basic Tests"` below
+# would never have matched anything. The "Multimedia Only" form (forms.m0f10)
+# lives directly under that module; its Image question (q_image_acquire,
+# modules-0/forms-10.xml) is reachable with no Next taps since every question
+# in this form renders on one screen (Question List style) - confirmed by the
+# same source, not just assumed. Path: Start > Basic Form Tests > Multimedia Only.
 #
 # Button text (capture_image="Take Picture", discard_image="Remove Image")
 # verified against the same res/values/strings.xml citations as
@@ -45,7 +49,7 @@ tags:
       USERNAME: ${CC_TEST_USERNAME}
       PASSWORD: ${CC_TEST_PASSWORD}
 - tapOn: "Start"
-- tapOn: "Basic Tests"
+- tapOn: "Basic Form Tests"
 - tapOn: "Multimedia Only"
 # --- Capture 3: take a picture, verify it attached ---
 - tapOn: "Take Picture"

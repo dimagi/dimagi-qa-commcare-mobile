@@ -36,7 +36,6 @@ tags:
       USERNAME: ${CC_TEST_USERNAME}
       PASSWORD: ${CC_TEST_PASSWORD}
 - tapOn: "Start"
-- tapOn: "Multimedia"
 - tapOn: "Image Resize"
 # Image Resize 11 - Large Image
 - runFlow:
@@ -59,7 +58,7 @@ tags:
     env:
       FORM_NAME: "Tall Image"
 - back
-- back
-- assertVisible:
-    text: "Start"
+- extendedWaitUntil:
+    visible:
+      text: "Start"
     timeout: 5000

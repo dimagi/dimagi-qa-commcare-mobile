@@ -1,0 +1,56 @@
+appId: org.commcare.dalvik
+tags:
+  - multimedia
+  - automatable
+---
+# Master Mobile Plan (2026) > Multimedia > "Capture 1" - Verify user is able
+# to capture a signature without any errors.
+#
+# Navigation confirmed against the REAL "Basic Tests" app content (extracted
+# basic_tests.ccz from commcare-android/app/instrumentation-tests/resources -
+# read-only reference, not committed here, not fabricated): its module list
+# (per en/app_strings.txt) is "Basic Form Tests" (modules.m0) - NOT "Basic
+# Tests", which is only the app's own display name, not a menu item (see the
+# same correction made to capture_03_04_take_and_remove_photo.yaml, which had
+# this exact mistake). That module's "Multimedia Only" form (forms.m0f10,
+# modules-0/forms-10.xml) has a signature-capture binary question (`sig_cap`)
+# as its second question, on the same single screen as the other multimedia
+# questions Capture 3/4/etc. already interact with directly (no Next-taps
+# between them - same "Question List" convention capture_03_04 established).
+#
+# Selectors verified against source (read-only reference, not modified):
+#   app/res/values/strings.xml: sign_button="Gather Signature" (line 236),
+#     save_and_close="Save and Close" (line 235).
+#   app/src/org/commcare/activities/DrawActivity.java line 188-189: the
+#     "Save and Close" action is id/btnFinishDraw.
+#   app/res/layout/draw_layout.xml: the signature canvas (DrawView) is added
+#     programmatically filling id/drawViewLayout, with no fixed id of its own
+#     - the draw gesture below uses percentage screen coordinates instead of
+#     an id selector, same technique app/instrumentation-tests/src/org/
+#     commcare/androidTests/SignatureTests.kt uses (a CENTER_LEFT -> TOP_RIGHT
+#     swipe) to put ink on an unidentified canvas view.
+#   app/src/org/commcare/views/widgets/SignatureWidget.java line 92-146: after
+#     saving, the "Gather Signature" button text does NOT change (it stays
+#     "Gather Signature" - reused by Capture 2 to reopen the same signature)
+#     - a signature THUMBNAIL is added alongside it instead. That thumbnail
+#     ImageView has no fixed id either, so this asserts the widget's own
+#     decode-failure text stays absent instead (mErrorTextView, "Selected
+#     file is not a valid image", only shown if the saved file fails to
+#     decode as an image) - the best available concrete signal that the save
+#     succeeded, short of a screenshot comparison.
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- tapOn: "Start"
+- tapOn: "Basic Form Tests"
+- tapOn: "Multimedia Only"
+- tapOn: "Gather Signature"
+- swipe:
+    start: "20%, 80%"
+    end: "80%, 20%"
+- tapOn:
+    id: "org.commcare.dalvik:id/btnFinishDraw"
+- assertNotVisible: "Selected file is not a valid image"
+- assertVisible: "Gather Signature"

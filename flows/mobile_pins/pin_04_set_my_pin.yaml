@@ -39,6 +39,5 @@ tags:
     id: "org.commcare.dalvik:id/pin_confirm_button"
 - assertVisible:
     text: "PIN set successfully"
-    timeout: 3000
     optional: true # Toast may dismiss before Maestro's screenshot poll catches it
 - runFlow: ../common/logout.yaml

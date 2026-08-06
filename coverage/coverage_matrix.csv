@@ -14,12 +14,12 @@ Update,Update,Update + Check for changes,Update App + verify change reflected,Au
 Update,Update,Check for new build,Verify HQ auto-created a build with correct comment/timestamp,Not automatable,HQ release-page inspection in a browser,
 Update,Update,Change update target back,Set target back to Latest Version,Automatable,,flows/update/update_target_developer_options_flow.yaml
 Update,Update,Confirm that no update occurs if you try,Verify 'up to date' message,Automatable,,flows/update/update_target_developer_options_flow.yaml
-Update,Update,Uninstall/Reinstall,Fresh Play Store install + old app version,Partial,Needs a specific old app build provisioned + a real Play Store install,
+Update,Update,Uninstall/Reinstall,Fresh Play Store install + old app version,Partial,"Needs a specific old app build provisioned + a real Play Store install BLOCKED: genuinely needs a real Play Store install, which this harness's sideloaded-APK BrowserStack approach cannot perform (App Automate installs the uploaded APK directly, bypassing the Play Store entirely) - no Maestro/harness path exists for this today.",
 Update,Update,Interrupt update,Toggle airplane mode mid-download,Not automatable,Timing-critical manual airplane-mode toggle during a live download,
 Update,Update,Reestablish connection,Wait ~10 minutes,Not automatable,Open-ended real-time wait,
 Update,Update,Verify update,"Logout/login, confirm version",Automatable,,flows/update/update_target_developer_options_flow.yaml
 Update,Update,Recheck button 1,"HQ trivial change + release, then airplane mode",Not automatable,HQ change + airplane-mode timing,
-Update,Update,Recheck button 2,"Reconnect, press Recheck, verify update",Partial,"Needs a scripted network-disable/enable step (BrowserStack network condition, not physical airplane mode)",
+Update,Update,Recheck button 2,"Reconnect, press Recheck, verify update",Partial,"Needs a scripted network-disable/enable step (BrowserStack network condition, not physical airplane mode) BLOCKED: depends on 'Recheck button 1' (Not automatable - manual airplane-mode toggle) having already put the device in that state; this harness has no scripted network-condition toggle (BrowserStack may expose one, not wired into run_suite.py/browserstack_client.py today) - no Maestro/harness path exists for this yet.",
 Mobile Pins,Mobile Pins,Setup 1,Install CommCare,Automatable,Framework setup step,(handled by scripts/download_apk.py - no dedicated flow needed)
 Mobile Pins,Mobile Pins,Setup 2,Publish app to device via HQ,Partial,HQ API: publish/star latest build,(handled by hq_setup/mobile_pins/setup_02_install_application.json - no dedicated flow needed beyond common/login.yaml)
 Mobile Pins,Mobile Pins,Setup 3,Enable Developer Options (tap About CommCare 4x),Automatable,,flows/mobile_pins/setup_03_enable_developer_options.yaml
@@ -100,8 +100,8 @@ Multimedia,Multimedia,Lazy Video 2,'Missing video' popup shown per question,Auto
 Multimedia,Multimedia,Lazy Video 3,Download + play lazily-loaded video,Partial,Depends on a real background download completing within the test's timeout,flows/multimedia/lazy_video_03_download_and_play.yaml
 Multimedia,Multimedia,Lazy Video 4,Videos still play after relogin,Automatable,,flows/multimedia/lazy_video_04_relogin_videos_play.yaml
 Multimedia,Multimedia,Lazy Video 5,'Media not found' message for unreferenced videos,Automatable,,flows/multimedia/lazy_video_05_no_references_media_not_found.yaml
-Multimedia,Multimedia,Capture 1,Gather signature (draw + save),Automatable,Maestro swipe/drag gestures can draw a signature,
-Multimedia,Multimedia,Capture 2,Signature reset + redraw,Automatable,,
+Multimedia,Multimedia,Capture 1,Gather signature (draw + save),Automatable,Maestro swipe/drag gestures can draw a signature,flows/multimedia/capture_01_gather_signature.yaml
+Multimedia,Multimedia,Capture 2,Signature reset + redraw,Automatable,,flows/multimedia/capture_02_signature_reset.yaml
 Multimedia,Multimedia,Capture 3,Take picture for image question,Partial,Camera-capture caveat,flows/multimedia/capture_03_04_take_and_remove_photo.yaml
 Multimedia,Multimedia,Capture 4,Remove + retake image,Partial,Camera-capture caveat,flows/multimedia/capture_03_04_take_and_remove_photo.yaml
 Multimedia,Multimedia,Capture 5,Record + play video,Not automatable,Real camera recording + playback-correctness judgment,
@@ -109,20 +109,20 @@ Multimedia,Multimedia,Capture 6,Record + play audio,Not automatable,Audio-qualit
 Multimedia,Multimedia,Capture 7,Pause/resume while recording audio,Not automatable,Same as Capture 6,
 Multimedia,Multimedia,Capture 8,HQ Submit History multimedia integrity check,Not automatable,HQ report browser inspection,
 Prompted Updates,Prompted Updates,Setup 1,Confirm CommCare Version build setting,Not automatable,Read-only HQ Advanced Settings inspection - no state to script,
-Prompted Updates,Prompted Updates,Setup 2,Mark latest build In Test + install prior released build + login,Partial,HQ API: set build status,
-Prompted Updates,Prompted Updates,Setup 3,Set Prompt Updates to CommCare/App = On,Partial,HQ API: update-settings toggle,
-Prompted Updates,Prompted Updates,Prompted Update Scenario 1,Optional CCZ update end-to-end,Partial,HQ API: mark latest build Released; rest is on-device,
-Prompted Updates,Prompted Updates,Prompted Update Scenario 2,Forced CCZ update blocker screen,Partial,HQ API: set Forced + mark Released,
-Prompted Updates,Prompted Updates,Prompted Update Scenario 3,No prompt for an un-starred build,Partial,HQ API: create a new unreleased build,
+Prompted Updates,Prompted Updates,Setup 2,Mark latest build In Test + install prior released build + login,Partial,HQ API: set build status,hq_setup/prompted_updates/setup_02_mark_in_test.json
+Prompted Updates,Prompted Updates,Setup 3,Set Prompt Updates to CommCare/App = On,Partial,HQ API: update-settings toggle,hq_setup/prompted_updates/setup_03_prompts_on.json
+Prompted Updates,Prompted Updates,Prompted Update Scenario 1,Optional CCZ update end-to-end,Partial,HQ API: mark latest build Released; rest is on-device,hq_setup/prompted_updates/scenario_01_mark_released.json; flows/prompted_updates/scenario_01_optional_ccz_update.yaml
+Prompted Updates,Prompted Updates,Prompted Update Scenario 2,Forced CCZ update blocker screen,Partial,HQ API: set Forced + mark Released,hq_setup/prompted_updates/scenario_02_forced.json; flows/prompted_updates/scenario_02_forced_ccz_update.yaml
+Prompted Updates,Prompted Updates,Prompted Update Scenario 3,No prompt for an un-starred build,Partial,HQ API: create a new unreleased build,hq_setup/prompted_updates/scenario_03_unreleased_build.json; flows/prompted_updates/scenario_03_unstarred_build_no_prompt.yaml
 Prompted Updates,Prompted Updates,Prompted Update Scenario 4 (NOTE: The earliest version for which this test can be performed is CommCare 2.40. Skip it for earlier versions),APK update via Play Store using a 2-versions-back APK,Not automatable,Needs a specific historical APK sideloaded + a real Play Store update chain,
-Prompted Updates,Prompted Updates,Setup 1,Set custom keys + release build 3.4.1,Partial,HQ API: set custom properties + create/release build,
-Prompted Updates,Prompted Updates,Setup 2,Update custom keys + release build 3.4.2,Partial,Same as above,
+Prompted Updates,Prompted Updates,Setup 1,Set custom keys + release build 3.4.1,Partial,HQ API: set custom properties + create/release build,hq_setup/prompted_updates/varying_prompt_setup.json (covers both Setup 1 and Setup 2 of this Varying-Prompt sub-section in one call)
+Prompted Updates,Prompted Updates,Setup 2,Update custom keys + release build 3.4.2,Partial,Same as above,hq_setup/prompted_updates/varying_prompt_setup.json (covers both Setup 1 and Setup 2 of this Varying-Prompt sub-section in one call)
 Prompted Updates,Prompted Updates,Varying Prompt 1,Update frequency end-to-end,Automatable,,flows/prompted_updates/varying_prompt_01_update_frequency.yaml
 Prompted Updates,Prompted Updates,Varying Prompt 3,3 login/logout cycles as test2 - views-before-reducing-frequency,Automatable,,flows/prompted_updates/varying_prompt_03_views_before_reducing_frequency.yaml
 Prompted Updates,Prompted Updates,Varying Prompt 4,4th-login reduced-frequency prompt,Automatable,,flows/prompted_updates/varying_prompt_04_reduced_show_frequency.yaml
 Prompted Updates,Prompted Updates,Varying Prompt 5,Forced update completion,Automatable,,flows/prompted_updates/varying_prompt_05_forced_update_completion.yaml
 ExternalApp Tests,ExternalApp Tests,Setup 1,Install companion Mobile API Testing App from Jenkins,Partial,Needs the companion APK downloaded from Jenkins and installed alongside CommCare,(out-of-band provisioning - fetching the APK from an internal Jenkins job is not a Maestro flow; see flows/externalapp_tests/README.md for how the resulting APK is consumed via `run_suite.py --other-app`)
-ExternalApp Tests,ExternalApp Tests,Setup 2,Install CommCare under test,Automatable,,
+ExternalApp Tests,ExternalApp Tests,Setup 2,Install CommCare under test,Automatable,"Covered by run_suite.py's own APK upload/install (every BrowserStack session installs the given --apk fresh) - not a Maestro flow, nothing to add here.",
 ExternalApp Tests,ExternalApp Tests,Setup 3,Deploy fixture test app + login + background CommCare,Partial,HQ API: publish app (see hq_setup/externalapp_tests/setup_03_deploy_fixture_app.json),hq_setup/externalapp_tests/setup_03_deploy_fixture_app.json; flows/externalapp_tests/setup_03_login_and_background.yaml
 ExternalApp Tests,ExternalApp Tests,External App 1,"Launch companion app, verify button set",Partial,"Spike confirmed (BrowserStack otherApps) - companion app appId/button text are UNVERIFIED placeholders, see flows/externalapp_tests/README.md",flows/externalapp_tests/external_app_01_launch_and_verify_buttons.yaml
 ExternalApp Tests,ExternalApp Tests,External App 2,Start CommCare from companion app + submit form,Partial,"Spike confirmed (BrowserStack otherApps) - companion app appId UNVERIFIED, see flows/externalapp_tests/README.md",flows/externalapp_tests/external_app_02_start_commcare_submit_form.yaml
@@ -179,7 +179,7 @@ Updates (partial and failed),Updates (partial and failed),Installation 2,Install
 Updates (partial and failed),Updates (partial and failed),Update 13,"Mark V6 released on linked app, update",Partial,HQ API: mark build released,flows/updates_partial_failed/scenario_4_linked_app_install_and_update.yaml
 Updates (partial and failed),Updates (partial and failed),Update 14,Form A verification (new questions),Automatable,,flows/updates_partial_failed/scenario_4_linked_app_install_and_update.yaml
 Updates (partial and failed),Updates (partial and failed),Update 15,Form B verification (unchanged),Automatable,,flows/updates_partial_failed/scenario_4_linked_app_install_and_update.yaml
-Updates (partial and failed),Updates (partial and failed),Setup,Install old CommCare 2.45,Partial,Needs a specific historical APK provisioned externally,
+Updates (partial and failed),Updates (partial and failed),Setup,Install old CommCare 2.45,Partial,"Needs a specific historical APK provisioned externally Covered by run_suite.py --release-tag/--apk (installing a specific historical CommCare binary is harness-level APK selection, not an in-app Maestro action) - not a Maestro flow, nothing to add here.",
 Updates (partial and failed),Updates (partial and failed),Installation 1,Install linked app V2 (Version 18),Automatable,,flows/updates_partial_failed/scenario_5_relogin_autoupdate_verification.yaml
 Updates (partial and failed),Updates (partial and failed),Update 16,"Stage update to V6, interrupt with CommCare update mid-flow",Not automatable,Timing-critical interleaved binary update,
 Updates (partial and failed),Updates (partial and failed),Update 17,Re-login,Automatable,,flows/updates_partial_failed/scenario_5_relogin_autoupdate_verification.yaml
@@ -233,7 +233,7 @@ Recovery Measures,Recovery Measures,CC Reinstall Needed 7,"Install 2.49.5, verif
 Recovery Measures,Recovery Measures,CC Reinstall Needed 8,"Update to test version, verify unblocked",Automatable,,flows/recovery_measures/point_release_flow.yaml
 Recovery Measures,Recovery Measures,Heartbeat Request Improvement 1,Install Test One/Two via HQ + submit form,Partial,HQ API,hq_setup/recovery_measures/heartbeat_1_setup.json + flows/recovery_measures/heartbeat_01_setup_and_submit.yaml
 Recovery Measures,Recovery Measures,Heartbeat Request Improvement 2,Mark Test Two released + wait 1 hour + verify heartbeat recovery,Not automatable,Requires a full real-time 1-hour wait - impractical for billed device-farm sessions,
-Trigger Device Logs,Trigger device logs,Device Logs 1,Set feature flag + install/login/submit/logout,Partial,"HQ API: superuser feature-flag toggle (one-time env setup, not scripted per-run)",
+Trigger Device Logs,Trigger device logs,Device Logs 1,Set feature flag + install/login/submit/logout,Partial,"HQ API: superuser feature-flag toggle (one-time env setup, not scripted per-run)","hq_setup/trigger_device_logs/device_logs_1_feature_flag.json (manual one-time flag toggle, see its own _comment); flows/trigger_device_logs/device_logs_1_submit_form.yaml"
 Trigger Device Logs,Trigger device logs,Device Logs 2,Django Admin - add domain/username,Not automatable,Django Admin is a raw desktop-browser admin page,
 Trigger Device Logs,Trigger device logs,Device Logs 3,Login + sync + wait 10 min for Sumologic ingestion,Not automatable,Open-ended real-time ingestion wait,
 Trigger Device Logs,Trigger device logs,Device Logs 4,Query Sumologic + validate log entries,Not automatable,Pure desktop-browser Sumologic query - no device interaction,

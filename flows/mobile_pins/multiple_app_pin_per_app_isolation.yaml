@@ -76,7 +76,6 @@ tags:
       PIN: "1111"
 - assertVisible:
     text: "PIN set successfully"
-    timeout: 3000
     optional: true
 - runFlow: ../common/logout.yaml
 
@@ -94,7 +93,6 @@ tags:
     id: "org.commcare.dalvik:id/update_button"
 - assertVisible:
     text: "CommCare is loading your app"
-    timeout: 5000
     optional: true # only shown if Case Management wasn't already seated
 - extendedWaitUntil:
     visible:
@@ -115,7 +113,6 @@ tags:
       PIN: "2222"
 - assertVisible:
     text: "PIN set successfully"
-    timeout: 3000
     optional: true
 - runFlow: ../common/logout.yaml
 

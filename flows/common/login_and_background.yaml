@@ -25,7 +25,8 @@ appId: org.commcare.dalvik
     env:
       USERNAME: ${USERNAME}
       PASSWORD: ${PASSWORD}
-- assertVisible:
-    id: "org.commcare.dalvik:id/nsv_home_screen"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nsv_home_screen"
     timeout: 10000
 - pressKey: "home"

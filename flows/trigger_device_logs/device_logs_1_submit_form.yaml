@@ -1,0 +1,50 @@
+appId: org.commcare.dalvik
+tags:
+  - trigger_device_logs
+  - partial
+---
+# Master Mobile Plan (2026) > Trigger device logs > "Device Logs 1" -
+# "Install/login/submit/logout". The feature-flag half of this row is a
+# one-time manual environment toggle, not a per-run pre-step - see
+# hq_setup/trigger_device_logs/device_logs_1_feature_flag.json's own comment
+# for why that's intentionally not scripted here. This flow is the on-device
+# half only: login, submit a form, logout - against the real "Basic Tests"
+# app specifically (NOT flows/common/submit_only_form.yaml, which only works
+# for apps with exactly one module and one form - "Basic Tests" has 21
+# modules, so that generic subflow's single-item-list tap would land on the
+# wrong module here).
+#
+# Navigation/selectors verified against the REAL "Basic Tests" app content
+# (extracted basic_tests.ccz from commcare-android/app/instrumentation-tests/
+# resources - read-only reference, not committed here, not fabricated):
+#   en/app_strings.txt: modules.m0="Basic Form Tests", forms.m0f0="Basic Form".
+#   modules-0/forms-0.xml: "Basic Form"'s only real question is
+#     /data/enter_a_name (type xsd:string, itext label "Enter a Name!" /
+#     "Enter a Name! [Hindi]" depending on locale) - answered below so the
+#     form can actually reach nav_btn_finish; a second bound node
+#     (form_summary) is `relevant="false()"` and never rendered.
+#   nav_btn_next / nav_btn_finish ids - same
+#   app/res/layout/screen_form_entry.xml citation used throughout this repo's
+#   other form-submission flows (e.g. flows/common/navigate_form_no_errors.yaml).
+#   No tap-then-type needed for enter_a_name: same auto-focus behavior cited
+#   in flows/externalapp_tests/external_app_02_start_commcare_submit_form.yaml
+#   ("ENTER A VALUE") - app/src/org/commcare/views/QuestionsView.java's
+#   setFocus() auto-focuses the first (only) question widget on a freshly
+#   navigated screen and opens the keyboard, so `inputText` alone reaches it.
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- tapOn: "Start"
+- tapOn: "Basic Form Tests"
+- tapOn: "Basic Form"
+- inputText: "Trigger Device Logs 1"
+- hideKeyboard
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_finish"
+    timeout: 10000
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"
+- runFlow: ../common/logout.yaml

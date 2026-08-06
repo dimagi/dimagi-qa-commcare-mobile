@@ -14,39 +14,27 @@ tags:
 # cleanly) and leaves the visual-distortion judgment unautomated, same as
 # the CSV's own stated dependency.
 #
-# PARTIAL/UNVERIFIED DEPENDENCY: assumes the "Basic Tests" Multimedia QA
-# test app is already installed (out of scope for this flow - see
-# hq_setup/multimedia/*.json for the HQ-side resize-setting changes that
-# some sibling test cases in this family depend on instead) with a
-# "Multimedia" menu containing an "Image Resize" submenu, itself listing
-# four sibling forms named "Large Image", "Small Image", "Wide Image", and
-# "Tall Image" (literal names from the manual test sheet - "Basic
-# Tests"/"Image Resize" is a QA-specific CCZ not present in the
-# commcare-android source, so this exact menu structure could not be
-# verified against anything in this repo). tapOn is by visible text
-# throughout so it's resilient to list position.
-#
-# NOTE ON THE EXISTING image_resize_26 FLOW: that flow taps "Image Resize"
-# and lands directly in a 4-question form, with no separate per-form menu
-# tap - plausibly because CommCare auto-skips a menu screen when it has only
-# one child (so tapping "Image Resize" there enters its sole form
-# directly). This flow's test cases are explicitly per-form ("Large Image"
-# form, "Small Image" form, ...), so "Image Resize" is treated here as a
-# genuine menu with (at least) those four forms as children - flagged as an
-# assumption, not confirmed against the actual QA CCZ.
+# NAVIGATION CORRECTED (previously wrong, now source-verified): the real
+# "Multimedia" QA app's app_strings.txt (qateam - Multimedia CCZ, in this
+# repo's resources/ folder) shows "Image Resize" is its OWN top-level module
+# (modules.m1), a SIBLING of the "Multimedia" module (modules.m0) - NOT a
+# submenu nested under it. The previous `tapOn: "Multimedia"` before `tapOn:
+# "Image Resize"` was tapping into the wrong module first and would never
+# have reached this one. "Image Resize" (m1) does list exactly the four
+# sibling forms this flow expects: "Large Image" (m1f0), "Small Image"
+# (m1f1), "Wide Image" (m1f2), "Tall Image" (m1f3) - plus a fifth,
+# "Smart Image Resize" (m1f4), not exercised by any current flow.
 #
 # Each form's open/page/exit sequence is delegated to
 # ../common/view_form_no_errors_from_menu.yaml (see that file for the full
 # selector citation) so it lands back on the "Image Resize" menu ready for
-# the next form, without re-navigating "Start" -> "Multimedia" -> "Image
-# Resize" four times over.
+# the next form, without re-navigating "Start" -> "Image Resize" four times over.
 - runFlow:
     file: ../common/login.yaml
     env:
       USERNAME: ${CC_TEST_USERNAME}
       PASSWORD: ${CC_TEST_PASSWORD}
 - tapOn: "Start"
-- tapOn: "Multimedia"
 - tapOn: "Image Resize"
 # Image Resize 1 - Large Image
 - runFlow:
@@ -68,10 +56,10 @@ tags:
     file: ../common/view_form_no_errors_from_menu.yaml
     env:
       FORM_NAME: "Tall Image"
-# Back out of "Image Resize" -> "Multimedia" -> home, confirming the app is
-# still in a healthy state.
+# Back out of "Image Resize" -> home, confirming the app is still in a
+# healthy state.
 - back
-- back
-- assertVisible:
-    text: "Start"
+- extendedWaitUntil:
+    visible:
+      text: "Start"
     timeout: 5000

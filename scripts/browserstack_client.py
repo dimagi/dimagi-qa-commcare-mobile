@@ -7,6 +7,9 @@ Endpoints used here (verified via BrowserStack's published docs, 2026-08-04):
     POST https://api-cloud.browserstack.com/app-automate/maestro/v2/test-suite  (upload flows.zip)
     POST https://api-cloud.browserstack.com/app-automate/maestro/v2/android/build (trigger run)
     GET  https://api-cloud.browserstack.com/app-automate/maestro/v2/builds/<build_id> (poll status)
+    GET  https://api-cloud.browserstack.com/app-automate/maestro/v2/builds/<build_id>/sessions/<session_id>
+         (per-test names/statuses/artifact URLs - NOT included in the builds/<id> response above,
+         which only has aggregate counts per session)
 
 Auth is HTTP Basic with your BrowserStack username + access key (the same
 BROWSERSTACK_USERNAME/BROWSERSTACK_PASSWORD pair commcare-android's Espresso CI job
@@ -52,7 +55,11 @@ class BrowserStackClient:
             "project": project,
         }
         if build_name:
-            payload["build"] = build_name
+            # BrowserStack's real key is `customBuildName`, not `build` - the
+            # latter is silently ignored (no error, name just never shows up
+            # in the dashboard). Confirmed against BrowserStack's own Maestro
+            # build API reference.
+            payload["customBuildName"] = build_name
         if other_apps:
             # Pre-installs companion APKs (e.g. ExternalApp Tests' Mobile API
             # Testing App) alongside `app` at session start - max 3 per
@@ -78,6 +85,16 @@ class BrowserStackClient:
 
     def get_build(self, build_id):
         resp = requests.get(f"{API_BASE}/builds/{build_id}", auth=self.auth)
+        resp.raise_for_status()
+        return resp.json()
+
+    def get_session(self, build_id, session_id):
+        """GET .../builds/<id> only carries aggregate per-session counts
+        (passed/failed/skipped numbers) - the individual test names/statuses
+        (report_generator needs these) live in this separate per-session
+        endpoint. Confirmed live: the build-level response's session objects
+        have no `testcases.data`, only `testcases.count`/`testcases.status`."""
+        resp = requests.get(f"{API_BASE}/builds/{build_id}/sessions/{session_id}", auth=self.auth)
         resp.raise_for_status()
         return resp.json()
 

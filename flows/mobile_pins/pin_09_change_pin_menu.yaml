@@ -23,6 +23,5 @@ tags:
       NEW_PIN: "5678"
 - assertVisible:
     text: "PIN set successfully"
-    timeout: 3000
     optional: true
 - runFlow: ../common/logout.yaml

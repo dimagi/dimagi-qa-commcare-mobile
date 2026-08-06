@@ -31,8 +31,9 @@ appId: org.commcare.dalvik
 # (activity.task.error.generic / app.handled.error.explanation). Not
 # re-derived here to avoid drift between the two copies.
 - tapOn: "${FORM_NAME}"
-- assertVisible:
-    id: "org.commcare.dalvik:id/nav_btn_next"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_next"
     timeout: 5000
 - repeat:
     times: 10

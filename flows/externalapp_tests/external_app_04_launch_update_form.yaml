@@ -50,8 +50,9 @@ env:
 # is used here). nav_btn_next/nav_btn_finish ids verified against
 # app/res/layout/screen_form_entry.xml + FormNavigationUI.java, matched via a regex `id`
 # selector since either being visible confirms an update form launched.
-- assertVisible:
-    id: "org.commcare.dalvik:id/nav_btn_(next|finish)"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_(next|finish)"
     timeout: 15000
 
 # STEP 5, "Enter Data and submit the update form": same auto-focus reasoning as

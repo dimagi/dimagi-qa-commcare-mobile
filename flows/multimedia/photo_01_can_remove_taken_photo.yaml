@@ -64,8 +64,9 @@ tags:
       - tapOn:
           id: "org.commcare.dalvik:id/nav_btn_next"
           optional: true
-- assertVisible:
-    text: "Take Picture"
+- extendedWaitUntil:
+    visible:
+      text: "Take Picture"
     timeout: 5000
 - tapOn: "Take Picture"
 # BEST-EFFORT camera capture - see header caveat. Tries a shutter button on

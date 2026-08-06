@@ -66,31 +66,49 @@ def _parse_duration_ms(duration):
         return 0
 
 
-def normalize_build(build):
-    """BrowserStack GET /builds/<id> -> devices[].sessions[].testcases.data[].testcases[].
-    Unknown/timedout statuses fold into "failed" so nothing silently vanishes
-    from the counts."""
+def normalize_session(session_detail, device_name=""):
+    """Normalize ONE session's full detail - devices[].sessions[].testcases.data[].testcases[],
+    as returned by BrowserStackClient.get_session (or already embedded, for offline/preview
+    fixtures built by hand) - into TestResults. Unknown/timedout statuses fold into "failed"
+    so nothing silently vanishes from the counts."""
     results = []
+    for group in session_detail.get("testcases", {}).get("data", []):
+        workflow = _infer_workflow(group.get("class", ""))
+        for tc in group.get("testcases", []):
+            status = tc.get("status", "failed")
+            if status not in ("passed", "failed", "skipped"):
+                status = "skipped" if status == "queued" else "failed"
+            results.append(TestResult(
+                name=tc.get("name") or "unnamed",
+                workflow=workflow,
+                status=status,
+                duration_ms=_parse_duration_ms(tc.get("duration")),
+                device=device_name,
+                error=_extract_error(tc),
+                video_url=tc.get("video", ""),
+                screenshot_url=tc.get("screenshots", ""),
+                maestro_commands_url=tc.get("maestro_commands", ""),
+            ))
+    return results
+
+
+def normalize_build(build, bs_client=None):
+    """BrowserStack's build-level GET /builds/<id> response only carries
+    aggregate per-session counts (testcases.count/testcases.status) - NOT the
+    individual test names/statuses report_generator needs, which live in the
+    separate per-session endpoint (confirmed live - the build-level session
+    objects have no testcases.data at all). Pass bs_client to fetch that live
+    for every session; without one, this only picks up sessions that already
+    have testcases.data embedded (e.g. a fixture built for --from-json)."""
+    results = []
+    build_id = build.get("id")
     for device in build.get("devices", []):
         device_name = device.get("device", "")
         for session in device.get("sessions", []):
-            for group in session.get("testcases", {}).get("data", []):
-                workflow = _infer_workflow(group.get("class", ""))
-                for tc in group.get("testcases", []):
-                    status = tc.get("status", "failed")
-                    if status not in ("passed", "failed", "skipped"):
-                        status = "skipped" if status == "queued" else "failed"
-                    results.append(TestResult(
-                        name=tc.get("name") or "unnamed",
-                        workflow=workflow,
-                        status=status,
-                        duration_ms=_parse_duration_ms(tc.get("duration")),
-                        device=device_name,
-                        error=_extract_error(tc),
-                        video_url=tc.get("video", ""),
-                        screenshot_url=tc.get("screenshots", ""),
-                        maestro_commands_url=tc.get("maestro_commands", ""),
-                    ))
+            session_detail = session
+            if bs_client is not None and build_id and session.get("id"):
+                session_detail = bs_client.get_session(build_id, session["id"])
+            results.extend(normalize_session(session_detail, device_name))
     return results
 
 
@@ -170,18 +188,19 @@ def enrich_failures(results):
 
 def match_flow_files(failed_results, candidate_files, flows_dir):
     """Map failed TestResults back to their .yaml flow files so a caller can
-    re-trigger just those. Every response seen so far has reported the
-    testcase `name` as exactly its relative "flows/<workflow>/<file>.yaml"
-    execute[] path, but that's not documented anywhere as guaranteed - if
-    BrowserStack ever reports a bare filename instead, this falls back to
-    matching by filename stem. A failed name matching neither is skipped
+    re-trigger just those. Confirmed live: BrowserStack reports a testcase's
+    `name` as its relative "<workflow>/<file>" execute[] path WITHOUT the
+    .yaml extension (not "flows/<workflow>/<file>.yaml" as a stricter
+    reading of the execute[] contract might suggest) - matches by stripping
+    the candidate file's own extension, falling back to filename-stem-only
+    matching if that still misses. A failed name matching neither is skipped
     (not retried); the caller is responsible for surfacing that."""
     failed_names = {r.name for r in failed_results}
-    failed_stems = {n.rsplit("/", 1)[-1].rsplit(".", 1)[0] for n in failed_names}
+    failed_stems = {n.rsplit("/", 1)[-1] for n in failed_names}
     matched = []
     for f in candidate_files:
-        rel = f.relative_to(flows_dir).as_posix()
-        if rel in failed_names or f.stem in failed_stems:
+        rel_no_ext = f.relative_to(flows_dir).with_suffix("").as_posix()
+        if rel_no_ext in failed_names or f.stem in failed_stems:
             matched.append(f)
     return matched
 
@@ -580,7 +599,11 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="Generate an HTML report from a saved BrowserStack build JSON.")
-    parser.add_argument("--from-json", required=True, help="Path to a saved `GET .../builds/<id>` response.")
+    parser.add_argument("--from-json", required=True,
+                         help="Path to a build JSON shaped with per-session testcases.data already "
+                              "embedded (a real GET .../builds/<id> response never has this - only "
+                              "aggregate counts - it lives in the separate .../sessions/<id> endpoint; "
+                              "this flag is for hand-built preview fixtures, not a raw API dump).")
     parser.add_argument("--build-id", default=None, help="Overrides the build id used for the report folder name.")
     parser.add_argument("--no-enrich", action="store_true", help="Skip fetching failed_step from maestro_commands logs.")
     args = parser.parse_args()

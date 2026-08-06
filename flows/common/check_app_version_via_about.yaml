@@ -35,7 +35,8 @@ appId: org.commcare.dalvik
 #   subflow narrows the check to a specific version number.
 - tapOn: "More options"
 - tapOn: "About CommCare"
-- assertVisible:
-    text: "(?s).*App v${EXPECTED_VERSION}\\..*"
+- extendedWaitUntil:
+    visible:
+      text: "(?s).*App v${EXPECTED_VERSION}\\..*"
     timeout: 5000
 - tapOn: "OK"

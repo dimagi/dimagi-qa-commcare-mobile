@@ -1,0 +1,59 @@
+appId: org.commcare.dalvik
+tags:
+  - multimedia
+  - automatable
+---
+# Master Mobile Plan (2026) > Multimedia > "Capture 2" - Signature Reset:
+# reopen a previously-captured signature, reset it, draw a new one, and
+# confirm the new signature replaces the old one.
+#
+# The sheet's own wording ("Continue from previous test") makes this a direct
+# continuation of Capture 1 - per this repo's "each flow runnable in
+# isolation" convention (docs/FRAMEWORK.md), this flow redoes Capture 1's own
+# setup (login, navigate, capture an initial signature) itself rather than
+# depending on that flow having just run. See
+# flows/multimedia/capture_01_gather_signature.yaml for the full selector
+# citations (sign_button/save_and_close strings, DrawActivity.java's
+# btnFinishDraw, draw_layout.xml's unidentified DrawView canvas) - not
+# re-cited here to avoid drift between the two copies.
+#
+# Reset button verified against source (read-only reference, not modified):
+#   app/res/values/strings.xml: reset_image="Reset" (line 234).
+#   app/src/org/commcare/activities/DrawActivity.java line 196-198: the
+#     "Reset" action is id/btnResetDraw.
+#   app/src/org/commcare/views/widgets/SignatureWidget.java: reopening
+#     "Gather Signature" on a question that already has a saved answer passes
+#     the existing file into launchSignatureActivity() (line 143) - i.e. the
+#     draw canvas should come up pre-loaded with the PRIOR signature, matching
+#     the sheet's step 3 ("Verify you are seeing the previously recorded
+#     signature"). Not independently asserted here (the DrawView has no fixed
+#     id to inspect its contents against) - this flow proceeds on the
+#     documented behavior per source, same "can't screenshot-diff the canvas"
+#     limitation noted in capture_01's own citation.
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- tapOn: "Start"
+- tapOn: "Basic Form Tests"
+- tapOn: "Multimedia Only"
+- tapOn: "Gather Signature"
+- swipe:
+    start: "20%, 80%"
+    end: "80%, 20%"
+- tapOn:
+    id: "org.commcare.dalvik:id/btnFinishDraw"
+- assertNotVisible: "Selected file is not a valid image"
+
+# --- Reopen, verify the reset button is available, reset, redraw, save ---
+- tapOn: "Gather Signature"
+- tapOn:
+    id: "org.commcare.dalvik:id/btnResetDraw"
+- swipe:
+    start: "80%, 80%"
+    end: "20%, 20%"
+- tapOn:
+    id: "org.commcare.dalvik:id/btnFinishDraw"
+- assertNotVisible: "Selected file is not a valid image"
+- assertVisible: "Gather Signature"

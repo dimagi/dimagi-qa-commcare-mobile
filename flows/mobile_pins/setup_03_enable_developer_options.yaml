@@ -48,7 +48,6 @@ tags:
       - tapOn: "OK"
 - assertVisible:
     text: "Developer Mode Enabled"
-    timeout: 3000
     optional: true # toast may dismiss before Maestro's screenshot poll catches it
 
 # Confirm the Settings menu now exposes "Developer Options" (only visible

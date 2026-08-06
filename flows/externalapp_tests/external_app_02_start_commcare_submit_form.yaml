@@ -62,8 +62,9 @@ env:
 # a single regex `id` selector since either one being visible confirms the Basic Form
 # launched (single-question forms show nav_btn_finish directly, multi-question ones show
 # nav_btn_next first).
-- assertVisible:
-    id: "org.commcare.dalvik:id/nav_btn_(next|finish)"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_(next|finish)"
     timeout: 15000
 
 # ENTER A VALUE: the Basic Form's exact question/field is specific to the "External App

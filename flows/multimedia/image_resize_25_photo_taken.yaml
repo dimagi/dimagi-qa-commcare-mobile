@@ -49,8 +49,17 @@ tags:
       USERNAME: ${CC_TEST_USERNAME}
       PASSWORD: ${CC_TEST_PASSWORD}
 - tapOn: "Start"
-- tapOn: "Multimedia"
 - tapOn: "Image Resize"
+# NAVIGATION PARTIALLY CORRECTED, ONE ASSUMPTION STILL OPEN: the real
+# "Multimedia" QA app (qateam - Multimedia CCZ, resources/) confirms "Image
+# Resize" is its own top-level module reached directly from Start (removed
+# an erroneous extra "Multimedia" tap that used to precede it - see
+# image_resize_01_04_default_setting.yaml's header for the full citation).
+# BUT it also shows "Image Resize" contains FIVE SEPARATE single-purpose
+# forms (Large/Small/Wide/Tall/Smart Image), not one form with four photo
+# questions in sequence as the repeat loop below still assumes - unlike
+# 01-24 (view-only, no capture), this flow hasn't been restructured to
+# select each form individually yet. Treat as unverified until that's done.
 # Questions 1-3: take a photo, then advance.
 - repeat:
     times: 3
