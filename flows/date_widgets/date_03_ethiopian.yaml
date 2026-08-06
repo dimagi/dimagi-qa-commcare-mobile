@@ -1,0 +1,56 @@
+appId: org.commcare.dalvik
+tags:
+  - date_widgets
+  - partial
+---
+# Master Mobile Plan (2026) > Date Widgets > "Date 3" - Ethiopian: same
+# structure as date_02_nepali.yaml (see that file's header for the full
+# rationale/caveats - PARTIAL for the same "exhaustive month-order/exact
+# calendar cross-reference" reason), just the Ethiopian form/widget instead.
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: "Date Widgets") - a fresh
+# BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
+# null.
+#
+# Verified against commcare-android source (read-only reference, not modified):
+#   The CCZ's own modules-0/forms-1.xml (extracted read-only from
+#     resources/qateam - Date Widgets - v40.ccz, never committed/modified):
+#     forms.m0f1="Ethiopian" - identical question structure to Nepali
+#     (ethiopian_intro -> gregorian_calendar -> ethiopian_widget -> display),
+#     just a different title/module.
+#   Same DateWidgetsTests.kt ids/credentials as date_02_nepali.yaml.
+- runFlow:
+    file: ../common/install_app_as_web_user.yaml
+    env:
+      APP_NAME: "Date Widgets"
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: "test1"
+      PASSWORD: "123"
+- assertVisible: "Start"
+- tapOn: "Start"
+- tapOn: "Date Widgets"
+- tapOn: "Ethiopian"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+# Gregorian calendar question - defaults to today, no interaction needed.
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+# Ethiopian Calendar question - exercise the month/day up/down controls.
+- assertVisible:
+    id: "org.commcare.dalvik:id/monthtxt"
+- tapOn:
+    id: "org.commcare.dalvik:id/monthupbtn"
+- tapOn:
+    id: "org.commcare.dalvik:id/daydownbtn"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+- assertVisible:
+    id: "org.commcare.dalvik:id/dateGregorian"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"
+- assertVisible:
+    text: "1 form sent to server!"
+    optional: true

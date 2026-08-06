@@ -281,3 +281,8 @@ Menu Badges,Menu Badges,Menu Badges 2,Login,Automatable,Handled by the shared lo
 Menu Badges,Menu Badges,Menu Badges 3,Confirm page with module badges loads immediately,Partial,Needs HQ web-user install (install_app_as_web_user.yaml),flows/menu_badges/menu_badges_03_04_badge_loads.yaml
 Menu Badges,Menu Badges,Menu Badges 4,Menu Badge Load,Partial,Same HQ web-user dependency as Menu Badges 3; waits up to 2 minutes for the badge count to populate,flows/menu_badges/menu_badges_03_04_badge_loads.yaml
 Menu Badges,Menu Badges,Menu Badges 5,Check badge appearance,Not automatable,Visual-rendering judgment (legible / not cut off / not fuzzy) - outside Maestro structural assertions,
+Date Widgets,Date Widgets,Date 1,Install,Automatable,Handled by run_suite.py APK install + install_app_as_web_user.yaml - no dedicated flow needed,"(handled by ../common/install_app_as_web_user.yaml, APP_NAME: Date Widgets)"
+Date Widgets,Date Widgets,Date 2,Nepali,Partial,Needs HQ web-user install; exhaustive month-order/calendar cross-reference verification skipped (visual/computational judgment),flows/date_widgets/date_02_nepali.yaml
+Date Widgets,Date Widgets,Date 3,Ethiopian,Partial,"Same as Date 2, Ethiopian calendar",flows/date_widgets/date_03_ethiopian.yaml
+Date Widgets,Date Widgets,Date 4,Standard 1,Partial,Needs HQ web-user install; on-device navigation is automatable,flows/date_widgets/date_04_05_standard_widget.yaml
+Date Widgets,Date Widgets,Date 5,Standard 2,Partial,Same HQ web-user dependency as Date 4; asserts the three-format label is visible rather than an exact moving-target date string,flows/date_widgets/date_04_05_standard_widget.yaml

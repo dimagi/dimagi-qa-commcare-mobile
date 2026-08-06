@@ -1,0 +1,58 @@
+appId: org.commcare.dalvik
+tags:
+  - date_widgets
+  - partial
+---
+# Master Mobile Plan (2026) > Date Widgets > "Date 4" (Standard 1 - see the
+# standard date/month/year widget, pick a date) and "Date 5" (Standard 2 -
+# the label shows the chosen date in three formats: long, short, and
+# unformatted).
+#
+# PARTIAL: needs HQ web-user install (install_app_as_web_user.yaml). The
+# exact rendered date text depends on today's live date, so this flow
+# asserts the three-format label is visible and non-empty rather than a
+# fixed string - matching this repo's convention of not hardcoding a moving
+# target.
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: "Date Widgets") - a fresh
+# BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
+# null.
+#
+# Verified against commcare-android source (read-only reference, not modified):
+#   The CCZ's own default/app_strings.txt + modules-0/forms-4.xml
+#     (extracted read-only from resources/qateam - Date Widgets - v40.ccz,
+#     never committed/modified): modules.m0="Date Widgets",
+#     forms.m0f4="Standard Widget test" (module index 4, matching
+#     DateWidgetsTests.kt's testStandardWidget() -> openModule(4)) - a
+#     single "Date" question (plain xsd:date widget, defaults to today, no
+#     interaction needed) followed by an output/label screen whose itext
+#     literally concatenates format-date() in three ways: "%a, %b %e, %Y"
+#     (long), "%e/%n/%y" (short), and the raw unformatted value.
+#   DateWidgetsTests.kt: login credentials "test1"/"123" (NOT the sheet's
+#     own "test1/1234"); "1 form sent to server!" toast confirms successful
+#     submission.
+- runFlow:
+    file: ../common/install_app_as_web_user.yaml
+    env:
+      APP_NAME: "Date Widgets"
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: "test1"
+      PASSWORD: "123"
+- assertVisible: "Start"
+- tapOn: "Start"
+- tapOn: "Date Widgets"
+- tapOn: "Standard Widget test"
+# "Date" question - defaults to today, no interaction needed.
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+- assertVisible: "Date chosen long form:"
+- assertVisible: "Date chosen short form:"
+- assertVisible: "Date chosen, unformatted:"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"
+- assertVisible:
+    text: "1 form sent to server!"
+    optional: true

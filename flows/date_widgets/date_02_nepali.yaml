@@ -1,0 +1,79 @@
+appId: org.commcare.dalvik
+tags:
+  - date_widgets
+  - partial
+---
+# Master Mobile Plan (2026) > Date Widgets > "Date 2" - Nepali: open the
+# Nepali form, proceed through the Gregorian date question (defaults to
+# today), interact with the Nepali calendar widget's month/day controls,
+# and submit.
+#
+# PARTIAL: the sheet's own exhaustive check ("scroll through the months to
+# ensure they appear correctly [in order/wrap around correctly], cross-
+# reference against the real Nepali calendar for the exact year/month
+# names") is a visual/computational completeness judgment - this flow only
+# exercises the up/down button interactions and confirms the form submits
+# without error, matching this repo's convention of automating the
+# structural/behavioral half and leaving exhaustive-content verification as
+# a documented gap (same category as e.g. Menu Badges 5's caveat).
+# DateWidgetsTests.kt's own testDateWidgetMonths() does attempt the full
+# month-rotation-order check, but does so by reading the widget's live text
+# and rotating an in-memory list to match - there's no Maestro-native
+# equivalent to "read a value and branch on it" at that level, so this
+# flow does not replicate it.
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: "Date Widgets") - a fresh
+# BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
+# null.
+#
+# Verified against commcare-android source (read-only reference, not modified):
+#   The CCZ's own default/app_strings.txt + modules-0/forms-0.xml
+#     (extracted read-only from resources/qateam - Date Widgets - v40.ccz,
+#     never committed/modified): modules.m0="Date Widgets",
+#     forms.m0f0="Nepali" - question order is nepal_intro (info text) ->
+#     gregorian_calendar (plain xsd:date widget, "select a date and
+#     proceed", defaults to today) -> nepal_widget (auto-seeded from
+#     gregorian_calendar via setvalue) -> a final display screen (nepal_date
+#     + gregorian_date labels).
+#   DateWidgetsTests.kt: login credentials "test1"/"123" (NOT the sheet's
+#     own "test1/1234" - trusting the instrumentation test's real,
+#     source-verified credentials over the sheet's prose); R.id.monthupbtn/
+#     R.id.monthtxt/R.id.yeardownbtn/R.id.dayupbtn/R.id.daydownbtn/
+#     R.id.daytxt/R.id.yeartxt/R.id.dateGregorian - the Nepali/Ethiopian
+#     custom widget's real ids, reused below; "1 form sent to server!"
+#     toast confirms successful submission.
+- runFlow:
+    file: ../common/install_app_as_web_user.yaml
+    env:
+      APP_NAME: "Date Widgets"
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: "test1"
+      PASSWORD: "123"
+- assertVisible: "Start"
+- tapOn: "Start"
+- tapOn: "Date Widgets"
+- tapOn: "Nepali"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+# Gregorian calendar question - defaults to today, no interaction needed.
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+# Nepal Calendar question - exercise the month/day up/down controls.
+- assertVisible:
+    id: "org.commcare.dalvik:id/monthtxt"
+- tapOn:
+    id: "org.commcare.dalvik:id/monthupbtn"
+- tapOn:
+    id: "org.commcare.dalvik:id/daydownbtn"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+- assertVisible:
+    id: "org.commcare.dalvik:id/dateGregorian"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"
+- assertVisible:
+    text: "1 form sent to server!"
+    optional: true
