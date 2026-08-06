@@ -6,7 +6,7 @@ on:
       tag:
         description: "Run only flows carrying this tag (e.g. mobile_pins). Leave blank to run everything."
         required: false
-        default: "mobile_pins"
+        default: ""
       release_tag:
         description: "commcare-android GitHub release tag to test (e.g. commcare_2.63.4). Leave blank for latest."
         required: false
@@ -66,11 +66,11 @@ jobs:
           HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
           HQ_WEB_USER_PASSWORD: ${{ secrets.HQ_WEB_USER_PASSWORD }}
         run: |
-          ARGS="--devices ${{ github.event.inputs.devices || 'Samsung Galaxy S20-10.0' }}"
-          if [ -n "${{ github.event.inputs.tag }}" ]; then ARGS="$ARGS --tag ${{ github.event.inputs.tag }}"; fi
-          if [ -n "${{ github.event.inputs.release_tag }}" ]; then ARGS="$ARGS --release-tag ${{ github.event.inputs.release_tag }}"; fi
-          if [ -n "${{ github.event.inputs.hq_setup }}" ]; then ARGS="$ARGS --hq-setup ${{ github.event.inputs.hq_setup }}"; fi
-          python scripts/run_suite.py $ARGS
+          ARGS=(--devices "${{ github.event.inputs.devices || 'Samsung Galaxy S20-10.0' }}")
+          if [ -n "${{ github.event.inputs.tag }}" ]; then ARGS+=(--tag "${{ github.event.inputs.tag }}"); fi
+          if [ -n "${{ github.event.inputs.release_tag }}" ]; then ARGS+=(--release-tag "${{ github.event.inputs.release_tag }}"); fi
+          if [ -n "${{ github.event.inputs.hq_setup }}" ]; then ARGS+=(--hq-setup "${{ github.event.inputs.hq_setup }}"); fi
+          python scripts/run_suite.py "${ARGS[@]}"
 
       - name: Save report history
         if: always()
