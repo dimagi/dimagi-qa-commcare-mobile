@@ -286,3 +286,14 @@ Date Widgets,Date Widgets,Date 2,Nepali,Partial,Needs HQ web-user install; exhau
 Date Widgets,Date Widgets,Date 3,Ethiopian,Partial,"Same as Date 2, Ethiopian calendar",flows/date_widgets/date_03_ethiopian.yaml
 Date Widgets,Date Widgets,Date 4,Standard 1,Partial,Needs HQ web-user install; on-device navigation is automatable,flows/date_widgets/date_04_05_standard_widget.yaml
 Date Widgets,Date Widgets,Date 5,Standard 2,Partial,Same HQ web-user dependency as Date 4; asserts the three-format label is visible rather than an exact moving-target date string,flows/date_widgets/date_04_05_standard_widget.yaml
+Other - Error Tests,Other - Error Tests,Setup 1,Install Application,Automatable,Handled by run_suite.py APK install + install_app_as_web_user.yaml - no dedicated flow needed,"(handled by ../common/install_app_as_web_user.yaml, APP_NAME: Other)"
+Other - Error Tests,Other - Error Tests,Setup 2,Restore User,Automatable,Handled by the shared login step in xform_error_01_04.yaml/keyboard_navigation.yaml - no dedicated flow needed,flows/other_error_tests/xform_error_01_04.yaml
+Other - Error Tests,Other - Error Tests,Keyboard Navigation,Ensure action key function updates,Partial,"IME action-key symbol is rendered by the on-device keyboard app, not asserted; only form paging/completion is automated",flows/other_error_tests/keyboard_navigation.yaml
+Other - Error Tests,Other - Error Tests,XForm Error 1,Immediate calculate expression fail,Automatable,,flows/other_error_tests/xform_error_01_04.yaml
+Other - Error Tests,Other - Error Tests,XForm Error 2,Delayed calculate expression fail,Automatable,,flows/other_error_tests/xform_error_01_04.yaml
+Other - Error Tests,Other - Error Tests,XForm Error 3,Bad relevancy condition fail,Automatable,,flows/other_error_tests/xform_error_01_04.yaml
+Other - Error Tests,Other - Error Tests,XForm Error 4,Bad repeat node reference fail,Automatable,,flows/other_error_tests/xform_error_01_04.yaml
+Other - Error Tests,Other - Error Tests,Callout Setup 1,Install Breath Counter,Not automatable,"Requires a real Google Play Store install of a third-party app - BrowserStack App Automate installs only the uploaded APK, no Play Store access",
+Other - Error Tests,Other - Error Tests,Callout Setup 2,Install SMS Application,Not automatable,Requires a real SMS app already present/installed from the Play Store,
+Other - Error Tests,Other - Error Tests,Arbitrary Intent 1,External callout to Breath Counter,Not automatable,Depends on Callout Setup 1 (Not automatable) - the external app it callouts to is never installed,
+Other - Error Tests,Other - Error Tests,Arbitrary Intent 2,Expanded callout - Send SMS,Not automatable,Depends on Callout Setup 2 (Not automatable) - no SMS app installed to receive the callout,

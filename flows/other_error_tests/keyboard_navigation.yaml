@@ -1,0 +1,55 @@
+appId: org.commcare.dalvik
+tags:
+  - other_error_tests
+  - partial
+---
+# Master Mobile Plan (2026) > Other - Error Tests > "Keyboard Navigation" -
+# Start > Interface > Keyboard Tests, verify the IME action key (Next/Done/
+# etc.) changes appropriately per question, then save and exit.
+#
+# PARTIAL: the IME action-key symbol/label is rendered by the on-device
+# keyboard app itself (Gboard, etc.), not by org.commcare.dalvik's own view
+# hierarchy - Maestro has no reliable cross-app way to assert its exact
+# appearance changes per question, so this flow only exercises paging
+# through the form and completing it, not the visual IME-key verification
+# itself.
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: "Other") - a fresh
+# BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
+# null. Same "Other" app as xform_error_01_04.yaml - see that file's header
+# for the real-vs-instrumentation-test app-name citation.
+#
+# Verified against commcare-android source (read-only reference, not modified):
+#   The CCZ's own default/app_strings.txt (extracted read-only from
+#     resources/qateam - Other - v42.ccz, never committed/modified):
+#     modules.m0="Interface" containing forms.m0f3="Keyboard Tests" -
+#     matches this tab's own "Start -> Interface -> Keyboard Tests"
+#     navigation exactly.
+- runFlow:
+    file: ../common/install_app_as_web_user.yaml
+    env:
+      APP_NAME: "Other"
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: "test1"
+      PASSWORD: "123"
+- assertVisible: "Start"
+- tapOn: "Start"
+- tapOn: "Interface"
+- tapOn: "Keyboard Tests"
+- repeat:
+    while:
+      visible:
+        id: "org.commcare.dalvik:id/nav_btn_next"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/nav_btn_next"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_finish"
+    timeout: 10000
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"
+- assertVisible: "Start"
