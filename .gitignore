@@ -22,3 +22,9 @@ artifacts/
 # survives across CI runs too).
 reports/*
 !reports/history.json
+
+# QA app CCZs over/near GitHub's 100MB push limit - fetched on demand via
+# scripts/fetch_large_ccz.py instead of committed. See resources/README.md.
+resources/qateam - Multimedia*.ccz
+resources/qateam - Right to Left Tests!*.ccz
+resources/qateam - Mobile Updates - Test 1_2!*.ccz
