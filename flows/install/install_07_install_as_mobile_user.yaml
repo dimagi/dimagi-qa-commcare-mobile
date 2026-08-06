@@ -38,26 +38,24 @@ tags:
 - tapOn:
     id: "org.commcare.dalvik:id/edit_password"
 - inputText: "${HQ_MOBILE_WORKER_PASSWORD}"
-- hideKeyboard
+# UPDATE - do NOT use hideKeyboard here (this file previously did, repeated
+# 3x below this comment's old position): confirmed against Maestro's own
+# docs, on Android hideKeyboard ALWAYS sends a back-button press (there's no
+# OS-level "hide keyboard" API Maestro can call directly), regardless of
+# whether a keyboard is actually showing - and a real BrowserStack failure
+# (on flows/common/install_app_as_web_user.yaml, which shares this same
+# screen/pattern) showed the SAMSUNG HOME LAUNCHER on screen at the
+# get_apps_button wait, meaning repeated hideKeyboard calls had backed all
+# the way out of org.commcare.dalvik. Tapping a non-interactive area (the
+# screen's own title TextView, id/feature_prompt) drops focus and dismisses
+# the IME the same way a user tapping empty space would, without that risk -
+# this replaces the old "hideKeyboard has proven flaky" workaround below,
+# which was itself the cause of the flakiness, not a fix for it.
+- tapOn:
+    id: "org.commcare.dalvik:id/feature_prompt"
 - tapOn:
     text: "Skip"
     optional: true
-# hideKeyboard has proven flaky across real runs - works sometimes, not
-# others, non-deterministically. scrollUntilVisible does NOT help here: per
-# res/layout/user_get_available_apps.xml this form sits in a ScrollView
-# inside a `gravity="center"` LinearLayout, and InstallFromListActivity has
-# no windowSoftInputMode override in AndroidManifest.xml - on this Android 10
-# device that defaults to keyboard "pan" behavior, not "resize", so the
-# ScrollView's measured height never actually shrinks for the keyboard and
-# genuinely has no extra scroll room to give (confirmed: scrollUntilVisible
-# swiped 8 times with zero effect). Retry hideKeyboard alone a few times
-# (NOT paired with a tap - tapping "SEE AVAILABLE APPS" submits the login;
-# repeating that risks firing the request multiple times) and only tap once,
-# after the retries, when the button is actually confirmed visible.
-- repeat:
-    times: 3
-    commands:
-      - hideKeyboard
 - extendedWaitUntil:
     visible:
       id: "org.commcare.dalvik:id/get_apps_button"

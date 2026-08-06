@@ -29,33 +29,40 @@ tags:
     text: "Skip"
     optional: true
 - inputText: "${HQ_WEB_USER_EMAIL}"
-# hideKeyboard BEFORE tapping edit_password (not just after typing into it) -
-# live BrowserStack evidence (from flows/common/install_app_as_web_user.yaml,
-# which copied this exact sequence) showed the password ending up typed into
-# edit_email right after the email text with no separator - the tap on
-# edit_password landed on the wrong element/coordinate rather than shifting
-# focus, almost certainly because auth_scroll_view (this whole form is
-# inside a ScrollView) re-lays-out while the IME is still up, moving
-# edit_password's position between when Maestro reads the view hierarchy and
-# when the tap executes. Dismissing the keyboard first lets the layout
-# settle before the next tap's coordinates are captured.
-- hideKeyboard
+# Dismiss the keyboard by tapping a non-interactive area (the screen's own
+# title TextView, id/feature_prompt) BEFORE tapping edit_password, rather
+# than hideKeyboard - confirmed against Maestro's own docs: on Android,
+# hideKeyboard ALWAYS sends a back-button press (there's no OS-level "hide
+# keyboard" API Maestro can call directly), regardless of whether a keyboard
+# is actually showing. Live BrowserStack evidence (from
+# flows/common/install_app_as_web_user.yaml, which copied this exact
+# sequence) showed the password ending up typed into edit_email right after
+# the email text with no separator - most likely auth_scroll_view (this
+# whole form is inside a ScrollView) re-laying-out while the IME was still
+# up, moving edit_password's position between when Maestro read the view
+# hierarchy and when the tap executed; tapping a plain TextView (not the
+# EditText itself) drops focus and dismisses the IME the same way a user
+# tapping empty space would, without risking back-navigation.
+- tapOn:
+    id: "org.commcare.dalvik:id/feature_prompt"
 - tapOn:
     id: "org.commcare.dalvik:id/edit_password"
 - inputText: "${HQ_WEB_USER_PASSWORD}"
-- hideKeyboard
+- tapOn:
+    id: "org.commcare.dalvik:id/feature_prompt"
 - tapOn:
     text: "Skip"
     optional: true
-# install_07_install_as_mobile_user.yaml's header documents hideKeyboard as
-# "proven flaky across real runs" for this exact screen - retry a few times
-# rather than once (NOT paired with a tap each time - tapping get_apps_button
-# repeatedly would fire the request multiple times), then tap once the
-# button is actually confirmed visible.
-- repeat:
-    times: 3
-    commands:
-      - hideKeyboard
+# UPDATE - do NOT retry hideKeyboard here (a previous version of this file
+# did, following install_07's example): with the keyboard already dismissed
+# above via the feature_prompt tap, each further hideKeyboard call still
+# fires its unconditional back-button press regardless - confirmed via a
+# real BrowserStack failure whose commandlogs hierarchy dump showed the
+# SAMSUNG HOME LAUNCHER on screen at this exact point (from
+# install_app_as_web_user.yaml, which copies this same sequence), meaning
+# the repeated back-presses had exited org.commcare.dalvik entirely. A
+# single wait for get_apps_button is enough now that the keyboard is
+# already down.
 - extendedWaitUntil:
     visible:
       id: "org.commcare.dalvik:id/get_apps_button"
