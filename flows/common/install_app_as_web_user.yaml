@@ -45,6 +45,17 @@ appId: org.commcare.dalvik
 # overflow affordance on some devices is also a real possibility this wait
 # alone would NOT fix - flag for a screenshot/view-hierarchy check if this
 # still fails after the wait.
+#
+# UPDATE - root cause found via BrowserStack's own commandlogs API (fetched
+# the failing assertion's hierarchyRoot dump directly): the screen shown at
+# the timeout was the SAMSUNG HOME LAUNCHER (com.sec.android.app.launcher),
+# not CommCare at all - org.commcare.dalvik was never brought to the
+# foreground. This subflow is invoked via `runFlow` as another flow's very
+# FIRST step, and unlike install_07/install_08 (which both open with an
+# explicit `- launchApp`), this file had none - Maestro's implicit
+# launch-on-appId behavior evidently does not reliably fire in that
+# position. Added the explicit launchApp below to match install_07/08.
+- launchApp
 - extendedWaitUntil:
     visible: "More options"
     timeout: 20000
