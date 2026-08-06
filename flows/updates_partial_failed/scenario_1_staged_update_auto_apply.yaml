@@ -28,6 +28,19 @@ tags:
 # Selector citations live in the reused subflows - see
 # flows/common/login.yaml, flows/common/check_app_version_via_about.yaml and
 # flows/common/navigate_form_no_errors.yaml.
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: "Mobile Updates - Test
+# 1_2") - a fresh BrowserStack session has no app installed until this
+# runs; see DispatchActivity.java's CommCareSetupActivity routing when
+# currentApp == null. NOTE: this by itself does NOT establish the "staged
+# CCZ update, interrupted mid-stream" precondition the header above already
+# flags as out-of-scope/Setup - it only gets the device to a plain fresh
+# install of this app, which is a prerequisite for that out-of-scope setup
+# to even begin.
+- runFlow:
+    file: ../common/install_app_as_web_user.yaml
+    env:
+      APP_NAME: "Mobile Updates - Test 1_2"
 - runFlow:
     file: ../common/login.yaml
     env:

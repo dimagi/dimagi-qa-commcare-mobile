@@ -41,6 +41,24 @@ tags:
 #       reached. Your forms are being saved locally and will be submitted to
 #       the server later." (line 141) - shown via Toast.makeText(..,
 #       LENGTH_LONG), so it self-dismisses after a few seconds.
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: "Rate limited submission
+# app") - a fresh BrowserStack session has no app installed until this
+# runs; see DispatchActivity.java's CommCareSetupActivity routing when
+# currentApp == null. This repo's other comments call this app "Rate
+# Limiting" (a nickname), but the real HQ name - confirmed from
+# resources/'s committed CCZ filename "rate-limited - Rate limited
+# submission app  - v36.ccz" (HQ's own Content-Disposition download
+# filename, "{domain} - {app name} - v{version}.ccz") - is "Rate limited
+# submission app". Also note this app lives on the "rate-limited" HQ
+# domain, not "qateam" like most other flows in this repo; the web-user
+# install path has no domain field (it lists apps across every domain that
+# account can see), so this only works if HQ_WEB_USER_EMAIL has access to
+# rate-limited too - flag for correction if it doesn't.
+- runFlow:
+    file: ../common/install_app_as_web_user.yaml
+    env:
+      APP_NAME: "Rate limited submission app"
 - runFlow:
     file: ../common/login.yaml
     env:

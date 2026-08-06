@@ -44,6 +44,18 @@ tags:
 #   mark-released pre-step noted above.
 # - Update 11: Form One verification.
 # - Update 12: Form Two verification.
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: "Mobile Updates - Test
+# 3") - a fresh BrowserStack session has no app installed until this runs;
+# see DispatchActivity.java's CommCareSetupActivity routing when currentApp
+# == null. Real HQ name unconfirmed beyond this header's own citation (this
+# app isn't among the CCZs committed to resources/), but install_app_as_web_
+# user.yaml's tapOn matches by substring, so this is safe even if the real
+# name carries extra punctuation.
+- runFlow:
+    file: ../common/install_app_as_web_user.yaml
+    env:
+      APP_NAME: "Mobile Updates - Test 3"
 - runFlow:
     file: ../common/login.yaml
     env:

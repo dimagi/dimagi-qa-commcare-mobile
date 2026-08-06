@@ -35,6 +35,19 @@ tags:
 #     buildAboutCommCareDialog() renders AppUtils.getCurrentVersionString()
 #     inside the R.id.dialog_text TextView of the scrolling_info_dialog
 #     layout - this is where the on-device "latest version" text lives.
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: "Basic Tests") - a fresh
+# BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
+# null. "Basic Tests" is a guess by proximity (no specific app is named in
+# this row itself; sibling flows in this same tab default to it - see
+# prompted_update_scenario_01_ill_update_later.yaml) rather than a
+# citation-confirmed fact for THIS specific row - flag for correction if
+# "Auto CC Update 1"'s actual HQ setup uses a different app.
+- runFlow:
+    file: ../common/install_app_as_web_user.yaml
+    env:
+      APP_NAME: "Basic Tests"
 - runFlow:
     file: ../common/login.yaml
     env:
