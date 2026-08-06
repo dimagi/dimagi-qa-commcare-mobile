@@ -294,12 +294,34 @@ def render_chart_png(counts, history, out_path):
     """Slack can't render inline SVG, so this is the one place in the repo
     that reaches for a real chart library (matplotlib) instead of hand-drawn
     markup - draws the same donut + trend, side by side, to a single PNG for
-    slack_notify.py to attach. The HTML report itself stays dependency-free."""
+    slack_notify.py to attach. The HTML report itself stays dependency-free.
+
+    Panel sizing mirrors e2e-parity's .github/scripts/generate-chart.py
+    exactly (donut_side/trend_width/gap/margins below, same values) so both
+    repos' Slack charts read at the same scale. Explicit inch-based axes
+    placement, not gridspec width_ratios - a width_ratio split only
+    proportions the two cells, it doesn't make the donut a true square and
+    the trend a true rectangle of the SAME height."""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    fig, (ax_donut, ax_trend) = plt.subplots(1, 2, figsize=(9, 4), dpi=150)
+    show_trend = len(history) >= 2
+    donut_side = 4.3
+    if show_trend:
+        trend_width = donut_side * 2.5
+        gap = 0.55
+        left_margin, right_margin = 0.5, 0.3
+        bottom_margin, top_margin = 1.75, 0.7
+
+        fig_w = left_margin + donut_side + gap + trend_width + right_margin
+        fig_h = bottom_margin + donut_side + top_margin
+        fig = plt.figure(figsize=(fig_w, fig_h), dpi=150)
+        ax_donut = fig.add_axes((left_margin / fig_w, bottom_margin / fig_h, donut_side / fig_w, donut_side / fig_h))
+        ax_trend = fig.add_axes(((left_margin + donut_side + gap) / fig_w, bottom_margin / fig_h,
+                                  trend_width / fig_w, donut_side / fig_h))
+    else:
+        fig, ax_donut = plt.subplots(figsize=(donut_side + 1.2, donut_side + 1.2), dpi=150)
     fig.patch.set_facecolor("white")
 
     sizes = [counts.get(k, 0) for k in STATUS_ORDER if counts.get(k, 0)]
@@ -307,33 +329,34 @@ def render_chart_png(counts, history, out_path):
     labels = [STATUS_LABELS[k] for k in STATUS_ORDER if counts.get(k, 0)]
     if not sizes:
         sizes, colors, labels = [1], ["#9aa3b5"], ["No tests"]
-    ax_donut.pie(sizes, colors=colors, startangle=90, wedgeprops=dict(width=0.35, edgecolor="white"))
-    ax_donut.text(0, 0.08, f"{counts.get('pass_rate', 0):.0f}%", ha="center", va="center", fontsize=20, fontweight="bold")
-    ax_donut.text(0, -0.15, "passing", ha="center", va="center", fontsize=9, color="#6b7689")
-    ax_donut.set_title("Test Summary", fontsize=11, fontweight="bold")
-    ax_donut.legend(labels, loc="lower center", bbox_to_anchor=(0.5, -0.22), ncol=2, frameon=False, fontsize=8)
+    ax_donut.pie(sizes, colors=colors, startangle=90, wedgeprops=dict(width=0.32, edgecolor="white", linewidth=2))
+    ax_donut.text(0, 0.08, f"{counts.get('pass_rate', 0):.0f}%", ha="center", va="center", fontsize=26, fontweight="bold")
+    ax_donut.text(0, -0.12, "passing", ha="center", va="center", fontsize=12, color="#6b7689")
+    ax_donut.set_title("Test Summary", fontsize=13, fontweight="bold", pad=14)
+    ax_donut.legend(labels, loc="upper center", bbox_to_anchor=(0.5, 0.02), ncol=len(labels),
+                    frameon=False, fontsize=11, handlelength=1.2, handleheight=1.2)
+    ax_donut.axis("equal")
 
-    if len(history) >= 2:
+    if show_trend:
         xs = list(range(len(history)))
         ys = [h["pass_rate"] for h in history]
         dot_colors = [STATUS_COLORS["failed"] if h["failed"] > 0 else STATUS_COLORS["passed"] for h in history]
-        ax_trend.plot(xs, ys, color="#1f3a6e", linewidth=1.5, zorder=1)
-        ax_trend.scatter(xs, ys, color=dot_colors, zorder=2, s=30)
-        ax_trend.set_ylim(0, 100)
-        ax_trend.set_xticks([xs[0], xs[-1]])
-        ax_trend.set_xticklabels([_short_date(history[0]["timestamp"]), _short_date(history[-1]["timestamp"])], fontsize=8)
+        ax_trend.plot(xs, ys, color="#1f3a6e", linewidth=2, zorder=1)
+        ax_trend.scatter(xs, ys, color=dot_colors, zorder=2, s=45, edgecolors="white", linewidths=0.8)
+        ax_trend.set_ylim(-5, 105)
+        ax_trend.set_xlim(-0.5, max(len(history) - 1, 0) + 0.5)
+        ax_trend.set_xticks([xs[0], xs[-1]] if len(xs) > 1 else [0])
+        ax_trend.set_xticklabels([_short_date(history[0]["timestamp"]), _short_date(history[-1]["timestamp"])], fontsize=10, color="#6b7689")
         ax_trend.set_yticks([0, 50, 100])
-        ax_trend.set_yticklabels(["0%", "50%", "100%"], fontsize=8)
-        ax_trend.grid(axis="y", linestyle=":", linewidth=0.6, color="#dde3ee")
-        for spine in ("top", "right", "left"):
+        ax_trend.set_yticklabels(["0%", "50%", "100%"], fontsize=10, color="#6b7689")
+        for pct in (0, 50, 100):
+            ax_trend.axhline(pct, color="#dde3ee", linewidth=1, linestyle=(0, (2, 3)) if pct else "-", zorder=0)
+        for spine in ("top", "right", "left", "bottom"):
             ax_trend.spines[spine].set_visible(False)
-        ax_trend.set_title(f"Trend - pass rate over the last {len(history)} runs", fontsize=11, fontweight="bold")
-    else:
-        ax_trend.text(0.5, 0.5, "Not enough runs yet", ha="center", va="center", fontsize=10, color="#6b7689")
-        ax_trend.axis("off")
+        ax_trend.tick_params(length=0)
+        ax_trend.set_title(f"Trend - pass rate over the last {len(history)} runs", fontsize=12, fontweight="bold", loc="left", pad=10)
 
-    plt.tight_layout()
-    plt.savefig(out_path, facecolor="white")
+    plt.savefig(out_path, bbox_inches="tight", facecolor="white")
     plt.close(fig)
     return out_path
 
