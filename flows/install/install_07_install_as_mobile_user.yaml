@@ -7,6 +7,14 @@ tags:
 # PARTIAL: needs a valid HQ mobile-worker username/domain/password. Uses the
 # same fields InstallFromListTest.kt drives (edit_username/edit_domain/edit_password).
 - launchApp
+# Waits for "More options" rather than tapping it blindly: live BrowserStack
+# evidence (from flows/common/install_app_as_web_user.yaml, which copied
+# this same first-tap pattern) showed this exact tap failing with "Element
+# not found" right after a cold app launch - most likely
+# CommCareSetupActivity/its toolbar hasn't finished rendering yet.
+- extendedWaitUntil:
+    visible: "More options"
+    timeout: 20000
 - tapOn: "More options"
 - tapOn: "See Apps for My User"
 - tapOn:

@@ -34,6 +34,20 @@ appId: org.commcare.dalvik
 #     tapping a row immediately finishes this activity with RESULT_OK,
 #     carrying the selected app's media profile ref back to the caller - no
 #     separate per-row confirm step, same as install_08's single blind tap.
+#
+# Waits for "More options" rather than tapping it blindly: live BrowserStack
+# evidence showed this exact tap (the very first interaction after a cold
+# app launch, in both this subflow and install_07/08) failing with "Element
+# not found" - most likely CommCareSetupActivity/its toolbar hasn't finished
+# rendering yet immediately after launchApp, though CommCareSetupActivity
+# extends BaseDrawerActivity (whose shouldShowDrawer() can be true depending
+# on device/login state), so a drawer/hamburger icon replacing the standard
+# overflow affordance on some devices is also a real possibility this wait
+# alone would NOT fix - flag for a screenshot/view-hierarchy check if this
+# still fails after the wait.
+- extendedWaitUntil:
+    visible: "More options"
+    timeout: 20000
 - tapOn: "More options"
 - tapOn: "See Apps for My User"
 - tapOn:
@@ -44,6 +58,16 @@ appId: org.commcare.dalvik
     text: "Skip"
     optional: true
 - inputText: "${HQ_WEB_USER_EMAIL}"
+# hideKeyboard BEFORE tapping edit_password (not just after typing into it) -
+# live BrowserStack evidence showed the password ended up typed into
+# edit_email right after the email text with no separator, meaning the tap
+# on edit_password landed on the wrong element/coordinate rather than
+# shifting focus - almost certainly the auth_scroll_view (this whole form is
+# inside a ScrollView) re-laying-out while the IME is still up, moving
+# edit_password's on-screen position between when Maestro reads the view
+# hierarchy and when the tap executes. Dismissing the keyboard first lets
+# the layout settle before the next tap's coordinates are captured.
+- hideKeyboard
 - tapOn:
     id: "org.commcare.dalvik:id/edit_password"
 - inputText: "${HQ_WEB_USER_PASSWORD}"
@@ -51,6 +75,19 @@ appId: org.commcare.dalvik
 - tapOn:
     text: "Skip"
     optional: true
+# install_07_install_as_mobile_user.yaml's header documents hideKeyboard as
+# "proven flaky across real runs" for this exact screen - not deterministic,
+# so retry it a few times rather than once (NOT paired with a tap each
+# time - tapping get_apps_button repeatedly would fire the request multiple
+# times) and only tap once the button is actually confirmed visible.
+- repeat:
+    times: 3
+    commands:
+      - hideKeyboard
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/get_apps_button"
+    timeout: 10000
 - tapOn:
     id: "org.commcare.dalvik:id/get_apps_button"
 - extendedWaitUntil:

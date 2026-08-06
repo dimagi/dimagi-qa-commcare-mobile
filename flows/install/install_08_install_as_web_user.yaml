@@ -6,6 +6,14 @@ tags:
 # Master Mobile Plan (2026) > Install > "Install 8" - Install app as a web user.
 # PARTIAL: needs a valid HQ web-user email/password.
 - launchApp
+# Waits for "More options" rather than tapping it blindly: live BrowserStack
+# evidence showed this exact tap (the very first interaction after a cold
+# app launch) failing with "Element not found" - most likely
+# CommCareSetupActivity/its toolbar hasn't finished rendering yet
+# immediately after launchApp.
+- extendedWaitUntil:
+    visible: "More options"
+    timeout: 20000
 - tapOn: "More options"
 - tapOn: "See Apps for My User"
 - tapOn:
@@ -21,6 +29,17 @@ tags:
     text: "Skip"
     optional: true
 - inputText: "${HQ_WEB_USER_EMAIL}"
+# hideKeyboard BEFORE tapping edit_password (not just after typing into it) -
+# live BrowserStack evidence (from flows/common/install_app_as_web_user.yaml,
+# which copied this exact sequence) showed the password ending up typed into
+# edit_email right after the email text with no separator - the tap on
+# edit_password landed on the wrong element/coordinate rather than shifting
+# focus, almost certainly because auth_scroll_view (this whole form is
+# inside a ScrollView) re-lays-out while the IME is still up, moving
+# edit_password's position between when Maestro reads the view hierarchy and
+# when the tap executes. Dismissing the keyboard first lets the layout
+# settle before the next tap's coordinates are captured.
+- hideKeyboard
 - tapOn:
     id: "org.commcare.dalvik:id/edit_password"
 - inputText: "${HQ_WEB_USER_PASSWORD}"
@@ -28,6 +47,19 @@ tags:
 - tapOn:
     text: "Skip"
     optional: true
+# install_07_install_as_mobile_user.yaml's header documents hideKeyboard as
+# "proven flaky across real runs" for this exact screen - retry a few times
+# rather than once (NOT paired with a tap each time - tapping get_apps_button
+# repeatedly would fire the request multiple times), then tap once the
+# button is actually confirmed visible.
+- repeat:
+    times: 3
+    commands:
+      - hideKeyboard
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/get_apps_button"
+    timeout: 10000
 - tapOn:
     id: "org.commcare.dalvik:id/get_apps_button"
 - extendedWaitUntil:
