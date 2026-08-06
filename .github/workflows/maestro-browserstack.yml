@@ -36,6 +36,19 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      # reports/history.json is what the report's trend chart is drawn from -
+      # each run is a fresh checkout, so without this it'd always show a
+      # single point. Restore keyed on run_id first (never matches) so it
+      # falls through to the newest "report-history-" cache via restore-keys,
+      # then save under this run's own id - a fixed save key would collide
+      # with the previous run's immutable cache entry.
+      - name: Restore report history
+        uses: actions/cache/restore@v4
+        with:
+          path: reports/history.json
+          key: report-history-${{ github.run_id }}
+          restore-keys: report-history-
+
       - name: Run Maestro suite on BrowserStack
         env:
           BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
@@ -58,3 +71,18 @@ jobs:
           if [ -n "${{ github.event.inputs.release_tag }}" ]; then ARGS="$ARGS --release-tag ${{ github.event.inputs.release_tag }}"; fi
           if [ -n "${{ github.event.inputs.hq_setup }}" ]; then ARGS="$ARGS --hq-setup ${{ github.event.inputs.hq_setup }}"; fi
           python scripts/run_suite.py $ARGS
+
+      - name: Save report history
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: reports/history.json
+          key: report-history-${{ github.run_id }}
+
+      - name: Upload HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maestro-report
+          path: reports/
+          retention-days: 30

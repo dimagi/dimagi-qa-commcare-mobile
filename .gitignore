@@ -15,3 +15,10 @@ flows.zip
 # BrowserStack / run artifacts
 artifacts/
 *.log
+
+# Generated HTML reports - regenerate any of these via scripts/report_generator.py.
+# history.json is the one exception: it's what the trend chart is drawn from,
+# so it's tracked (see the maestro-browserstack.yml cache step for how it
+# survives across CI runs too).
+reports/*
+!reports/history.json

@@ -24,8 +24,10 @@ scripts/
   download_apk.py       Pulls the release APK from dimagi/commcare-android's GitHub releases
   hq_client.py          CommCareHQ session client for build-release/settings actions
   browserstack_client.py  BrowserStack App Automate Maestro API wrapper
+  report_generator.py   Builds the HTML run report (KPIs, donut, trend) - see below
   run_suite.py          Orchestrates all of the above
 coverage/coverage_matrix.csv   Every test case's automatability classification
+reports/                Generated HTML reports (gitignored) + history.json (tracked)
 .github/workflows/maestro-browserstack.yml   CI entry point
 ```
 
@@ -58,6 +60,34 @@ python scripts/run_suite.py --flow flows/install/install_04_see_apps_menu_item_v
 `run_suite.py` downloads the latest `commcare-android` release APK
 automatically if `--apk` isn't given (see the naming-drift caveat in
 `scripts/download_apk.py` - asset names aren't consistent release to release).
+
+## HTML report + trend
+
+Every `run_suite.py` invocation ends by writing `reports/<build_id>/index.html`
+(and refreshing `reports/latest.html`) via `scripts/report_generator.py`.
+Maestro itself has no built-in report for BrowserStack (cloud) runs - this
+turns BrowserStack's build/session JSON into KPI cards (Total, Passed, Failed,
+Skipped, Rerun), a pass/fail/skip/rerun donut, and a trend line across past
+runs, filterable by status or free-text search. No chart library: the donut is
+a stroke-dasharray trick on stacked `<circle>`s and the trend is a hand-built
+`<polyline>` + `<circle>` markers, both self-contained SVG in the page.
+
+The trend is drawn from `reports/history.json`, which every run appends one
+entry to (capped at the last 30 runs). That file is the one thing under
+`reports/` that's *not* gitignored, since it's what makes the trend mean
+anything across runs. In CI, `reports/history.json` survives between workflow
+runs via an `actions/cache` step (see `.github/workflows/maestro-browserstack.yml`)
+rather than being committed back automatically.
+
+"Rerun" only gets populated once a failed flow has actually been re-triggered
+and passed the second time (`report_generator.merge_rerun`) - nothing does
+that automatically yet, so today it'll read 0 for every run unless you wire a
+retry step into `run_suite.py` yourself.
+
+To preview the report format without running BrowserStack:
+```bash
+python scripts/report_generator.py --from-json path/to/saved_build_response.json --build-id test
+```
 
 ## What's actually implemented vs. documented-only
 

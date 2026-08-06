@@ -22,6 +22,7 @@ from dotenv import load_dotenv
 sys.path.insert(0, os.path.dirname(__file__))
 import download_apk
 import hq_client as hq_client_module
+import report_generator
 from browserstack_client import BrowserStackClient
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -180,6 +181,11 @@ def main():
         print(f"Waiting for build {build_id} ...")
         result = bs.wait_for_build(build_id)
         print(json.dumps(result, indent=2))
+
+        test_results = report_generator.normalize_build(result)
+        report_path = report_generator.generate_report(build_id, test_results)
+        print(f"HTML report: {report_path}")
+
         if result.get("status") not in ("passed", "done"):
             sys.exit(1)
 
