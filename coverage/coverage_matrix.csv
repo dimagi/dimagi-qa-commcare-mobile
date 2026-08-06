@@ -297,3 +297,15 @@ Other - Error Tests,Other - Error Tests,Callout Setup 1,Install Breath Counter,N
 Other - Error Tests,Other - Error Tests,Callout Setup 2,Install SMS Application,Not automatable,Requires a real SMS app already present/installed from the Play Store,
 Other - Error Tests,Other - Error Tests,Arbitrary Intent 1,External callout to Breath Counter,Not automatable,Depends on Callout Setup 1 (Not automatable) - the external app it callouts to is never installed,
 Other - Error Tests,Other - Error Tests,Arbitrary Intent 2,Expanded callout - Send SMS,Not automatable,Depends on Callout Setup 2 (Not automatable) - no SMS app installed to receive the callout,
+Case Filters,Case Filters,Setup 1,Login,Automatable,Handled by the shared login step in fuzzy_search_01_03.yaml - no dedicated flow needed,flows/case_filters/fuzzy_search_01_03.yaml
+Case Filters,Case Filters,Fuzzy Search 1,Enable Fuzzy Search,Partial,Needs HQ web-user install; assumes a pre-existing case named Christy per the sheet's own prerequisite note,flows/case_filters/fuzzy_search_01_03.yaml
+Case Filters,Case Filters,Fuzzy Search 2,Locate exact match,Partial,Same dependencies as Fuzzy Search 1,flows/case_filters/fuzzy_search_01_03.yaml
+Case Filters,Case Filters,Fuzzy Search 3,Locate fuzzy match,Partial,Same dependencies as Fuzzy Search 1,flows/case_filters/fuzzy_search_01_03.yaml
+Case Filters,Case Filters,Case Lists 1,Test case details GPS function,Partial,"Show Address launches an OS map-app chooser - device-dependent, same class as Support Menus' Report Problem share sheet",
+Case Filters,Case Filters,Case Lists 2,Test case map function,Partial,View on Map launches an OS map app for all geo-tagged cases - device-dependent,
+Case Filters,Case Filters,Case Lists 3,Register geoservices case,Partial,Register Case's site_location field is a geopoint widget (GPS capture or manual coordinate entry) - interaction not verified against a live run,
+Case Filters,Case Filters,Case Lists 4,Update geoservices case,Partial,Depends on Case Lists 3 having created a case first,
+Case Filters,Case Filters,Case Lists 5,Test case details for geoservices,Partial,Includes the same Show Address map-chooser dependency as Case Lists 1,
+Case Filters,Case Filters,Case Search & Claim 1,Explore date widget in Case Search & Claim app,Not automatable,Different app ('Case Search and Claim') not present in resources/ and not independently confirmed - not guessed per this session's own rule against unverified app names,
+Case Filters,Case Filters,Case Search & Claim 2,Date Widget - Single Date,Not automatable,Same app-verification gap as Case Search & Claim 1,
+Case Filters,Case Filters,Case List Barcode Scan Search,Case List Barcode Scan Search,Not automatable,Requires generating a QR code on an external website (the-qrcode-generator.com) and scanning it with the device camera,
