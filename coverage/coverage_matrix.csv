@@ -308,4 +308,5 @@ Case Filters,Case Filters,Case Lists 4,Update geoservices case,Partial,Depends o
 Case Filters,Case Filters,Case Lists 5,Test case details for geoservices,Partial,Includes the same Show Address map-chooser dependency as Case Lists 1,
 Case Filters,Case Filters,Case Search & Claim 1,Explore date widget in Case Search & Claim app,Not automatable,Different app ('Case Search and Claim') not present in resources/ and not independently confirmed - not guessed per this session's own rule against unverified app names,
 Case Filters,Case Filters,Case Search & Claim 2,Date Widget - Single Date,Not automatable,Same app-verification gap as Case Search & Claim 1,
-Case Filters,Case Filters,Case List Barcode Scan Search,Case List Barcode Scan Search,Not automatable,Requires generating a QR code on an external website (the-qrcode-generator.com) and scanning it with the device camera,
+Case Filters,Case Filters,Case List Search,Case List Barcode Scan Search,Not automatable,Requires generating a QR code on an external website (the-qrcode-generator.com) and scanning it with the device camera,
+Case Filters,Case Filters,End Form 1,Verify form navigation,Partial,Part of the Geoservices Register-a-Case sequence (Case Lists 3/4) - same geopoint-widget verification gap as those rows,
