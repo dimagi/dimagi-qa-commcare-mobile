@@ -45,7 +45,7 @@ class BrowserStackClient:
         resp.raise_for_status()
         return resp.json()  # {"test_suite_url": "bs://...", ...}
 
-    def trigger_build(self, app_url, test_suite_url, devices, project="CommCare QA",
+    def trigger_build(self, app_url, test_suite_url, devices, project="QA COMMCARE MOBILE TESTS",
                        build_name=None, execute=None, env_variables=None,
                        other_apps=None, extra_params=None):
         payload = {

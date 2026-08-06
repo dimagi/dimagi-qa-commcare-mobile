@@ -196,7 +196,7 @@ def main():
                          help="Path to an hq_setup/*.json pre-step spec to run first.")
     parser.add_argument("--devices", default="Samsung Galaxy S20-10.0",
                          help="Comma-separated BrowserStack device names.")
-    parser.add_argument("--project", default="CommCare QA")
+    parser.add_argument("--project", default="QA COMMCARE MOBILE TESTS")
     parser.add_argument("--build-name", default="QA-COMMCARE-MOBILE",
                          help="Sent as BrowserStack's customBuildName - shows up in the App "
                               "Automate dashboard in place of the generic 'Build #N' label.")

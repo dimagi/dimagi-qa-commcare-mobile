@@ -81,6 +81,7 @@ jobs:
 
       - name: Upload HTML report
         if: always()
+        id: upload_report
         uses: actions/upload-artifact@v4
         with:
           name: maestro-report
@@ -92,4 +93,5 @@ jobs:
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
           SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
+          REPORT_ARTIFACT_URL: ${{ steps.upload_report.outputs.artifact-url }}
         run: python scripts/slack_notify.py

@@ -46,6 +46,7 @@ class TestResult:
     failed_step: str = ""
     video_url: str = ""
     screenshot_url: str = ""
+    screenshot_data_uri: str = ""
     maestro_commands_url: str = ""
 
 
@@ -137,18 +138,70 @@ def _infer_workflow(class_name):
     return parts[0] if parts else "uncategorized"
 
 
+def _browserstack_auth():
+    """Both the maestro_commands and maestroScreenshot endpoints require the
+    same HTTP Basic Auth as every other BrowserStack API call in this repo
+    (see browserstack_client.py) - confirmed live: a request with no auth
+    gets a 401, which is exactly why fetch_failed_step used to always fall
+    back to "Step unavailable" (its bare requests.get() carried no
+    credentials, so resp.raise_for_status() always raised, caught by the
+    bare except and silently swallowed). Returns None if the env vars
+    aren't set, so callers can degrade the same way they already did
+    (best-effort, never raises)."""
+    import os
+    username = os.environ.get("BROWSERSTACK_USERNAME")
+    access_key = os.environ.get("BROWSERSTACK_ACCESS_KEY")
+    if username and access_key:
+        return (username, access_key)
+    return None
+
+
+def _find_deepest_failure(entries):
+    """Recursively search a maestro_commands response for the deepest FAILED
+    entry. Confirmed live shape (fetched directly from a real failed test's
+    commandlogs endpoint, not guessed from docs - BrowserStack doesn't
+    publicly document this): a list of {"command": {...}, "metadata": {...}}
+    objects. metadata carries "status" ("COMPLETED"/"FAILED"),
+    "description" (human label, e.g. "Assert that More options is visible"),
+    "sourceDescription" (which .yaml file this step came from), and - only
+    when status is FAILED - an "error" object with a "message" string (and,
+    for assertion failures, a "hierarchyRoot" view-hierarchy dump this
+    report doesn't need). A runFlow step nests its subflow's own commands
+    under command["runFlowCommand"]["commands"] as the SAME shape recursively
+    - the outer runFlow entry's own metadata.status reflects whether
+    something inside it failed, but the inner entry (if present) is more
+    specific, so this recurses into it and prefers the deepest match."""
+    best = None
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        metadata = entry.get("metadata") or {}
+        if str(metadata.get("status", "")).upper() == "FAILED":
+            best = metadata
+        nested = ((entry.get("command") or {}).get("runFlowCommand") or {}).get("commands")
+        if isinstance(nested, list):
+            deeper = _find_deepest_failure(nested)
+            if deeper is not None:
+                best = deeper
+    return best
+
+
 def fetch_failed_step(commands_url, timeout=8):
-    """Best-effort only: BrowserStack doesn't publicly document the
-    maestro_commands JSON shape, so this defensively looks for a list of
-    {command/name/label, status/result} entries and returns the last one
-    that looks failed. Returns None - never raises - if the request fails,
-    times out, or the shape doesn't match anything recognizable; callers
-    fall back to linking the raw URL instead of showing a guessed step."""
+    """Best-effort: fetches the real maestro_commands log (see
+    _find_deepest_failure's docstring for the confirmed JSON shape) and
+    returns a human-readable "<file> - <description>: <error message>"
+    string for the deepest failed step. Returns None - never raises - if
+    auth isn't configured, the request fails, or the shape doesn't match
+    anything recognizable; callers fall back to linking the raw URL instead
+    of showing a guessed step."""
     if not commands_url:
+        return None
+    auth = _browserstack_auth()
+    if auth is None:
         return None
     try:
         import requests
-        resp = requests.get(commands_url, timeout=timeout)
+        resp = requests.get(commands_url, auth=auth, timeout=timeout)
         resp.raise_for_status()
         data = resp.json()
     except Exception:
@@ -158,31 +211,72 @@ def fetch_failed_step(commands_url, timeout=8):
     if not isinstance(entries, list):
         return None
 
-    for entry in reversed(entries):
-        if not isinstance(entry, dict):
-            continue
-        status = str(entry.get("status") or entry.get("result") or "").lower()
-        if "fail" in status or "error" in status:
-            step = entry.get("command") or entry.get("name") or entry.get("label") or entry.get("description")
-            detail = entry.get("error") or entry.get("reason") or entry.get("message")
-            if step and detail:
-                return f"{step} — {detail}"
-            return step or detail
-    return None
+    metadata = _find_deepest_failure(entries)
+    if not metadata:
+        return None
+    source = metadata.get("sourceDescription", "")
+    description = metadata.get("description", "")
+    error_message = (metadata.get("error") or {}).get("message", "")
+    step = " - ".join(p for p in (source, description) if p)
+    if step and error_message:
+        return f"{step}: {error_message}"
+    return step or error_message or None
+
+
+def fetch_screenshot_data_uri(screenshot_url, timeout=15):
+    """Best-effort: the `screenshots` field BrowserStack returns per
+    testcase is NOT a direct image URL - confirmed live, it's a ZIP archive
+    (content-type application/zip) containing exactly one PNG named
+    "screenshot-...-(<test name>).png". A plain <img src="{screenshot_url}">
+    can't render that (wrong content-type, and BrowserStack's API requires
+    HTTP Basic Auth a browser never sends anyway) - this downloads the zip
+    with auth, extracts the PNG, and returns a data: URI so the HTML report
+    stays self-contained (no external image references, needed since the
+    report gets shared as a standalone file via Slack, not just linked).
+    Returns None - never raises - on any failure; callers fall back to a
+    plain "screenshot" link with no inline preview."""
+    if not screenshot_url:
+        return None
+    auth = _browserstack_auth()
+    if auth is None:
+        return None
+    try:
+        import base64
+        import io
+        import zipfile
+        import requests
+        resp = requests.get(screenshot_url, auth=auth, timeout=timeout)
+        resp.raise_for_status()
+        with zipfile.ZipFile(io.BytesIO(resp.content)) as zf:
+            png_names = [n for n in zf.namelist() if n.lower().endswith(".png")]
+            if not png_names:
+                return None
+            png_bytes = zf.read(png_names[0])
+        encoded = base64.b64encode(png_bytes).decode("ascii")
+        return f"data:image/png;base64,{encoded}"
+    except Exception:
+        return None
 
 
 def enrich_failures(results):
-    """Best-effort fill-in of failed_step for every failed result by
-    fetching its maestro_commands log. A fetch/parse failure just leaves
-    failed_step blank - the report falls back to the raw log link, nothing
-    fabricated."""
+    """Best-effort fill-in of failed_step and screenshot_data_uri for every
+    failed result. A fetch/parse failure just leaves the field blank - the
+    report falls back to the raw log/screenshot links, nothing fabricated."""
     enriched = []
     for r in results:
-        if r.status == "failed" and not r.failed_step and r.maestro_commands_url:
+        if r.status != "failed":
+            enriched.append(r)
+            continue
+        updates = {}
+        if not r.failed_step and r.maestro_commands_url:
             step = fetch_failed_step(r.maestro_commands_url)
             if step:
-                r = dataclasses.replace(r, failed_step=step)
-        enriched.append(r)
+                updates["failed_step"] = step
+        if not r.screenshot_data_uri and r.screenshot_url:
+            data_uri = fetch_screenshot_data_uri(r.screenshot_url)
+            if data_uri:
+                updates["screenshot_data_uri"] = data_uri
+        enriched.append(dataclasses.replace(r, **updates) if updates else r)
     return enriched
 
 
@@ -503,16 +597,23 @@ def render_html(build_meta, results, counts, history):
                     f'<div class="fail-step muted">Step unavailable - '
                     f'<a href="{_escape(r.maestro_commands_url)}" target="_blank" rel="noopener">see the raw Maestro commands log</a>.</div>'
                 )
-            if r.screenshot_url:
+            if r.screenshot_data_uri:
+                # Embedded as a data: URI, not a link to r.screenshot_url - that
+                # URL is a Basic-Auth-protected zip archive (confirmed live),
+                # not a directly renderable image; see
+                # fetch_screenshot_data_uri's docstring.
                 detail_parts.append(
-                    f'<div class="fail-shot"><a href="{_escape(r.screenshot_url)}" target="_blank" rel="noopener">'
-                    f'<img src="{_escape(r.screenshot_url)}" alt="failure screenshot" loading="lazy"></a></div>'
+                    f'<div class="fail-shot"><img src="{r.screenshot_data_uri}" '
+                    f'alt="failure screenshot" loading="lazy"></div>'
                 )
         links = []
         if r.video_url:
             links.append(f'<a href="{_escape(r.video_url)}" target="_blank" rel="noopener">video</a>')
         if r.screenshot_url:
-            links.append(f'<a href="{_escape(r.screenshot_url)}" target="_blank" rel="noopener">screenshot</a>')
+            # Requires a BrowserStack-authenticated session to open (returns a
+            # zip archive, not a viewable page) - kept as a reference link for
+            # anyone with dashboard access, not as an inline-viewable image.
+            links.append(f'<a href="{_escape(r.screenshot_url)}" target="_blank" rel="noopener">screenshot (BrowserStack)</a>')
         rows.append(
             f'<tr data-status="{r.status}" data-text="{_escape(text)}">'
             f'<td>{_escape(r.workflow)}</td>'

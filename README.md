@@ -129,8 +129,10 @@ skipped independently of the test run itself. One Slack message includes:
    inline SVG, so this is the one place in the repo that uses a real chart
    library (`matplotlib`, `report_generator.render_chart_png`) instead of
    hand-drawn markup - the HTML report itself stays dependency-free.
-4. A **Download HTML report** link and a **View run artifact** link
-   (the GitHub Actions run page, where the `maestro-report` artifact lives).
+4. A **Download HTML report** link (the `maestro-report` GitHub Actions
+   artifact - `REPORT_ARTIFACT_URL`, set from the `actions/upload-artifact`
+   step's own `artifact-url` output) and a **View run artifact** link (the
+   run page itself).
 
 **Setup**: the bot token needs the `files:write` and `chat:write` scopes,
 and the bot must already be a member of `SLACK_CHANNEL_ID` - Slack silently
@@ -138,13 +140,16 @@ won't post into a channel it hasn't been invited to, regardless of scopes.
 Both `SLACK_BOT_TOKEN` and `SLACK_CHANNEL_ID` are read as repo secrets in CI
 (see `.github/workflows/maestro-browserstack.yml`) or from `.env` locally.
 
-**Why two messages show up per run.** The HTML report's "download" link has
-to point at an actual Slack-hosted permalink to be clickable by the whole
-channel, and Slack only makes an uploaded file's permalink resolve for
-non-uploaders once it's shared into the channel - so `slack_notify.py`
-uploads it as its own bare file-share post (no comment text) *before* the
-main summary message, purely so that message's link has somewhere to point.
-The chart PNG + all the text above is the single second message.
+**One message per run.** Earlier versions of this script also uploaded the
+HTML report to Slack directly, which needed a *separate* bare file-share
+post before the main message (Slack only makes an uploaded file's permalink
+resolve for the whole channel once it's shared into that channel - there's
+no way to get a working permalink without a post of its own). Linking to
+the GitHub Actions artifact instead - same pattern as this org's other CI
+repos (e2e-parity's `post-slack-chart.py`, dimagi-qa's
+`hq-smoke-tests.yml`) - sidesteps that: the artifact URL already resolves
+for anyone with repo access, so the chart PNG + summary text is the only
+message posted.
 
 To preview without posting for real, run `scripts/report_generator.render_chart_png`
 and `scripts/slack_notify.build_message` directly against a saved

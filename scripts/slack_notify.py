@@ -1,21 +1,30 @@
 """
 Posts a Slack summary of the latest Maestro/BrowserStack run to
 SLACK_CHANNEL_ID (auth via SLACK_BOT_TOKEN). Meant to run as its own CI step
-right after run_suite.py, in the same job - it reads reports/latest.html,
-reports/latest_results.json and reports/history.json straight off disk
-rather than being wired into run_suite.py, so notifying can be skipped or
-rerun independently of the test run itself.
+right after run_suite.py, in the same job - it reads reports/latest_results.json
+and reports/history.json straight off disk rather than being wired into
+run_suite.py, so notifying can be skipped or rerun independently of the test
+run itself.
 
 The bot token needs the `files:write` and `chat:write` scopes, and the bot
 must already be a member of SLACK_CHANNEL_ID (Slack won't post into a
 channel it hasn't been invited to, regardless of scopes).
 
-Uses Slack's current (v2) file upload flow - the old files.upload endpoint
-is deprecated:
-    1. files.getUploadURLExternal   - reserve an upload slot
-    2. POST the raw bytes to that URL
-    3. files.completeUploadExternal - finalize; passing channel_id (+ an
-       optional initial_comment) posts it as a message in one call.
+ONE message per run: the chart PNG uploaded via Slack's current (v2) file
+upload flow (files.getUploadURLExternal -> PUT bytes -> files.completeUploadExternal
+with channel_id + initial_comment, posting the file and the summary text as a
+single message). The "Download HTML report" link points at the GitHub Actions
+artifact (REPORT_ARTIFACT_URL, the `actions/upload-artifact` step's own
+`artifact-url` output - see maestro-browserstack.yml), NOT a Slack-hosted
+copy of the report. This matches the proven pattern in this org's other CI
+repos (e2e-parity's post-slack-chart.py, dimagi-qa's hq-smoke-tests.yml) -
+Slack has no API to get a permalink for an uploaded file that resolves for
+the whole channel WITHOUT that upload itself posting as its own separate
+message, so the earlier "upload the HTML report to Slack first" approach
+here always produced two messages per run (the bare file-share, then the
+chart+summary linking to it). Since a GitHub Actions artifact URL already
+resolves for anyone with repo access with no separate post needed, this
+sidesteps the problem entirely instead of working around it.
 
 Usage: python scripts/slack_notify.py
 """
@@ -82,7 +91,7 @@ def _gh_run_url():
     return ""
 
 
-def build_message(counts, failed_results, html_permalink, run_url):
+def build_message(counts, failed_results, report_artifact_url, run_url):
     workflow = os.environ.get("GITHUB_WORKFLOW", "Maestro BrowserStack QA")
     event = os.environ.get("GITHUB_EVENT_NAME", "manual")
     ref = os.environ.get("GITHUB_REF_NAME", "?")
@@ -108,8 +117,8 @@ def build_message(counts, failed_results, html_permalink, run_url):
             lines.append(f"_+{len(failed_results) - len(shown)} more_")
 
     links = []
-    if html_permalink:
-        links.append(f"<{html_permalink}|:page_facing_up: Download HTML report>")
+    if report_artifact_url:
+        links.append(f"<{report_artifact_url}|:page_facing_up: Download HTML report>")
     if run_url:
         links.append(f"<{run_url}|:link: View run artifact>")
     if links:
@@ -134,18 +143,12 @@ def main():
     results = json.loads(results_path.read_text(encoding="utf-8")) if results_path.exists() else []
     failed_results = [r for r in results if r["status"] == "failed"]
 
-    html_path = REPORTS_DIR / "latest.html"
-    html_permalink = ""
-    if html_path.exists():
-        # Shared with no initial_comment - a bare file-share post, just so
-        # its permalink resolves for everyone before the summary message
-        # (below) links to it.
-        uploaded = upload_file(token, channel_id, html_path, title="Maestro run report")
-        html_permalink = uploaded.get("permalink", "")
-    else:
-        print("reports/latest.html not found - report_generator.generate_report() must run first.")
+    report_artifact_url = os.environ.get("REPORT_ARTIFACT_URL", "")
+    if not report_artifact_url:
+        print("REPORT_ARTIFACT_URL not set - the message will have no 'Download HTML report' "
+              "link (set it from the actions/upload-artifact step's `artifact-url` output).")
 
-    message = build_message(counts, failed_results, html_permalink, _gh_run_url())
+    message = build_message(counts, failed_results, report_artifact_url, _gh_run_url())
 
     with tempfile.TemporaryDirectory() as tmp:
         chart_path = pathlib.Path(tmp) / "slack-chart.png"
