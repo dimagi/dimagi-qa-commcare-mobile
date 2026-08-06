@@ -25,6 +25,7 @@ scripts/
   hq_client.py          CommCareHQ session client for build-release/settings actions
   browserstack_client.py  BrowserStack App Automate Maestro API wrapper
   report_generator.py   Builds the HTML run report (KPIs, donut, trend) - see below
+  slack_notify.py       Posts the run summary + chart to Slack - see below
   run_suite.py          Orchestrates all of the above
 coverage/coverage_matrix.csv   Every test case's automatability classification
 reports/                Generated HTML reports (gitignored) + history.json (tracked)
@@ -109,6 +110,46 @@ To preview the report format without running BrowserStack:
 ```bash
 python scripts/report_generator.py --from-json path/to/saved_build_response.json --build-id test
 ```
+
+## Slack notification
+
+`scripts/slack_notify.py` posts a summary of the latest run to `SLACK_CHANNEL_ID`
+right after `run_suite.py` finishes (wired in as its own CI step, `if: always()`,
+so it fires whether the run passed or failed). It reads straight off
+`reports/latest.html` / `reports/latest_results.json` / `reports/history.json`
+rather than being called from inside `run_suite.py`, so it can be rerun or
+skipped independently of the test run itself. One Slack message includes:
+
+1. Workflow name + branch/ref, and what triggered it (`GITHUB_WORKFLOW`,
+   `GITHUB_REF_NAME`, `GITHUB_EVENT_NAME`, `GITHUB_ACTOR` - all set
+   automatically by Actions, no extra `env:` wiring needed).
+2. Pass rate, Total, Passed, Failed, Skipped, Rerun, plus up to 10 failed
+   test names (`_+N more_` beyond that).
+3. The same donut + trend as the HTML report, as one PNG. Slack can't render
+   inline SVG, so this is the one place in the repo that uses a real chart
+   library (`matplotlib`, `report_generator.render_chart_png`) instead of
+   hand-drawn markup - the HTML report itself stays dependency-free.
+4. A **Download HTML report** link and a **View run artifact** link
+   (the GitHub Actions run page, where the `maestro-report` artifact lives).
+
+**Setup**: the bot token needs the `files:write` and `chat:write` scopes,
+and the bot must already be a member of `SLACK_CHANNEL_ID` - Slack silently
+won't post into a channel it hasn't been invited to, regardless of scopes.
+Both `SLACK_BOT_TOKEN` and `SLACK_CHANNEL_ID` are read as repo secrets in CI
+(see `.github/workflows/maestro-browserstack.yml`) or from `.env` locally.
+
+**Why two messages show up per run.** The HTML report's "download" link has
+to point at an actual Slack-hosted permalink to be clickable by the whole
+channel, and Slack only makes an uploaded file's permalink resolve for
+non-uploaders once it's shared into the channel - so `slack_notify.py`
+uploads it as its own bare file-share post (no comment text) *before* the
+main summary message, purely so that message's link has somewhere to point.
+The chart PNG + all the text above is the single second message.
+
+To preview without posting for real, run `scripts/report_generator.render_chart_png`
+and `scripts/slack_notify.build_message` directly against a saved
+`history.json`/`results.json` - `slack_notify.py`'s `main()` is the only
+part that actually talks to Slack.
 
 ## What's actually implemented vs. documented-only
 

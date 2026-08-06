@@ -288,6 +288,56 @@ def render_trend(history, width=640, height=140):
     )
 
 
+# --------------------------------------------------------------- PNG chart --
+
+def render_chart_png(counts, history, out_path):
+    """Slack can't render inline SVG, so this is the one place in the repo
+    that reaches for a real chart library (matplotlib) instead of hand-drawn
+    markup - draws the same donut + trend, side by side, to a single PNG for
+    slack_notify.py to attach. The HTML report itself stays dependency-free."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    fig, (ax_donut, ax_trend) = plt.subplots(1, 2, figsize=(9, 4), dpi=150)
+    fig.patch.set_facecolor("white")
+
+    sizes = [counts.get(k, 0) for k in STATUS_ORDER if counts.get(k, 0)]
+    colors = [STATUS_COLORS[k] for k in STATUS_ORDER if counts.get(k, 0)]
+    labels = [STATUS_LABELS[k] for k in STATUS_ORDER if counts.get(k, 0)]
+    if not sizes:
+        sizes, colors, labels = [1], ["#9aa3b5"], ["No tests"]
+    ax_donut.pie(sizes, colors=colors, startangle=90, wedgeprops=dict(width=0.35, edgecolor="white"))
+    ax_donut.text(0, 0.08, f"{counts.get('pass_rate', 0):.0f}%", ha="center", va="center", fontsize=20, fontweight="bold")
+    ax_donut.text(0, -0.15, "passing", ha="center", va="center", fontsize=9, color="#6b7689")
+    ax_donut.set_title("Test Summary", fontsize=11, fontweight="bold")
+    ax_donut.legend(labels, loc="lower center", bbox_to_anchor=(0.5, -0.22), ncol=2, frameon=False, fontsize=8)
+
+    if len(history) >= 2:
+        xs = list(range(len(history)))
+        ys = [h["pass_rate"] for h in history]
+        dot_colors = [STATUS_COLORS["failed"] if h["failed"] > 0 else STATUS_COLORS["passed"] for h in history]
+        ax_trend.plot(xs, ys, color="#1f3a6e", linewidth=1.5, zorder=1)
+        ax_trend.scatter(xs, ys, color=dot_colors, zorder=2, s=30)
+        ax_trend.set_ylim(0, 100)
+        ax_trend.set_xticks([xs[0], xs[-1]])
+        ax_trend.set_xticklabels([_short_date(history[0]["timestamp"]), _short_date(history[-1]["timestamp"])], fontsize=8)
+        ax_trend.set_yticks([0, 50, 100])
+        ax_trend.set_yticklabels(["0%", "50%", "100%"], fontsize=8)
+        ax_trend.grid(axis="y", linestyle=":", linewidth=0.6, color="#dde3ee")
+        for spine in ("top", "right", "left"):
+            ax_trend.spines[spine].set_visible(False)
+        ax_trend.set_title(f"Trend - pass rate over the last {len(history)} runs", fontsize=11, fontweight="bold")
+    else:
+        ax_trend.text(0.5, 0.5, "Not enough runs yet", ha="center", va="center", fontsize=10, color="#6b7689")
+        ax_trend.axis("off")
+
+    plt.tight_layout()
+    plt.savefig(out_path, facecolor="white")
+    plt.close(fig)
+    return out_path
+
+
 # ---------------------------------------------------------------- history --
 
 def load_history():
@@ -491,12 +541,15 @@ def generate_report(build_id, results, enrich=True):
     })
 
     html = render_html({"build_id": build_id, "timestamp": timestamp}, results, counts, history)
+    results_json = json.dumps([dataclasses.asdict(r) for r in results], indent=2)
 
     run_dir = REPORTS_DIR / str(build_id)
     run_dir.mkdir(parents=True, exist_ok=True)
     report_path = run_dir / "index.html"
     report_path.write_text(html, encoding="utf-8")
+    (run_dir / "results.json").write_text(results_json, encoding="utf-8")
     (REPORTS_DIR / "latest.html").write_text(html, encoding="utf-8")
+    (REPORTS_DIR / "latest_results.json").write_text(results_json, encoding="utf-8")
     return report_path
 
 
