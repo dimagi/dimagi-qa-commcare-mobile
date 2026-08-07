@@ -126,10 +126,12 @@ def build_message(counts, failed_results, report_artifact_url, run_url):
         # initial_comment accepts) has no color or table primitive - a real
         # bordered table / colored header needs Block Kit attachments, which
         # this upload API doesn't take. Closest achievable equivalent: a
-        # red-square emoji on the header, and a fenced code block (Slack
+        # red-circle emoji on the header (":red_square:" turned out not to be
+        # a real Slack shortcode - it rendered as literal text), and a
+        # fenced code block (Slack
         # renders ``` as a light-bordered monospace box) for the table body.
         lines.append("")
-        lines.append(":red_square: *Failed Tests*")
+        lines.append(":red_circle: *Failed Tests*")
         shown = failed_results[:MAX_FAILED_LISTED]
         workflow_width = max(len(r["workflow"]) for r in shown)
         header = f"{'Workflow'.ljust(workflow_width)} | Test"
