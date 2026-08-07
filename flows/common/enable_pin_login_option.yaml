@@ -1,5 +1,38 @@
 appId: org.commcare.dalvik
 ---
+# FINAL UPDATE - THIS SUBFLOW CANNOT WORK AGAINST A RELEASE APK, PERIOD.
+# Confirmed via commcare-android source: DeveloperPreferences.
+# hideOrShowDangerousSettings() unconditionally REMOVES this preference row
+# (and every other non-whitelisted dev preference) from the Developer
+# Options screen whenever !GlobalPrivilegesManager.isAdvancedSettingsAccessEnabled()
+# && !BuildConfig.DEBUG - i.e. on every release build, unless a device-level
+# "Advanced Settings"/"Mobile Privileges" privilege has been separately
+# unlocked. That privilege is NOT an HQ app-builder setting - it's granted by
+# the Master Mobile Plan's own "Setup 4" test case (already correctly marked
+# Not automatable in coverage_matrix.csv): open Developer Options' own
+# overflow menu > "Mobile Privileges" > "CLAIM PRIVILEGES" > scan a barcode
+# shown at https://www.commcarehq.org/account/mobile_privileges/ on a
+# SEPARATE logged-in browser session. WHITELISTED_DEVELOPER_PREF_KEYS
+# (DeveloperPreferences.java) confirms exactly which 6 rows survive without
+# that privilege - cc-offer-pin-for-login (this one) is not among them.
+# Confirmed live, repeatedly: after fixing every install/scroll/timing bug
+# in every mobile_pins flow, the Developer Options screen consistently
+# rendered only those 6 whitelisted rows (Show Update Options Item, Image
+# Above Question Text Enabled, Detect and Trigger Purge on Form Save,
+# Default Audio Quality, Certificate Transparency, Override Log Submission
+# Server) and never this one, on every attempt - scrolling doesn't help
+# because the row is never added to the screen at all, not merely
+# off-screen. Every mobile_pins Pin 1-14 / Mutiple App PIN test case
+# ultimately depends on this toggle (directly or via
+# set_pin_via_dialog.yaml/dismiss_pin_prompt_dont_ask_again.yaml assuming
+# "Create a PIN?" is already visible) and is therefore Not automatable via
+# Maestro against a release APK - reclassified in coverage_matrix.csv and
+# both tracking docs. The flow files under flows/mobile_pins/ are left on
+# disk (not deleted) since they're otherwise-correct, well-cited attempts
+# that would become useful again if this repo ever tests against a debug
+# APK variant or the account running BrowserStack's tests gets the Mobile
+# Privileges barcode-claim performed on it first.
+#
 # Reusable subflow: unlocks CommCare's "Developer Options" (via the classic
 # "About CommCare" x4 dismiss trick) and turns on the "Give option to use
 # PIN for login" developer preference (cc-offer-pin-for-login). Needed
