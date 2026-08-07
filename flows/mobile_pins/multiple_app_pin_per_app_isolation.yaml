@@ -125,14 +125,30 @@ tags:
     visible:
       id: "org.commcare.dalvik:id/apps_list_view"
     timeout: 30000
+# Same scroll-before-tap fix as install_app_as_web_user.yaml's own FOURTH
+# CAVEAT - this is the same scrollable "Apps Available for Install" list,
+# just inlined here since this second install can't go through that shared
+# subflow (its clearState:true would wipe the first app). "Basic Tests"
+# sorts near the top so this is likely already visible, but scrollUntilVisible
+# is a no-op when the target is already on screen, so include it for parity.
+- scrollUntilVisible:
+    element:
+      text: ".*Basic Tests$"
+    direction: DOWN
+    timeout: 20000
 - tapOn: ".*Basic Tests$"
 - tapOn:
     id: "org.commcare.dalvik:id/install_app_button"
     retryTapIfNoChange: false
     optional: true
+# Optional per install_app_as_web_user.yaml's own FIFTH CAVEAT - this
+# transitional screen doesn't reliably render long enough (or at all) to
+# catch with a poll-based wait; the login screen wait right after it is the
+# real success criterion.
 - extendedWaitUntil:
     visible: "Setting Up App"
     timeout: 60000
+    optional: true
 - extendedWaitUntil:
     visible:
       id: "org.commcare.dalvik:id/edit_username"

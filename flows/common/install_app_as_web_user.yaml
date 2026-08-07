@@ -162,14 +162,42 @@ appId: org.commcare.dalvik
     visible:
       id: "org.commcare.dalvik:id/apps_list_view"
     timeout: 30000
+# FOURTH CAVEAT, learned from a real BrowserStack failure on "Case
+# Managements!": the apps_list_view is a SCROLLABLE list (confirmed sorted
+# alphabetically per InstallFromListActivity.java line 419), and a bare
+# tapOn cannot select an element that's below the fold - it only searches
+# the CURRENTLY RENDERED view hierarchy. The failing run's own hierarchyRoot
+# dump showed the visible page ending at "Advanced Settings" (last item
+# before the status bar) with no "Case Managements!" row present at all -
+# every app name that alphabetically sorts past roughly "Advanced Settings"
+# (i.e. nearly every APP_NAME used in this repo besides "[Master] Basic
+# Tests", which happens to sort near the top) needs a scroll first.
+# scrollUntilVisible is a no-op if the target is already on screen, so this
+# is safe to run unconditionally for every APP_NAME, including "Basic Tests".
+- scrollUntilVisible:
+    element:
+      text: "${APP_NAME}"
+    direction: DOWN
+    timeout: 20000
 - tapOn: "${APP_NAME}"
 - tapOn:
     id: "org.commcare.dalvik:id/install_app_button"
     retryTapIfNoChange: false
     optional: true
+# FIFTH CAVEAT, learned from a real BrowserStack failure: this
+# extendedWaitUntil used to be a hard (non-optional) assertion, and it timed
+# out after the full 60s on 15/16 flows in one build - "Setting Up App" is
+# only a transitional loading screen, and evidently doesn't reliably render
+# for long enough (or at all, e.g. if BrowserStack's device already has the
+# CCZ cached) to be caught by a poll-based wait. The actual thing every
+# caller needs is the LOGIN screen that appears once setup finishes, which
+# the next wait below already asserts - this one is now optional so a fast
+# install doesn't fail the whole flow over a screen that isn't the real
+# success criterion.
 - extendedWaitUntil:
     visible: "Setting Up App"
     timeout: 60000
+    optional: true
 - extendedWaitUntil:
     visible:
       id: "org.commcare.dalvik:id/edit_username"
