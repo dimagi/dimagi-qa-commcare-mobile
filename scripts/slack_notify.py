@@ -91,16 +91,30 @@ def _gh_run_url():
     return ""
 
 
+# GitHub's raw event names aren't the friendly "TRIGGER" phrasing this org's
+# other Slack bots use (e2e-parity/dimagi-qa) - map the ones this workflow
+# actually fires (workflow_dispatch, schedule) and fall back to a generic
+# uppercased/spaced transform for anything else.
+_EVENT_LABELS = {
+    "schedule": "SCHEDULED TRIGGER",
+    "workflow_dispatch": "MANUAL TRIGGER",
+}
+
+
 def build_message(counts, failed_results, report_artifact_url, run_url):
     workflow = os.environ.get("GITHUB_WORKFLOW", "Maestro BrowserStack QA")
     event = os.environ.get("GITHUB_EVENT_NAME", "manual")
+    event_label = _EVENT_LABELS.get(event, event.replace("_", " ").upper())
+    run_number = os.environ.get("GITHUB_RUN_NUMBER", "?")
+    tag = (os.environ.get("RUN_TAG") or "ALL").upper()
     ref = os.environ.get("GITHUB_REF_NAME", "?")
     actor = os.environ.get("GITHUB_ACTOR", "?")
     status_icon = ":white_check_mark:" if counts["failed"] == 0 else ":x:"
 
     lines = [
-        f":test_tube: *{workflow} @ {ref}*  {status_icon}",
-        f"Triggered by {actor} · trigger: `{event}`",
+        f"{status_icon} :bar_chart: *[{tag}] {workflow} Run #{run_number} Test Summary Charts "
+        f"triggered by {event_label} event*",
+        f"Branch `{ref}` · triggered by {actor}",
         "",
         (f"*Pass rate:* {counts['pass_rate']:.1f}% ({counts['passed'] + counts['rerun']}/{counts['total']})   "
          f"*Total:* {counts['total']}   *Passed:* {counts['passed']}   *Failed:* {counts['failed']}   "
@@ -108,13 +122,28 @@ def build_message(counts, failed_results, report_artifact_url, run_url):
     ]
 
     if failed_results:
+        # Slack's plain mrkdwn (what files.completeUploadExternal's
+        # initial_comment accepts) has no color or table primitive - a real
+        # bordered table / colored header needs Block Kit attachments, which
+        # this upload API doesn't take. Closest achievable equivalent: a
+        # red-square emoji on the header, and a fenced code block (Slack
+        # renders ``` as a light-bordered monospace box) for the table body.
         lines.append("")
-        lines.append("*Failed tests:*")
+        lines.append(":red_square: *Failed Tests*")
         shown = failed_results[:MAX_FAILED_LISTED]
+        workflow_width = max(len(r["workflow"]) for r in shown)
+        header = f"{'Workflow'.ljust(workflow_width)} | Test"
+        table = ["```", header, "-" * len(header)]
         for r in shown:
-            lines.append(f"• {r['workflow']} — {r['name']}")
+            name = r["name"]
+            prefix = f"{r['workflow']}/"
+            if name.startswith(prefix):
+                name = name[len(prefix):]
+            table.append(f"{r['workflow'].ljust(workflow_width)} | {name}")
         if len(failed_results) > len(shown):
-            lines.append(f"_+{len(failed_results) - len(shown)} more_")
+            table.append(f"... +{len(failed_results) - len(shown)} more")
+        table.append("```")
+        lines.extend(table)
 
     links = []
     if report_artifact_url:

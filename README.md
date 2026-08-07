@@ -65,7 +65,7 @@ automatically if `--apk` isn't given (see the naming-drift caveat in
 ## HTML report + trend
 
 Every `run_suite.py` invocation ends by writing `reports/<build_id>/index.html`
-(and refreshing `reports/latest.html`) via `scripts/report_generator.py`.
+(and refreshing `reports/report.html`) via `scripts/report_generator.py`.
 Maestro itself has no built-in report for BrowserStack (cloud) runs - this
 turns BrowserStack's build/session JSON into KPI cards (Total, Passed, Failed,
 Skipped, Rerun), a pass/fail/skip/rerun donut, and a trend line across past
@@ -116,7 +116,7 @@ python scripts/report_generator.py --from-json path/to/saved_build_response.json
 `scripts/slack_notify.py` posts a summary of the latest run to `SLACK_CHANNEL_ID`
 right after `run_suite.py` finishes (wired in as its own CI step, `if: always()`,
 so it fires whether the run passed or failed). It reads straight off
-`reports/latest.html` / `reports/latest_results.json` / `reports/history.json`
+`reports/latest_results.json` / `reports/history.json`
 rather than being called from inside `run_suite.py`, so it can be rerun or
 skipped independently of the test run itself. One Slack message includes:
 

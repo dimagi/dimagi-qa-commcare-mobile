@@ -134,13 +134,17 @@ def run_all_builds(bs, flow_files, app_url, args, env_variables, other_app_urls,
         chunk_name = f"{build_name}-part{i + 1}" if build_name and len(chunks) > 1 else build_name
         if len(chunks) > 1:
             print(f"Build part {i + 1}/{len(chunks)}: {len(chunk)} flow file(s)")
-        build_id, result = run_build(bs, chunk + common_files, app_url, args,
-                                      env_variables, other_app_urls, tmp_dir, build_name=chunk_name)
-        if build_id is None:
-            continue
-        build_ids.append(build_id)
-        if result is not None:
-            test_results.extend(report_generator.normalize_build(result, bs_client=bs))
+        # run_build normally returns a single (build_id, result) pair, but
+        # falls back to one pair per flow file if the whole chunk stays a
+        # total parse error after retries (see run_build's own docstring) -
+        # handle both shapes uniformly.
+        for build_id, result in run_build(bs, chunk + common_files, app_url, args,
+                                           env_variables, other_app_urls, tmp_dir, build_name=chunk_name):
+            if build_id is None:
+                continue
+            build_ids.append(build_id)
+            if result is not None:
+                test_results.extend(report_generator.normalize_build(result, bs_client=bs))
     return build_ids, test_results
 
 
@@ -169,56 +173,91 @@ def _is_testsuite_parse_error(result):
     return bool(result.get("devices"))
 
 
+def _run_build_once(bs, flow_files, app_url, args, env_variables, other_app_urls, tmp_dir, build_name=None):
+    """One upload+trigger+wait cycle, no retry/fallback logic - the primitive
+    run_build composes into its retry-then-split strategy."""
+    zip_path = build_flows_zip(flow_files, tmp_dir)
+    print(f"Uploading test suite ({len(flow_files)} flow file(s)) to BrowserStack ...")
+    suite_resp = bs.upload_test_suite(str(zip_path))
+
+    # BrowserStack only auto-discovers flows at the zip's root by default;
+    # ours live under flows/<workflow>/*.yaml, so pass explicit paths
+    # (relative to the zip's root "flows/" folder) for everything that isn't
+    # a flows/common/*.yaml helper (those are only reachable via runFlow,
+    # never meant to be executed directly as top-level tests).
+    execute = [f.relative_to(FLOWS_DIR).as_posix() for f in flow_files if f.parent.name != "common"]
+    build_resp = bs.trigger_build(
+        app_url=app_url,
+        test_suite_url=suite_resp["test_suite_url"],
+        devices=[d.strip() for d in args.devices.split(",")],
+        project=args.project,
+        build_name=build_name,
+        execute=execute,
+        env_variables=env_variables,
+        other_apps=other_app_urls,
+    )
+    print(f"Build triggered: {json.dumps(build_resp, indent=2)}")
+
+    build_id = build_resp.get("build_id") or build_resp.get("id")
+    if not build_id:
+        print("No build_id in response - can't poll for status.")
+        return None, None
+    if args.no_wait:
+        return build_id, None
+    print(f"Waiting for build {build_id} ...")
+    result = bs.wait_for_build(build_id)
+    print(json.dumps(result, indent=2))
+    return build_id, result
+
+
 def run_build(bs, flow_files, app_url, args, env_variables, other_app_urls, tmp_dir, build_name=None,
               max_parse_retries=2):
     """Zip the given flow files, upload as a test suite, trigger a build, and
     wait for it. Shared by the main run and the --retry-failed re-run so both
-    go through the exact same upload/trigger/poll path.
+    go through the exact same upload/trigger/poll path. Returns a LIST of
+    (build_id, result) pairs - normally just one, but see the fallback below.
 
     Retries the WHOLE upload+trigger+wait cycle (fresh zip, fresh test-suite
     upload) up to max_parse_retries times if the build comes back as a total
-    testsuite parse error - see _is_testsuite_parse_error's docstring."""
-    execute = [f.relative_to(FLOWS_DIR).as_posix() for f in flow_files if f.parent.name != "common"]
+    testsuite parse error (see _is_testsuite_parse_error's docstring) - this
+    clears genuinely transient upload/parse hiccups.
 
+    If it's STILL a parse error after every retry, live investigation found
+    this can also be a deterministic property of a specific multi-flow
+    combination (confirmed: the exact same 2-3 flow set from one directory
+    failed identically on 6 separate attempts, including 3 fresh-upload
+    retries in a row, while single-flow uploads of the same content - and
+    even 5-14 flow combinations from OTHER directories - reliably parsed
+    fine; no zip-structure, line-ending, or content difference explains it).
+    Retrying identical content doesn't fix a deterministic failure, so as a
+    last resort this falls back to running each non-common flow file in the
+    batch as its OWN single-flow build and concatenating the results -
+    slower, but every single-flow upload attempted during that investigation
+    parsed successfully, so this guarantees forward progress instead of
+    losing the whole batch to an unexplained BrowserStack-side quirk."""
+    non_common = [f for f in flow_files if f.parent.name != "common"]
+    common = [f for f in flow_files if f.parent.name == "common"]
+
+    build_id, result = None, None
     for attempt in range(max_parse_retries + 1):
-        zip_path = build_flows_zip(flow_files, tmp_dir)
-        print(f"Uploading test suite ({len(flow_files)} flow file(s)) to BrowserStack ..."
-              + (f" (attempt {attempt + 1}/{max_parse_retries + 1})" if attempt else ""))
-        suite_resp = bs.upload_test_suite(str(zip_path))
-
-        # BrowserStack only auto-discovers flows at the zip's root by default;
-        # ours live under flows/<workflow>/*.yaml, so pass explicit paths
-        # (relative to the zip's root "flows/" folder) for everything that isn't
-        # a flows/common/*.yaml helper (those are only reachable via runFlow,
-        # never meant to be executed directly as top-level tests).
-        build_resp = bs.trigger_build(
-            app_url=app_url,
-            test_suite_url=suite_resp["test_suite_url"],
-            devices=[d.strip() for d in args.devices.split(",")],
-            project=args.project,
-            build_name=build_name,
-            execute=execute,
-            env_variables=env_variables,
-            other_apps=other_app_urls,
-        )
-        print(f"Build triggered: {json.dumps(build_resp, indent=2)}")
-
-        build_id = build_resp.get("build_id") or build_resp.get("id")
-        if not build_id:
-            print("No build_id in response - can't poll for status.")
-            return None, None
-        if args.no_wait:
-            return build_id, None
-        print(f"Waiting for build {build_id} ...")
-        result = bs.wait_for_build(build_id)
-        print(json.dumps(result, indent=2))
-
+        build_id, result = _run_build_once(bs, flow_files, app_url, args, env_variables,
+                                            other_app_urls, tmp_dir, build_name=build_name)
         if not _is_testsuite_parse_error(result):
-            return build_id, result
+            return [(build_id, result)]
         if attempt < max_parse_retries:
             print(f"Build {build_id} was a total BROWSERSTACK_TESTSUITE_PARSE_ERROR "
                   f"(0 tests ran) - retrying with a fresh upload ...")
-    return build_id, result
+
+    if len(non_common) <= 1:
+        return [(build_id, result)]
+    print(f"Build {build_id} stayed a total parse error after {max_parse_retries + 1} attempts - "
+          f"falling back to {len(non_common)} individual single-flow builds ...")
+    pairs = []
+    for i, f in enumerate(non_common):
+        sub_name = f"{build_name}-single{i + 1}" if build_name else None
+        pairs.extend(run_build(bs, [f] + common, app_url, args, env_variables, other_app_urls,
+                                tmp_dir, build_name=sub_name, max_parse_retries=max_parse_retries))
+    return pairs
 
 
 def main():

@@ -94,4 +94,5 @@ jobs:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
           SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
           REPORT_ARTIFACT_URL: ${{ steps.upload_report.outputs.artifact-url }}
+          RUN_TAG: ${{ github.event.inputs.tag }}
         run: python scripts/slack_notify.py

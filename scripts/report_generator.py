@@ -663,7 +663,7 @@ def _escape(text):
 # --------------------------------------------------------------------- CLI --
 
 def generate_report(build_id, results, enrich=True):
-    """Write reports/<build_id>/index.html, refresh reports/latest.html, and
+    """Write reports/<build_id>/index.html, refresh reports/report.html, and
     append this run's summary to reports/history.json. Returns the path to
     the per-run report. `enrich` fetches each failed test's Maestro commands
     log to fill in failed_step - set False to skip the network calls (e.g.
@@ -691,7 +691,7 @@ def generate_report(build_id, results, enrich=True):
     report_path = run_dir / "index.html"
     report_path.write_text(html, encoding="utf-8")
     (run_dir / "results.json").write_text(results_json, encoding="utf-8")
-    (REPORTS_DIR / "latest.html").write_text(html, encoding="utf-8")
+    (REPORTS_DIR / "report.html").write_text(html, encoding="utf-8")
     (REPORTS_DIR / "latest_results.json").write_text(results_json, encoding="utf-8")
     return report_path
 
