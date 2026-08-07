@@ -47,8 +47,13 @@ tags:
     id: "org.commcare.dalvik:id/daydownbtn"
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_next"
+# UPDATE, found via a real BrowserStack failure: same id/dateGregorian issue
+# as date_02_nepali.yaml's own header note - that id belongs to the widget's
+# entry screen, not "Display Dates" (confirmed live: "This should display
+# the Gregorian date based on the date selected in the Ethiopian calendar:
+# ..." with no dateGregorian id present).
 - assertVisible:
-    id: "org.commcare.dalvik:id/dateGregorian"
+    text: "(?s).*Gregorian date based on the date selected in the Ethiopian calendar.*"
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_finish"
 - assertVisible:

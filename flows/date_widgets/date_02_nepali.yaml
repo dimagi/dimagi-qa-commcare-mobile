@@ -70,8 +70,17 @@ tags:
     id: "org.commcare.dalvik:id/daydownbtn"
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_next"
+# UPDATE, found via a real BrowserStack failure: id/dateGregorian belongs to
+# the Nepali widget's OWN screen (its live Gregorian-equivalent readout
+# while entering the date), not the "Display Dates" screen this flow has
+# already advanced to by this point via nav_btn_next above - confirmed live
+# via the failing run's hierarchyRoot dump, which showed plain-text labels
+# ("This should display the Gregorian date based on the date selected in
+# the Nepalese calendar: ...") with no dateGregorian id anywhere. Asserting
+# on that visible sentence instead - (?s) lets ".*" span the label's own
+# internal newlines/wrapping.
 - assertVisible:
-    id: "org.commcare.dalvik:id/dateGregorian"
+    text: "(?s).*Gregorian date based on the date selected in the Nepalese calendar.*"
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_finish"
 - assertVisible:

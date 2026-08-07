@@ -174,15 +174,33 @@ appId: org.commcare.dalvik
 # Tests", which happens to sort near the top) needs a scroll first.
 # scrollUntilVisible is a no-op if the target is already on screen, so this
 # is safe to run unconditionally for every APP_NAME, including "Basic Tests".
+#
+# SEVENTH CAVEAT, learned from a real BrowserStack failure on "Session
+# Expiration Test": the qateam domain's app list turned out to be much
+# longer than earlier caveats assumed (confirmed live - the failing run's
+# hierarchyRoot dump showed dozens of unrelated apps spanning "KD Case
+# Management" through "Mobile2.47_test4_5" alphabetically, nowhere near "S").
+# 20s wasn't enough scroll time to reach a target that sorts late in a list
+# this long - raised to 60s.
 - scrollUntilVisible:
     element:
       text: "${APP_NAME}"
     direction: DOWN
-    timeout: 20000
+    timeout: 60000
 - tapOn: "${APP_NAME}"
 - tapOn:
     id: "org.commcare.dalvik:id/install_app_button"
     retryTapIfNoChange: false
+    optional: true
+# EIGHTH CAVEAT, learned from a real BrowserStack failure on "Conditional
+# Enum in Case List" (and previously misread as a version-mismatch retry
+# case for "Case Managements!" too): some apps land on an "Almost there!
+# Press the button below to install your app." screen with its own "Start
+# Install"/"Start Over" buttons - text-based, not the same id/screen as
+# install_app_button above (that tap alone didn't reach it). Optional tap
+# so flows whose app skips straight to setup aren't affected.
+- tapOn:
+    text: "Start Install"
     optional: true
 # SIXTH CAVEAT, learned from a real BrowserStack failure on "Case
 # Managements!": some apps' published CCZ requires a newer CommCare APK

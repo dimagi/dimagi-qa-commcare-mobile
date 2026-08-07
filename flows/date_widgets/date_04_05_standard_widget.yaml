@@ -48,9 +48,19 @@ tags:
 # "Date" question - defaults to today, no interaction needed.
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_next"
-- assertVisible: "Date chosen long form:"
-- assertVisible: "Date chosen short form:"
-- assertVisible: "Date chosen, unformatted:"
+# UPDATE, found via a real BrowserStack failure: all three "Date chosen ..."
+# labels render as ONE combined multi-line TextView ("Date chosen long
+# form: ...\nDate chosen short form: ...\nDate chosen, unformatted: ..."),
+# confirmed live via the failing run's hierarchyRoot dump - Maestro's
+# assertVisible is a full match against the element's ENTIRE text (same
+# semantics as tapOn's own full-match discovery elsewhere in this repo), so
+# a bare substring never matched. (?s) (DOTALL) lets ".*" span the
+# newlines; each assertion below still targets the same one combined
+# element, which is fine - they're independent regex checks, not separate
+# widgets.
+- assertVisible: "(?s).*Date chosen long form:.*"
+- assertVisible: "(?s).*Date chosen short form:.*"
+- assertVisible: "(?s).*Date chosen, unformatted:.*"
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_finish"
 - assertVisible:

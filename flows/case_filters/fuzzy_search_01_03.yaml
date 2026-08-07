@@ -52,12 +52,22 @@ tags:
 - assertVisible: "Start"
 
 # --- Fuzzy Search 1: enable Fuzzy Search Matches in Settings. ---
+# UPDATE, found via a real BrowserStack failure: this used to `back` twice.
+# "Fuzzy Search Matches" is a ListPreference-style row - tapping "Enabled"
+# selects the value and auto-dismisses its own dialog (same mechanic as
+# DeveloperPreferences' ListPreference rows, e.g. cc-offer-pin-for-login -
+# see flows/common/enable_pin_login_option.yaml), so only ONE screen (the
+# Settings activity itself) is actually open by this point. The failing
+# run's hierarchyRoot dump showed the SAMSUNG HOME LAUNCHER on screen right
+# after this block - the second `back` had nothing left to close inside the
+# app and fell through to real OS back-navigation, exiting CommCare
+# entirely (same class of bug as install_app_as_web_user.yaml's earlier
+# hideKeyboard-repeat caveat).
 - tapOn: "More options"
 - tapOn: "Settings"
 - assertVisible: "CommCare > Settings"
 - tapOn: "Fuzzy Search Matches"
 - tapOn: "Enabled"
-- back
 - back
 
 # --- Fuzzy Search 2: incremental exact-match search, highlighted. ---
