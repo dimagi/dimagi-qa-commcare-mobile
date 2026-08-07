@@ -134,17 +134,50 @@ def run_all_builds(bs, flow_files, app_url, args, env_variables, other_app_urls,
         chunk_name = f"{build_name}-part{i + 1}" if build_name and len(chunks) > 1 else build_name
         if len(chunks) > 1:
             print(f"Build part {i + 1}/{len(chunks)}: {len(chunk)} flow file(s)")
-        # run_build normally returns a single (build_id, result) pair, but
-        # falls back to one pair per flow file if the whole chunk stays a
-        # total parse error after retries (see run_build's own docstring) -
-        # handle both shapes uniformly.
-        for build_id, result in run_build(bs, chunk + common_files, app_url, args,
-                                           env_variables, other_app_urls, tmp_dir, build_name=chunk_name):
+        # run_build normally returns a single (build_id, result,
+        # covered_files, upload_attempts) tuple, but falls back to one tuple
+        # per flow file if the whole chunk stays a total parse error after
+        # retries (see run_build's own docstring) - handle both shapes
+        # uniformly.
+        for build_id, result, covered_files, upload_attempts in run_build(
+                bs, chunk + common_files, app_url, args, env_variables, other_app_urls, tmp_dir,
+                build_name=chunk_name):
             if build_id is None:
                 continue
             build_ids.append(build_id)
-            if result is not None:
-                test_results.extend(report_generator.normalize_build(result, bs_client=bs))
+            if result is None:
+                continue
+            normalized = report_generator.normalize_build(result, bs_client=bs)
+            if upload_attempts > 1:
+                # Not the same thing as the existing "rerun" status (that's
+                # for a flow that genuinely EXECUTED and failed, then passed
+                # on a real retry) - this is BrowserStack's upload/parse
+                # pipeline needing multiple attempts before Maestro ever ran
+                # anything, so status/counts are left alone; just note it so
+                # it isn't invisible (confirmed live: a flow that needed 2
+                # retries reported a clean 100% pass rate with Rerun: 0).
+                note = f"(passed after {upload_attempts} upload attempts due to intermittent BROWSERSTACK_TESTSUITE_PARSE_ERROR)"
+                for r in normalized:
+                    r.error = f"{r.error} {note}".strip() if r.error else note
+            test_results.extend(normalized)
+            # A flow whose build stayed a total parse error has no
+            # testcases.data at all (see run_build's docstring) - normalize
+            # can't produce anything for it, so it would otherwise vanish
+            # from the report's totals instead of counting as a failure.
+            # Synthesize an explicit failed result for any covered flow with
+            # no matching normalized entry.
+            seen_names = {r.name for r in normalized}
+            for f in covered_files:
+                expected_name = f"{f.parent.name}/{f.stem}"
+                if expected_name not in seen_names:
+                    test_results.append(report_generator.TestResult(
+                        name=expected_name,
+                        workflow=f.parent.name,
+                        status="failed",
+                        error=f"BrowserStack build {build_id} was a total testsuite parse "
+                              f"error - this flow never actually ran (see the CI log for "
+                              f"retry/fallback details).",
+                    ))
     return build_ids, test_results
 
 
@@ -234,7 +267,32 @@ def run_build(bs, flow_files, app_url, args, env_variables, other_app_urls, tmp_
     batch as its OWN single-flow build and concatenating the results -
     slower, but every single-flow upload attempted during that investigation
     parsed successfully, so this guarantees forward progress instead of
-    losing the whole batch to an unexplained BrowserStack-side quirk."""
+    losing the whole batch to an unexplained BrowserStack-side quirk.
+
+    Each returned tuple's `result` may STILL be a total parse error (a
+    single-flow build can rarely hit this too, confirmed live) - the caller
+    is responsible for noticing when a covered flow never got a real
+    testcases.data entry and surfacing that explicitly (see
+    run_all_builds' own comment on this): normalize_session has nothing to
+    read out of a session with no `testcases.data` array at all, so a flow
+    stuck in this state otherwise vanishes from the report's totals
+    silently instead of counting as a failure - confirmed live on
+    session_expiration/setup_02_restore_user_session_expires.yaml, whose
+    build showed a real BrowserStack "0 unique tests" parse error in the
+    dashboard, but the generated report's Total counted only 1 of the 2
+    flows that were actually supposed to run.
+
+    The 4th element, upload_attempts, is how many total upload+trigger+wait
+    cycles it took to get a non-parse-error result (1 if it worked first
+    try). This is NOT the same thing as the existing "rerun" concept
+    (--retry-failed re-running a flow that genuinely EXECUTED and failed) -
+    every parse-error attempt here has testcases.count==0, meaning Maestro
+    never actually ran the flow at all, so it's an upload/parse retry, not a
+    test retry. Still worth surfacing (confirmed live: a flow that needed 2
+    retries before passing showed a clean 100% pass rate with Rerun: 0,
+    hiding that BrowserStack's upload pipeline was flaky that run) - the
+    caller notes it on the TestResult without touching status or the
+    Rerun count, which already means something else."""
     non_common = [f for f in flow_files if f.parent.name != "common"]
     common = [f for f in flow_files if f.parent.name == "common"]
 
@@ -243,21 +301,21 @@ def run_build(bs, flow_files, app_url, args, env_variables, other_app_urls, tmp_
         build_id, result = _run_build_once(bs, flow_files, app_url, args, env_variables,
                                             other_app_urls, tmp_dir, build_name=build_name)
         if not _is_testsuite_parse_error(result):
-            return [(build_id, result)]
+            return [(build_id, result, non_common, attempt + 1)]
         if attempt < max_parse_retries:
             print(f"Build {build_id} was a total BROWSERSTACK_TESTSUITE_PARSE_ERROR "
                   f"(0 tests ran) - retrying with a fresh upload ...")
 
     if len(non_common) <= 1:
-        return [(build_id, result)]
+        return [(build_id, result, non_common, max_parse_retries + 1)]
     print(f"Build {build_id} stayed a total parse error after {max_parse_retries + 1} attempts - "
           f"falling back to {len(non_common)} individual single-flow builds ...")
-    pairs = []
+    quads = []
     for i, f in enumerate(non_common):
         sub_name = f"{build_name}-single{i + 1}" if build_name else None
-        pairs.extend(run_build(bs, [f] + common, app_url, args, env_variables, other_app_urls,
+        quads.extend(run_build(bs, [f] + common, app_url, args, env_variables, other_app_urls,
                                 tmp_dir, build_name=sub_name, max_parse_retries=max_parse_retries))
-    return pairs
+    return quads
 
 
 def main():
