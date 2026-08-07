@@ -88,10 +88,55 @@ tags:
     file: ../common/install_app_as_web_user.yaml
     env:
       APP_NAME: "Case Managements!"
-- runFlow:
-    file: ../common/install_app_as_web_user.yaml
-    env:
-      APP_NAME: "Basic Tests$"
+# Install Basic Tests SECOND, inlined rather than a second runFlow to
+# install_app_as_web_user.yaml - that subflow's own launchApp now uses
+# clearState: true (see its header for why), which would wipe the
+# Case Managements! install this flow just did. This block is that same
+# subflow's steps verbatim, minus its leading launchApp.
+- tapOn: "More options"
+- tapOn: "See Apps for My User"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/switch_button"
+    timeout: 15000
+- tapOn:
+    id: "org.commcare.dalvik:id/switch_button"
+- tapOn:
+    id: "org.commcare.dalvik:id/edit_email"
+- tapOn:
+    text: "Skip"
+    optional: true
+- inputText: "${HQ_WEB_USER_EMAIL}"
+- hideKeyboard
+- tapOn:
+    id: "org.commcare.dalvik:id/edit_password"
+- inputText: "${HQ_WEB_USER_PASSWORD}"
+- hideKeyboard
+- tapOn:
+    text: "Skip"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/get_apps_button"
+    timeout: 10000
+- tapOn:
+    id: "org.commcare.dalvik:id/get_apps_button"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/apps_list_view"
+    timeout: 30000
+- tapOn: "Basic Tests$"
+- tapOn:
+    id: "org.commcare.dalvik:id/install_app_button"
+    retryTapIfNoChange: false
+    optional: true
+- extendedWaitUntil:
+    visible: "Setting Up App"
+    timeout: 60000
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/edit_username"
+    timeout: 90000
 - runFlow:
     file: ../common/login.yaml
     env:

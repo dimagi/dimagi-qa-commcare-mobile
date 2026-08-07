@@ -40,7 +40,8 @@ tags:
 # see flows/common/verify_form_a_questions.yaml and
 # flows/common/verify_form_b_photo_question.yaml for the specific caveats on
 # "Form A"/"Form B" naming and question order/wording.
-- launchApp
+- launchApp:
+    clearState: true
 - tapOn: "More options"
 - assertVisible: "See Apps for My User"
 

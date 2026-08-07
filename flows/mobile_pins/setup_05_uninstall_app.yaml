@@ -41,7 +41,8 @@ tags:
 #     uninstall your app and then reboot to save changes."), positive button
 #     getString(R.string.ok) ("OK") -> SingleAppManagerActivity.uninstall().
 #   app/res/values/strings.xml: uninstall_app="Uninstall" (button text).
-- launchApp
+- launchApp:
+    clearState: true
 - tapOn: "More options"
 - tapOn: "Go To App Manager"
 - assertVisible:

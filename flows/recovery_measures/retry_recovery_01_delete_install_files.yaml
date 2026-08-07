@@ -54,4 +54,5 @@ tags:
 # than chaining off of this file, per docs/FRAMEWORK.md's "each flow must be
 # runnable in isolation" convention):
 - stopApp
-- launchApp
+- launchApp:
+    clearState: true

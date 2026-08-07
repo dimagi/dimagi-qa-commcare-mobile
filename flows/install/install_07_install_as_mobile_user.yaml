@@ -6,7 +6,8 @@ tags:
 # Master Mobile Plan (2026) > Install > "Install 7" - Install app as a mobile user.
 # PARTIAL: needs a valid HQ mobile-worker username/domain/password. Uses the
 # same fields InstallFromListTest.kt drives (edit_username/edit_domain/edit_password).
-- launchApp
+- launchApp:
+    clearState: true
 # Waits for "More options" rather than tapping it blindly: live BrowserStack
 # evidence (from flows/common/install_app_as_web_user.yaml, which copied
 # this same first-tap pattern) showed this exact tap failing with "Element

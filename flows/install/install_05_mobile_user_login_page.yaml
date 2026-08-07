@@ -6,7 +6,8 @@ tags:
 # Master Mobile Plan (2026) > Install > "Install 5" - Verifying mobile user page.
 # ids verified against InstallFromListTest.kt (edit_username / edit_domain /
 # edit_password / get_apps_button / switch_button).
-- launchApp
+- launchApp:
+    clearState: true
 - tapOn: "More options"
 - tapOn: "See Apps for My User"
 - assertVisible:

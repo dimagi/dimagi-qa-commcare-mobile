@@ -31,7 +31,8 @@ tags:
 # flows/common/verify_form_b_photo_question.yaml for the caveats on
 # "Form A"/"Form B" naming and question order/wording in this pre-provisioned
 # QA app.
-- launchApp
+- launchApp:
+    clearState: true
 - tapOn: "More options"
 - tapOn: "See Apps for My User"
 - tapOn:

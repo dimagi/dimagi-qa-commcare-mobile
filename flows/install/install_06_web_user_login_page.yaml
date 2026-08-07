@@ -6,7 +6,8 @@ tags:
 # Master Mobile Plan (2026) > Install > "Install 6" - Verifying web user page.
 # switch_button toggles between the mobile-worker and web-user forms (see
 # InstallFromListTest.kt line ~60/89).
-- launchApp
+- launchApp:
+    clearState: true
 - tapOn: "More options"
 - tapOn: "See Apps for My User"
 - tapOn:

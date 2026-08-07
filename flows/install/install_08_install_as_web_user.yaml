@@ -5,7 +5,8 @@ tags:
 ---
 # Master Mobile Plan (2026) > Install > "Install 8" - Install app as a web user.
 # PARTIAL: needs a valid HQ web-user email/password.
-- launchApp
+- launchApp:
+    clearState: true
 # Waits for "More options" rather than tapping it blindly: live BrowserStack
 # evidence showed this exact tap (the very first interaction after a cold
 # app launch) failing with "Element not found" - most likely

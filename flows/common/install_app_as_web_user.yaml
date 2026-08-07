@@ -66,7 +66,28 @@ appId: org.commcare.dalvik
 # explicit `- launchApp`), this file had none - Maestro's implicit
 # launch-on-appId behavior evidently does not reliably fire in that
 # position. Added the explicit launchApp below to match install_07/08.
-- launchApp
+#
+# UPDATE 2 - clearState: true added after a real failure whose embedded
+# view-hierarchy dump (not a screenshot - confirmed the screenshot API for
+# this build was returning a stale/unrelated image, see the still-open
+# caveat in docs/FRAMEWORK.md-equivalent commit history) showed the device
+# already sitting on "Apps Available for Install" at the very moment this
+# flow's FIRST switch_button wait timed out - i.e. the device had SOME
+# app's install-list screen still open from a prior attempt, not a blank
+# CommCareSetupActivity. `launchApp` with no clearState (Maestro's default)
+# only brings an app back to the foreground - it does NOT reset it to a
+# fresh install, so if anything (a Maestro-level retry of this same test,
+# or a previous flow in the same chunk/session) had left the app mid
+# install-list navigation, plain launchApp would resume exactly there,
+# breaking every step that assumes a blank CommCareSetupActivity start.
+# clearState guarantees the true fresh-install state this whole framework's
+# flows assume. NOTE: flows/mobile_pins/multiple_app_pin_per_app_isolation.yaml
+# calls this subflow TWICE (installing two apps side by side) - its second
+# call must NOT go through this file (clearState would wipe the first app),
+# so it inlines the post-launchApp steps directly instead - see that file's
+# own comment for why.
+- launchApp:
+    clearState: true
 - extendedWaitUntil:
     visible: "More options"
     timeout: 20000

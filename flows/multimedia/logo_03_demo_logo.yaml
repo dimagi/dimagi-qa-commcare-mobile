@@ -32,7 +32,8 @@ tags:
 # logo-chain citation and its CAVEAT about the logo ImageView having no
 # distinct resource id (id/toolbar is asserted as a best-effort proxy here
 # too).
-- launchApp
+- launchApp:
+    clearState: true
 - tapOn: "More options"
 - tapOn: "Enter Practice Mode"
 - assertVisible: "Starting Practice Mode"
