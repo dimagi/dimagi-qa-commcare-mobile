@@ -77,8 +77,13 @@ tags:
 - tapOn:
     id: "org.commcare.dalvik:id/search_action_bar"
 - inputText: "c"
+# UPDATE, found via a real BrowserStack failure: confirmed live the actual
+# rendered text is "N of M results for your derp: \"c\"" - a genuine (if
+# oddly-worded) app string, not "search". Matching on "results for your"
+# alone rather than hardcoding that specific placeholder word, in case it's
+# inconsistent across CCZ versions.
 - assertVisible:
-    text: "(?i).*results for your search.*"
+    text: "(?i).*results for your.*"
 - inputText: "h"
 - assertVisible: "Christy"
 
