@@ -1,0 +1,98 @@
+appId: org.commcare.dalvik
+tags:
+  - form_submissions
+  - automatable
+---
+# Master Mobile Plan (2026) > Form Submissions > "Case Name Size 1" (Basic
+# Tests app -> Case Tests -> register a case with a name over 255
+# characters, attempt to submit, confirm the app shows a length-warning
+# error) and "Case Name Size 2" (the oversized submission must NOT appear
+# under Saved Forms afterward). One sequential flow, same convention as
+# flows/conditional_enum_in_case_list/conditional_id_mapping_01_06_full_scenario.yaml
+# (a single narrative split across sheet rows).
+#
+# Verified against commcare-android source (read-only reference, not modified):
+#   The CCZ's own en/app_strings.txt + modules-3/forms-0.xml (extracted
+#     read-only from resources/qateam - [Master] Basic Tests - v1141.ccz,
+#     never committed/modified): modules.m3="Case Tests",
+#     forms.m3f0="Create a Case" (this app's "register a case" form,
+#     matching flows/case_filters/fuzzy_search_01_03.yaml's own citation of
+#     this same module). Body: a single required `casename` text question
+#     ("What is the case name? You should not be allowed to proceed if the
+#     question is empty."), then a required select1 `confirm` question with
+#     two choices whose itext is literally "Confirm - Please create this
+#     case." / "Cancel - Please do not create this case." - no client-side
+#     max-length constraint is defined in the form itself (confirmed by
+#     grepping the form's <bind> elements - only required="true()", no
+#     length constraint), so the 255-char check below happens at
+#     submit-time, not as an inline form-validation error.
+#   FormRecord.java updateAndProcessRecord(): FormRecordProcessor.process()
+#     of a completed form throws InvalidCasePropertyLengthException when a
+#     case property's value is too long, which is wrapped as an
+#     IllegalStateException using exactly R.string.invalid_case_property_length
+#     = "Invalid %1s, value must be 255 characters or less"
+#     (app/res/values/strings.xml line 334) - asserted below via a regex on
+#     the confirmed literal tail of this template ("value must be 255
+#     characters or less"), not the %1s-substituted property name (its
+#     exact substituted value - the raw case-transaction property name vs.
+#     a display label - is not confirmed by any source in this repo).
+#   SaveToDiskTask.java doTaskBackground(): catches the resulting
+#     FormInstanceTransactionException and returns SAVE_UNRECOVERABLE_ERROR
+#     with that same message text.
+#   FormEntryActivity.java savingComplete(): on SAVE_UNRECOVERABLE_ERROR,
+#     shows the message via UserfacingErrorHandling.createErrorDialog()
+#     titled Localization.get("notification.formentry.save_error.title") =
+#     "Error Saving your Form" (android_translatable_strings.txt line 697),
+#     with an "OK" button (R.string.ok), then calls
+#     quarantineRecordOnError() - which sets the form record's status to
+#     QUARANTINED, not COMPLETE. This is exactly why "Case Name Size 2"
+#     expects the record to be ABSENT from Saved Forms afterward: Saved
+#     Forms lists FormRecordFilter.Saved-matching (completed, non-
+#     quarantined) records, and a quarantined record doesn't match that
+#     filter.
+#   android_translatable_strings.txt: home.forms.saved="Saved" (home card
+#     label); app.workflow.saved.heading="Saved Forms" (list screen title).
+#   Credentials: test1/123 (InstrumentationUtility.kt's login() default,
+#     preferred over the sheet's own prose which elsewhere says "1234").
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: ".*Basic Tests$") - a
+# fresh BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
+# null.
+- runFlow:
+    file: ../common/install_app_as_web_user.yaml
+    env:
+      APP_NAME: ".*Basic Tests$"
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: "test1"
+      PASSWORD: "123"
+- assertVisible: "Start"
+
+# --- Case Name Size 1: register a case with a > 255 char name, attempt
+# submit, confirm the length-warning error. ---
+- tapOn: "Start"
+- tapOn: "Case Tests"
+- tapOn: "Create a Case"
+- inputText: "CaseNameTooLongCaseNameTooLongCaseNameTooLongCaseNameTooLongCaseNameTooLongCaseNameTooLongCaseNameTooLongCaseNameTooLongCaseNameTooLongCaseNameTooLongCaseNameTooLongCaseNameTooLongCaseNameTooLongCaseNameTooLongCaseNameTooLongCaseNameTooLongCaseNameTooLongCaseNameTooLong"
+- hideKeyboard
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+- tapOn: "Confirm - Please create this case."
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"
+- assertVisible: "Error Saving your Form"
+- assertVisible:
+    text: "(?i).*value must be 255 characters or less.*"
+- tapOn: "OK"
+- assertVisible: "Start"
+
+# --- Case Name Size 2: the oversized-name submission must NOT show up
+# under Saved Forms (it was quarantined, not completed). ---
+- tapOn: "Saved"
+- assertVisible: "Saved Forms"
+- assertNotVisible:
+    text: "(?i).*CaseNameTooLong.*"
+- back
+- assertVisible: "Start"

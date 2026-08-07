@@ -1,0 +1,100 @@
+appId: org.commcare.dalvik
+tags:
+  - form_submissions
+  - automatable
+---
+# Master Mobile Plan (2026) > Form Submissions > "Appearance Attributes" -
+# Start -> Basic Form Tests -> Appearance Attributes, page through and
+# submit.
+#
+# Form structure verified against the real CCZ (read-only reference, not
+# committed): resources/qateam - [Master] Basic Tests - v1141.ccz, unzipped
+# and inspected -
+#   en/app_strings.txt: forms.m0f12=[Mobile] Appearance Attributes.
+#   modules-0/forms-12.xml: the real question order/appearances/binds.
+# Real on-screen form title is "[Mobile] Appearance Attributes" (leading
+# "[Mobile] " prefix) - per install_app_as_web_user.yaml's hard-won FULL-MATCH
+# lesson (Maestro's tapOn text match is a full match, not substring), tapped
+# below via the same ".*<suffix>$" wildcard-prefix pattern this repo now uses
+# everywhere a form/app label may carry a bracketed prefix.
+#
+# REQUIRED-FIELD CAVEAT: this form has exactly two required questions -
+# /data/q_singleselect_compact (appearance="compact", choices Choice
+# A/B/C/D) and /data/automatic_advancing_with_images (appearance="quick
+# compact", choices Yes/No) - both use CommCare's "quick"/"compact" grid
+# widgets, which auto-advance to the next question the instant a choice is
+# tapped (SelectImageWidget/GridWidget "quick" appearance). Every other
+# question on this form is optional and is paged through via nav_btn_next
+# without answering (a plain "page through" per the sheet's own wording) -
+# this matches this repo's established generic-navigation convention (see
+# flows/common/navigate_form_no_errors.yaml, flows/multimedia/
+# mm4_question_types.yaml) rather than hand-modeling every appearance widget
+# (combobox filtering, grid views, collapsible groups, force-capture media,
+# etc. are all genuinely human-judgment-heavy per their own question text -
+# e.g. q_singleselect_combobox's label is itself a 9-step manual test script
+# - out of scope for a device-only Maestro flow).
+#
+# "Choice A" and "Yes" taps below are wrapped `optional: true` since the
+# quick/compact widgets auto-advance the SCREEN the moment they're tapped
+# (so nav_btn_next may already be gone/replaced by the time this step runs
+# depending on Maestro's screen-settle timing) - if the tap lands, great; if
+# the screen already moved on for some other reason, this is a no-op rather
+# than a hard failure. The subsequent generic repeat-next loop is generous
+# (times: 30) to safely walk the rest of this long form regardless of exactly
+# how many screens the "quick" auto-advance widgets collapse.
+#
+# nav_btn_next/nav_btn_finish ids and form.entry.complete.save.success="Form
+# successfully completed" (android_translatable_strings.txt:169) verified
+# against commcare-android source (read-only reference, never modified),
+# same regex-assertion convention as
+# flows/recovery_measures/point_release_flow.yaml.
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: ".*Basic Tests$") - a
+# fresh BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
+# null.
+- runFlow:
+    file: ../common/install_app_as_web_user.yaml
+    env:
+      APP_NAME: ".*Basic Tests$"
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- tapOn: "Start"
+- tapOn: "Basic Form Tests"
+- tapOn: ".*Appearance Attributes$"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_next"
+    timeout: 10000
+- repeat:
+    times: 30
+    while:
+      visible:
+        id: "org.commcare.dalvik:id/nav_btn_next"
+    commands:
+      # Best-effort answers for the two required "quick"/"compact" auto-advancing
+      # selects - no-ops (optional) on every other screen.
+      - tapOn:
+          text: "Choice A"
+          optional: true
+      - tapOn:
+          text: "Yes"
+          optional: true
+      - tapOn:
+          id: "org.commcare.dalvik:id/nav_btn_next"
+          optional: true
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_finish"
+    timeout: 10000
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"
+- assertVisible:
+    text: "(?i).*form.*success.*completed.*"
+- assertNotVisible:
+    text: "(?i).*unexpected error.*"
+- assertNotVisible:
+    text: "(?i).*commcare will now restart.*"

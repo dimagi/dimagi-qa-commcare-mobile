@@ -1,0 +1,85 @@
+appId: org.commcare.dalvik
+tags:
+  - form_submissions
+  - partial
+---
+# Master Mobile Plan (2026) > Form Submissions > "Locations" - the sheet's own
+# navigation text for this row literally says "Start -> Basic Form Tests ->
+# Question Types" (NOT "-> Locations", even though this app's Basic Form
+# Tests module has a real, separate "Locations" form -
+# en/app_strings.txt: forms.m0f9=Locations, confirmed while inspecting
+# resources/qateam - [Master] Basic Tests - v1141.ccz for this batch). Per
+# this task's explicit instruction to follow the sheet's literal wording
+# rather than "correct" what looks like a copy-paste error, this flow
+# navigates to "Question Types" exactly as written, not to the real
+# "Locations" form. Deliberately kept as its own short flow file (distinct
+# from flows/form_submissions/question_types_01_03_answer_and_submit.yaml)
+# because its Automatability/caveat is different from the "Question Types
+# 1-3" rows (those are answer-and-submit rows; this one is a PARTIAL
+# default-value-inspection row) - reusing that file's full answer-every-
+# question script would misrepresent what this row is actually checking.
+#
+# PARTIAL: the sheet's point for this row is "verify default location
+# values appear per question" - i.e. that each question pre-populates with
+# the correct expected default value. Maestro can assert that SOME text is
+# visible, but has no way to know the CORRECT expected default value for
+# each question without that expectation being specified anywhere in this
+# repo or the sheet extract provided for this batch, so a real per-question
+# default-value check is NOT scripted here. What this flow DOES do: navigate
+# to the (literal, per above) "Question Types" form and assert the screen
+# loaded with its first real question visible, as a sanity check that
+# whatever default values exist are at least rendering without crashing -
+# full per-question default-value verification stays a documented gap, to
+# be filled in only once the sheet clarifies which form/values it actually
+# means.
+#
+# Selectors verified against the real CCZ (read-only reference, not
+# committed): resources/qateam - [Master] Basic Tests - v1141.ccz, unzipped
+# and inspected - en/app_strings.txt (modules.m0=Basic Form Tests,
+# forms.m0f1=Question Types) and modules-0/forms-1.xml (intro-label text
+# "The following questions will go over basic question types allowed in a
+# form...", first real question is /data/q_text, itext label taken from
+# group_list/q_text_2-label per the form's own itext re-use). nav_btn_next id
+# and the "Exit Form?"/"EXIT WITHOUT SAVING" quit-dialog strings verified the
+# same way as flows/common/navigate_form_no_errors.yaml (whose citations
+# apply identically here).
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: ".*Basic Tests$") - a
+# fresh BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
+# null.
+- runFlow:
+    file: ../common/install_app_as_web_user.yaml
+    env:
+      APP_NAME: ".*Basic Tests$"
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- tapOn: "Start"
+- tapOn: "Basic Form Tests"
+- tapOn: "Question Types"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_next"
+    timeout: 10000
+- assertVisible:
+    text: "(?i).*following questions will go over basic question types.*"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+- assertVisible:
+    text: "(?i).*enter any form of text or special characters.*"
+- assertNotVisible:
+    text: "(?i).*unexpected error.*"
+- assertNotVisible:
+    text: "(?i).*commcare will now restart.*"
+- back
+- tapOn:
+    text: "(?i).*exit without saving.*"
+    optional: true
+- back
+- extendedWaitUntil:
+    visible:
+      text: "Start"
+    timeout: 5000

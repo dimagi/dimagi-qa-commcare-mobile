@@ -1,0 +1,223 @@
+appId: org.commcare.dalvik
+tags:
+  - form_submissions
+  - partial
+---
+# Master Mobile Plan (2026) > Form Submissions > "Minimize Duplicate" -
+# Basic Tests app > Menu "Minimize Duplicates": create a case, submit a
+# followup "Create a Sub Case" form, verify the sub case appears under
+# "View Case's Sub Case", update the case, verify parent case properties
+# update.
+#
+# PARTIAL: the sheet's last step, "verify parent case properties update",
+# needs opening a case-list/case-detail REPORT to visually confirm updated
+# property values against expectations - this app's case-list detail
+# columns (m3_case_short/m6_case_short in suite.xml) show whatever this app
+# was configured to display, which could not be verified against any source
+# in this repo (no live device access), so asserting the EXACT updated
+# property text on a case-list row is not scripted here and stays a
+# documented gap. Everything else reachable on-device (create the case,
+# create the sub case, confirm it's selectable under "View Case's Sub
+# Case", and actually submit the case-update form) IS automated below.
+#
+# APP/MENU STRUCTURE - verified against the real CCZ (read-only reference,
+# not committed): resources/qateam - [Master] Basic Tests - v1141.ccz,
+# unzipped and inspected -
+#   en/app_strings.txt: modules.m6=Minimize Duplicates, modules.m7=View
+#     Case's Sub Case, modules.m3=Case Tests, forms.m6f0=Close a Case,
+#     forms.m6f1=Create a Sub Case, forms.m3f0=Create a Case,
+#     forms.m3f1=Update a Case, case_list_form.m6=Create a Case.
+#   suite.xml: module m6's menu lists three items (m6-f0 "Close a Case",
+#     m6-f1 "Create a Sub Case", m6-case-list "Case List") plus a nested
+#     child menu `<menu root="m6" id="m7">` ("View Case's Sub Case"). All of
+#     m6-f0/m6-f1/m6-case-list select an open case of type "coverage_basic"
+#     (same case type as module m3's "Case Tests" forms - Create/Update/
+#     Close a Case all operate on this one shared case type). m3-f0
+#     ("Create a Case")'s own <entry><stack> has a conditional
+#     `<create if=".../return_to = 'm6' ...">` that jumps straight back into
+#     m6 with the newly-created case selected once registered - this is
+#     exactly the mechanism behind case_list_form.m6="Create a Case": when
+#     m6's own case-selection screen has no open coverage_basic case yet, it
+#     offers a "Create a Case" register button that launches this same
+#     m3-f0 form and returns to m6 afterward. This flow relies on that
+#     "Create a Case" button appearing on first entry into "Create a Sub
+#     Case" (m6-f1) on a fresh install (no cases exist yet).
+#   modules-3/forms-0.xml ("Create a Case"): required /data/casename (text)
+#     and /data/confirm (select1, values confirm/cancel, label "Are you sure
+#     you want to create a new case?").
+#   modules-6/forms-1.xml ("Create a Sub Case"): required
+#     /data/sub_case_name (text); /data/confirm_creation (select1, values
+#     confirm/cancel) is NOT required by its own bind but must be answered
+#     "confirm" for the sub_case_0 case-create block to become relevant
+#     (bind: relevant="/data/confirm_creation = 'confirm'") - otherwise no
+#     sub case is actually created.
+#   modules-7/forms-0.xml ("Close Case", m7-f0, the ONLY form under "View
+#     Case's Sub Case"): selects the parent coverage_basic case, then a
+#     sub_case_one filtered to that parent via
+#     `[index/parent=.../case_id]` - reaching its case-selection screen and
+#     seeing the exact sub-case NAME this flow itself typed in during
+#     "Create a Sub Case" IS the concrete, checkable version of "verify the
+#     sub case appears" (rather than an unverifiable guess at real case-list
+#     column text, since we control the name we typed).
+#   modules-3/forms-1.xml ("Update a Case"): the only required field is
+#     /data/intval (int) - answered below; every other field pre-fills from
+#     the existing case (setvalue ref=.../xforms-ready pulling from
+#     instance('casedb')) and is left as-is.
+#
+# KNOWN-VALUE TEST DATA: this flow types fixed, distinctive strings
+# ("MaestroBasicCase" for the case name, "MaestroSubCase" for the sub case
+# name) specifically so later screens can assert on them by exact text,
+# rather than guessing at real case-list column formatting.
+#
+# UNVERIFIED SCREEN-TRANSITION CAVEAT: the exact screen returned to
+# immediately after "Create a Case" submits (back at m6's own menu vs.
+# straight back into "Create a Sub Case" form entry with the case
+# pre-selected) could not be confirmed without live device access - the
+# `tapOn: "Create a Sub Case"` step below is marked `optional: true` for
+# this reason (a no-op if that menu item isn't the screen currently shown,
+# e.g. if the stack redirect already dropped us into the form itself).
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: ".*Basic Tests$") - a
+# fresh BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
+# null.
+- runFlow:
+    file: ../common/install_app_as_web_user.yaml
+    env:
+      APP_NAME: ".*Basic Tests$"
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- tapOn: "Start"
+- tapOn: "Minimize Duplicates"
+- tapOn: "Create a Sub Case"
+
+# --- Create a Case (via the case-list's "Create a Case" register button,
+# case_list_form.m6) - no coverage_basic case exists yet on a fresh install. ---
+- tapOn:
+    text: "Create a Case"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_next"
+    timeout: 10000
+- inputText: "MaestroBasicCase"
+- hideKeyboard
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+- tapOn:
+    text: "(?i).*please create this case.*"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_finish"
+    timeout: 10000
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"
+- assertVisible:
+    text: "(?i).*form.*success.*completed.*"
+
+# --- Create a Sub Case (per the stack redirect this should land back on m6;
+# re-navigate defensively in case it landed on the plain Minimize Duplicates
+# menu instead). ---
+- tapOn: "Start"
+  optional: true
+- tapOn: "Minimize Duplicates"
+  optional: true
+- tapOn: "Create a Sub Case"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_next"
+    timeout: 10000
+# Case-selection screen (if shown) - select the case by its known name.
+- tapOn:
+    text: "MaestroBasicCase"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_next"
+    timeout: 10000
+# sub_case_intro trigger.
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+- inputText: "MaestroSubCase"
+- hideKeyboard
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+# sub_case_number - optional, skipped.
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+- tapOn:
+    text: "(?i).*please create.*maestrosubcase.*"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_finish"
+    timeout: 10000
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"
+- assertVisible:
+    text: "(?i).*form.*success.*completed.*"
+
+# --- Verify the sub case appears under "View Case's Sub Case" (m7). ---
+- tapOn: "Start"
+- tapOn: "Minimize Duplicates"
+- tapOn: "View Case's Sub Case"
+- tapOn:
+    text: "MaestroBasicCase"
+    optional: true
+- assertVisible: "MaestroSubCase"
+- back
+- back
+
+# --- Update the case (Case Tests module -> Update a Case). ---
+- tapOn: "Start"
+- tapOn: "Case Tests"
+- tapOn: "Update a Case"
+- tapOn:
+    text: "MaestroBasicCase"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_next"
+    timeout: 10000
+- inputText: "Maestro updated text"
+- hideKeyboard
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+# singleselect, multiselect, phone_number - all optional per
+# modules-3/forms-1.xml's binds, skipped.
+- repeat:
+    times: 3
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/nav_btn_next"
+# /data/intval - the form's only required field.
+- inputText: "99"
+- hideKeyboard
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+# geodata, dateval, new_data (trailing info trigger) - optional, skipped.
+- repeat:
+    times: 3
+    while:
+      visible:
+        id: "org.commcare.dalvik:id/nav_btn_next"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/nav_btn_next"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_finish"
+    timeout: 10000
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"
+- assertVisible:
+    text: "(?i).*form.*success.*completed.*"
+- assertNotVisible:
+    text: "(?i).*unexpected error.*"
+- assertNotVisible:
+    text: "(?i).*commcare will now restart.*"

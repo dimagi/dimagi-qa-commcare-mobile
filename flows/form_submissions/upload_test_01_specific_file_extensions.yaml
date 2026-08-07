@@ -1,0 +1,113 @@
+appId: org.commcare.dalvik
+tags:
+  - form_submissions
+  - partial
+---
+# Master Mobile Plan (2026) > Form Submissions > "upload_test_1" - "File
+# upload with specific extensions": Basic Tests app > Upload Tests >
+# "Upload Tests for specific file extensions".
+#
+# Navigation verified against the real "[Master] Basic Tests" app content
+# (resources/qateam - [Master] Basic Tests - v1141.ccz, unzipped read-only):
+#   en/app_strings.txt: modules.m24="Upload Tests",
+#     forms.m24f1="Upload Tests for specific file extensions".
+#   modules-24/forms-1.xml: the form has exactly 23 <upload> questions, in
+#     this fixed order - 7 mediatype="image/*" (labels ask for heic, bmp,
+#     wbmp, jpg, JPG, webp, jpeg extensions), then 7 mediatype="audio/*"
+#     appearance="acquire-or-upload" (mp3, 3ga, 3g2, wav, amr, qcp, ogg),
+#     then 9 mediatype="video/*" (3gp, 3gpp, mp4, 3gp2, mpg4, mpeg4, m4v,
+#     mpg, mpeg). No <bind> marks any of them `required` and none are
+#     wrapped in a relevant/group construct, so the form should accept
+#     several left blank.
+#
+# PER-QUESTION-TYPE FEASIBILITY (per the task's own instruction to check
+# this explicitly rather than guess) - checked against
+# app/src/org/commcare/views/widgets/{Image,Audio,Video}Widget.java on the
+# read-only commcare-android reference:
+#   IMAGE (7 questions) - COVERABLE. ImageWidget's "Choose Image" button
+#     (res/values/strings.xml choose_image="Choose Image") calls
+#     WidgetUtils.createPickMediaIntent(context, "image/*") - the same
+#     system Photo Picker / DocumentsUI chooser that
+#     ../common/pick_first_gallery_image.yaml already knows how to drive.
+#     Automated below using addMedia + that same subflow, reusing
+#     flows/multimedia/assets/sample_image.png (the only image fixture
+#     committed anywhere in this repo per resources/README.md's own
+#     inventory - no .heic/.bmp/.wbmp/.jpg/.webp/.jpeg fixtures exist here,
+#     so this proves the image/* upload path works generically, not that
+#     each literal target extension is individually exercised).
+#   AUDIO (7 questions) - NOT COVERABLE here, marked PARTIAL/skipped.
+#     AudioWidget's "Choose Sound" button (choose_sound="Choose Sound")
+#     fires a plain Intent.ACTION_GET_CONTENT with type "audio/*" - a
+#     generic system file-browser, NOT the same Photo Picker intent the
+#     image/video widgets use, so pick_first_gallery_image.yaml's
+#     thumbnail-based selectors (icon_thumbnail / documentsui:id/thumbnail)
+#     are not confirmed to apply (an audio file list is far more likely to
+#     render as a plain list row than a thumbnail grid). Moot regardless:
+#     resources/README.md's tracked-file inventory and
+#     flows/multimedia/assets/ (just sample_image.png) confirm no audio
+#     fixture file exists anywhere in this repo to push via addMedia in the
+#     first place.
+#   VIDEO (9 questions) - NOT COVERABLE here, marked PARTIAL/skipped, but
+#     for a DIFFERENT reason than audio: VideoWidget's "Choose Video" button
+#     calls the exact same WidgetUtils.createPickMediaIntent(context,
+#     "video/*") helper as ImageWidget, so pick_first_gallery_image.yaml
+#     would plausibly work IF a video existed in the gallery - but no video
+#     fixture is committed in this repo (flows/multimedia/assets/ has only
+#     sample_image.png; coverage_matrix.csv's own "Filesize 1" and
+#     "Filesize Warning 2" rows are already flagged BLOCKED on the exact
+#     same missing "flows/multimedia/assets/oversized_test_video.mp4"), so
+#     there is nothing to push via addMedia here either.
+#
+# Net result: the 7 image sub-questions are answered for real; the 7 audio
+# + 9 video sub-questions are left blank (skipped via nav_btn_next, relying
+# on the "not required" observation above) so the form can still reach
+# nav_btn_finish and demonstrate the rest of the on-device flow completes.
+# Row is Partial in coverage_matrix.csv for this reason.
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: ".*Basic Tests$") - a
+# fresh BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
+# null.
+- addMedia:
+    - "../multimedia/assets/sample_image.png"
+- runFlow:
+    file: ../common/install_app_as_web_user.yaml
+    env:
+      APP_NAME: ".*Basic Tests$"
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- tapOn: "Start"
+- tapOn: "Upload Tests"
+- tapOn: "Upload Tests for specific file extensions"
+
+# --- 7 image/* questions: pick the one committed image fixture for each. ---
+- repeat:
+    times: 6
+    commands:
+      - tapOn: "Choose Image"
+      - runFlow: ../common/pick_first_gallery_image.yaml
+      - tapOn:
+          id: "org.commcare.dalvik:id/nav_btn_next"
+- tapOn: "Choose Image"
+- runFlow: ../common/pick_first_gallery_image.yaml
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+
+# --- 7 audio/* + 9 video/* questions: left blank, see header PARTIAL note -
+# skip through via nav_btn_next until the form's own finish button appears.
+- repeat:
+    while:
+      visible:
+        id: "org.commcare.dalvik:id/nav_btn_next"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/nav_btn_next"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_finish"
+    timeout: 10000
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"

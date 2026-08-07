@@ -1,0 +1,145 @@
+appId: org.commcare.dalvik
+tags:
+  - form_submissions
+  - automatable
+---
+# Master Mobile Plan (2026) > Form Submissions > "Groups" - Start -> Basic
+# Form Tests -> Groups, submit twice with different answers (looped twice in
+# this one flow, rather than two separate flow files, per the sheet's own
+# "loop twice" wording).
+#
+# Form structure verified against the real CCZ (read-only reference, not
+# committed): resources/qateam - [Master] Basic Tests - v1141.ccz, unzipped
+# and inspected -
+#   en/app_strings.txt: forms.m0f7=Groups.
+#   modules-0/forms-7.xml: the real question order/appearances/binds.
+#
+# REQUIRED-FIELD CAVEAT (why this isn't a pure generic-next-loop like the
+# other Form Submissions flows): the form's very first screen after its
+# intro trigger is /data/select_list, a "field-list" group that puts FIVE
+# select1 questions on one scrollable screen at once - "Choose:" (label_
+# vaccins, optional), "First" (/data/select_list/first, bind
+# required="true()"), "Second" (/data/select_list/second, bind
+# required="true()"), "Third" and "Fourth" (both optional). ALL FIVE share
+# the exact same three choice labels ("Yes"/"No"/"Don't know"), so a plain
+# `tapOn: "Yes"` is ambiguous - Maestro would always hit the FIRST "Yes" in
+# the view tree (label_vaccins's own), never reaching First/Second below it.
+# Disambiguated below via Maestro's `index` selector property (0-based,
+# document order): index 0 = label_vaccins's choice, index 1 = First's,
+# index 2 = Second's - matching the five questions' top-to-bottom order in
+# the form's own <select_list> group in modules-0/forms-7.xml. UNVERIFIED
+# against a live render (no device access from this repo) - if CommCare's
+# real view hierarchy doesn't lay these out in the same order the XML
+# declares them, adjust the index values here. Third/Fourth (optional) are
+# left unanswered.
+#
+# Every other question after this first screen is optional (verified against
+# every remaining <bind> in modules-0/forms-7.xml - none carry
+# required="true()"), including several conditionally-hidden follow-up
+# questions whose `relevant` expressions depend on answers this flow
+# deliberately doesn't give (multiple_one, first_select, county_select,
+# q_skip_one, q_skip_inner, etc.) - CommCare simply skips a question's screen
+# entirely when it isn't relevant, so the generic next-loop below safely
+# walks past all of them regardless of how many end up shown.
+#
+# DIFFERENT ANSWERS PER SUBMISSION (per the sheet): loop 1 answers
+# First=Yes, Second=Yes; loop 2 answers First=No, Second=No - genuinely
+# different responses, satisfying "submit twice with different answers".
+#
+# nav_btn_next/nav_btn_finish ids and form.entry.complete.save.success="Form
+# successfully completed" (android_translatable_strings.txt:169) verified
+# against commcare-android source (read-only reference, never modified),
+# same regex-assertion convention as
+# flows/recovery_measures/point_release_flow.yaml.
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: ".*Basic Tests$") - a
+# fresh BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
+# null.
+- runFlow:
+    file: ../common/install_app_as_web_user.yaml
+    env:
+      APP_NAME: ".*Basic Tests$"
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+
+# --- Submission 1: First = Yes, Second = Yes ---
+- tapOn: "Start"
+- tapOn: "Basic Form Tests"
+- tapOn: "Groups"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_next"
+    timeout: 10000
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+- tapOn:
+    text: "Yes"
+    index: 1
+- tapOn:
+    text: "Yes"
+    index: 2
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+- repeat:
+    times: 25
+    while:
+      visible:
+        id: "org.commcare.dalvik:id/nav_btn_next"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/nav_btn_next"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_finish"
+    timeout: 10000
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"
+- assertVisible:
+    text: "(?i).*form.*success.*completed.*"
+- assertNotVisible:
+    text: "(?i).*unexpected error.*"
+- assertNotVisible:
+    text: "(?i).*commcare will now restart.*"
+
+# --- Submission 2: First = No, Second = No (different answers) ---
+- tapOn: "Start"
+- tapOn: "Basic Form Tests"
+- tapOn: "Groups"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_next"
+    timeout: 10000
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+- tapOn:
+    text: "No"
+    index: 1
+- tapOn:
+    text: "No"
+    index: 2
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+- repeat:
+    times: 25
+    while:
+      visible:
+        id: "org.commcare.dalvik:id/nav_btn_next"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/nav_btn_next"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_finish"
+    timeout: 10000
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"
+- assertVisible:
+    text: "(?i).*form.*success.*completed.*"
+- assertNotVisible:
+    text: "(?i).*unexpected error.*"
+- assertNotVisible:
+    text: "(?i).*commcare will now restart.*"

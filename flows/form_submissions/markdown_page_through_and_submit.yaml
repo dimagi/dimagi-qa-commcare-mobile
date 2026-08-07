@@ -1,0 +1,78 @@
+appId: org.commcare.dalvik
+tags:
+  - form_submissions
+  - partial
+---
+# Master Mobile Plan (2026) > Form Submissions > "Markdown" - Start -> Basic
+# Form Tests -> Markdown, page through, submit.
+#
+# PARTIAL: the sheet's verification here is "confirm markdown renders per
+# [the] Confluence page" - i.e. that each question's markdown source (bold,
+# italics, strikethrough, headers, tables, clickable phone/web links,
+# markdown-in-select-choices) renders as correctly-formatted rich text on
+# screen. That is a visual-rendering judgment call with no text/
+# accessibility-tree equivalent Maestro can assert (a rendered "**bold**"
+# and a literal, un-rendered "**bold**" string both count as the identical
+# text node to Maestro's selectors), so the actual rendering check is NOT
+# automated here and stays a documented gap - same convention as
+# flows/date_widgets/date_02_nepali.yaml's own PARTIAL header for an
+# analogous "eyeball the rendered output" limitation. The on-device
+# navigation through every markdown question and the final submission ARE
+# fully automated below.
+#
+# Form structure verified against the real CCZ (read-only reference, not
+# committed): resources/qateam - [Master] Basic Tests - v1141.ccz, unzipped
+# and inspected -
+#   en/app_strings.txt: forms.m0f6=Markdown.
+#   modules-0/forms-6.xml: the real question order/appearances/binds - every
+#     question in this form is either a `trigger` (no answer needed to
+#     proceed) or a `select1` with NO required bind (/data/question13,
+#     "This question *should* have markdown in the selects" - optional), so
+#     a plain generic next-loop safely walks the entire form.
+#
+# nav_btn_next/nav_btn_finish ids and form.entry.complete.save.success="Form
+# successfully completed" (android_translatable_strings.txt:169) verified
+# against commcare-android source (read-only reference, never modified),
+# same regex-assertion convention as
+# flows/recovery_measures/point_release_flow.yaml.
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: ".*Basic Tests$") - a
+# fresh BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
+# null.
+- runFlow:
+    file: ../common/install_app_as_web_user.yaml
+    env:
+      APP_NAME: ".*Basic Tests$"
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- tapOn: "Start"
+- tapOn: "Basic Form Tests"
+- tapOn: "Markdown"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_next"
+    timeout: 10000
+- repeat:
+    times: 15
+    while:
+      visible:
+        id: "org.commcare.dalvik:id/nav_btn_next"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/nav_btn_next"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_finish"
+    timeout: 10000
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"
+- assertVisible:
+    text: "(?i).*form.*success.*completed.*"
+- assertNotVisible:
+    text: "(?i).*unexpected error.*"
+- assertNotVisible:
+    text: "(?i).*commcare will now restart.*"

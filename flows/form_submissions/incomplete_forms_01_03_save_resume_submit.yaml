@@ -1,0 +1,166 @@
+appId: org.commcare.dalvik
+tags:
+  - form_submissions
+  - partial
+---
+# Master Mobile Plan (2026) > Form Submissions > "Incomplete Forms 1", "2",
+# "3" - log in, open Question Types, answer only the first two real
+# questions (q_text, q_int - the "intro" step before them is a Next-only
+# label/trigger, not a question), leave the form via `back`, confirm the app
+# offers "SAVE INCOMPLETE", save it. Go home, open the saved form from the
+# "Incomplete" home card, verify both prior answers are still shown, answer
+# a third question (q_numeric), save incomplete again, then reopen once more
+# and finish the rest of the form to fully submit it.
+#
+# Run once for all three sheet rows, same convention as
+# flows/mobile_pins/pin_01_prompt_shown_on_first_login.yaml covering two
+# rows with one file - the on-device mechanics these three rows describe are
+# identical, only the sheet's own narrative framing differs across them.
+# ALSO COVERS coverage_matrix.csv's "Incomplete Forms 4" row for its
+# on-device half - see that row's own Partial note in coverage_matrix.csv
+# about the HQ Submit History web-report verification step, which has no
+# on-device equivalent and is out of scope for this Maestro-based,
+# device-only framework (see docs/FRAMEWORK.md's own scope statement).
+#
+# PARTIAL / BEST-EFFORT CAVEAT: whether a reopened incomplete form resumes
+# at question 1 (standard Javarosa re-entry behavior - pre-filling
+# already-answered widgets as you tap Next through them, which is the
+# assumption this flow is written against) or instead jumps straight to a
+# hierarchy/list view of already-answered questions is NOT conclusively
+# settled by any source available in this repo. commcare-android's
+# SavedFormTest.java (app/instrumentation-tests, read-only reference)
+# testIncompleteForm_forValidateCondition()/testIncompleteForm_forMediaChanges()
+# both call InstrumentationUtility.openFirstIncompleteForm() and then
+# clickListItem(R.id.list_view, N) to reach a specific question afterward -
+# which COULD indicate a list-style re-entry screen - but that test's app
+# ("TestSavedForm") is a different, dedicated fixture app, not this repo's
+# "[Master] Basic Tests", and R.id.list_view there is not confirmed to be
+# the same screen_suite_menu_list/screen_entity_select_list chrome this
+# framework already relies on elsewhere (it may just be a Field-List group
+# specific to that fixture's form design). If a live BrowserStack run shows
+# the reopened "Question Types" form does NOT land on q_text first, adjust
+# the nav_btn_next taps immediately after each reopen accordingly.
+#
+# Verified against commcare-android source (read-only reference, not modified):
+#   FormEntryDialogs.createQuitDialog(): back-press on an in-progress form
+#     shows a PaneledChoiceDialog titled quit_form_title="Exit Form?" with
+#     choices do_not_exit="STAY IN FORM", do_not_save="EXIT WITHOUT SAVING",
+#     and (isIncompleteEnabled, true by default per
+#     HiddenPreferences.isIncompleteFormsEnabled()) keep_changes="SAVE
+#     INCOMPLETE" (app/res/values/strings.xml lines 183-216).
+#   android_translatable_strings.txt: form.entry.incomplete.save.success=
+#     "Form saved as incomplete" (toast shown after tapping SAVE INCOMPLETE -
+#     transient, so asserted as optional below, same convention as the "1
+#     form sent to server!" toast in flows/date_widgets/date_04_05_standard_widget.yaml);
+#     home.forms.incomplete="Incomplete" (home card's static label -
+#     HomeButtons.java's getIncompleteButtonTextSetter() appends a live
+#     "(<count>)" suffix asynchronously via home.forms.incomplete.indicator,
+#     hence the "(?i)incomplete.*" regex tap below rather than a fixed
+#     literal); app.workflow.incomplete.heading="Incomplete Forms" (list
+#     screen title).
+#   InstrumentationUtility.kt openFirstIncompleteForm(): taps the home card
+#     via onView(withText(startsWith("Incomplete"))), then
+#     clickListItem(R.id.screen_entity_select_list, 0) - a single tap opens
+#     the form directly (FormRecordListActivity.onItemClick() -> returnItem(),
+#     no separate confirm step) - matches this flow's approach of tapping the
+#     row directly by its visible form-name text.
+#   FormRecordListActivity.java: listView id is screen_entity_select_list;
+#     IncompleteFormRecordView.java: each row's form-name text lives in the
+#     formrecord_txt_main TextView.
+#   The CCZ's own en/app_strings.txt + modules-0/forms-1.xml (extracted
+#     read-only from resources/qateam - [Master] Basic Tests - v1141.ccz,
+#     never committed/modified): modules.m0="Basic Form Tests",
+#     forms.m0f1="Question Types"; the form body order is intro (trigger,
+#     Next-only) -> q_text -> q_int -> q_numeric -> ~20 more questions
+#     (including media/GPS/signature/barcode types) with NO
+#     `<bind ... required="true()">` anywhere in the form (confirmed by
+#     grepping every <bind> in the form) - so Next can be tapped through
+#     every remaining question with no answer at all and Finish will still
+#     succeed, avoiding this framework's total lack of camera/GPS/signature-
+#     driving support.
+#   Credentials: test1/123 (InstrumentationUtility.kt's login() default,
+#     preferred over the sheet's own prose which elsewhere says "1234").
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: ".*Basic Tests$") - a
+# fresh BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
+# null.
+- runFlow:
+    file: ../common/install_app_as_web_user.yaml
+    env:
+      APP_NAME: ".*Basic Tests$"
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: "test1"
+      PASSWORD: "123"
+- assertVisible: "Start"
+
+# --- Incomplete Forms 1/2/3: answer 2 of ~20+ questions, save incomplete. ---
+- tapOn: "Start"
+- tapOn: "Basic Form Tests"
+- tapOn: "Question Types"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+- inputText: "MaestroIncompleteText1"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+- inputText: "42"
+- hideKeyboard
+- back
+- assertVisible: "Exit Form?"
+- assertVisible: "STAY IN FORM"
+- assertVisible: "SAVE INCOMPLETE"
+- tapOn: "SAVE INCOMPLETE"
+- assertVisible:
+    text: "(?i).*form saved as incomplete.*"
+    optional: true
+- assertVisible: "Start"
+
+# --- Reopen: verify both prior answers persisted, answer a third question. ---
+- tapOn:
+    text: "(?i)incomplete.*"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/screen_entity_select_list"
+    timeout: 10000
+- assertVisible: "Question Types"
+- tapOn: "Question Types"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+    optional: true
+- assertVisible: "MaestroIncompleteText1"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+- assertVisible: "42"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+- inputText: "3.5"
+- hideKeyboard
+- back
+- assertVisible: "Exit Form?"
+- tapOn: "SAVE INCOMPLETE"
+- assertVisible: "Start"
+
+# --- Reopen again and fully submit (no remaining question is required). ---
+- tapOn:
+    text: "(?i)incomplete.*"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/screen_entity_select_list"
+    timeout: 10000
+- tapOn: "Question Types"
+- repeat:
+    while:
+      visible:
+        id: "org.commcare.dalvik:id/nav_btn_next"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/nav_btn_next"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_finish"
+    timeout: 10000
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"
+- assertVisible: "Start"

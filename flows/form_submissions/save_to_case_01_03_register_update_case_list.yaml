@@ -1,0 +1,146 @@
+appId: org.commcare.dalvik
+tags:
+  - form_submissions
+  - automatable
+---
+# Master Mobile Plan (2026) > Form Submissions > "Save-to-case-1" (Register a
+# case), "Save-to-case-2" (Update a case) and "Save-to-case-3" (Verify case
+# list report), run as one sequential flow since all three live inside the
+# SAME on-device "Save to case test" module and the sheet gives no detailed
+# per-row steps beyond the summary text (same "single narrative" convention
+# as flows/conditional_enum_in_case_list/conditional_id_mapping_01_06_full_scenario.yaml).
+#
+# SECOND APP: per the Master Plan's own "Application:" note on this tab
+# ("Basic Tests\nCase Managements" - "Second app for save to case
+# workflows"), this flow installs "Case Managements!" (the exact HQ display
+# name, confirmed via resources/qateam - Case Managements! - v232.ccz's
+# en/app_strings.txt - NOT the plain "Case Management" guess used
+# originally elsewhere in this repo), copying the install pattern from
+# flows/mobile_pins/multiple_app_pin_per_app_isolation.yaml (the one other
+# flow in this repo that already installs this exact app) rather than
+# guessing: install_app_as_web_user.yaml with
+# APP_NAME: ".*Case Managements!$" (see that subflow's own header for why
+# the ".*<name>$" shape is required - Maestro tapOn text matching is a FULL
+# match, and bracket/exclamation-point-bearing HQ names need the wildcard
+# prefix/anchor).
+#
+# NO SaveToCaseTest.kt (or similarly named test) EXISTS in the read-only
+# commcare-android instrumentation-tests checkout (grepped
+# app/instrumentation-tests/src/org/commcare/androidTests for
+# "SaveToCase"/"save_to_case" - no matches) - ground truth for this flow
+# comes entirely from extracting resources/qateam - Case Managements! -
+# v232.ccz (a real zip, unzipped read-only to inspect suite.xml +
+# en/app_strings.txt + modules-1/forms-{0,1}.xml), not from an
+# instrumentation test or guessed UI text:
+#   en/app_strings.txt: modules.m1="Save to case test",
+#     forms.m1f0="Save to case test Reg", forms.m1f1="Save to case update".
+#   suite.xml: module m1 has exactly TWO commands - m1-f0 (no case datum -
+#     a plain registration form) and m1-f1 (datum
+#     case_id_load_stc0, nodeset instance('casedb')/casedb/case[@case_type=
+#     'stc'][@status='open'], detail-select="m1_case_short"
+#     detail-confirm="m1_case_long"). m1_case_short/m1_case_long each have a
+#     SINGLE field, "Name" (m1.case_short.case_name_1.header /
+#     m1.case_long.case_name_1.header), and m1_select_text (default/app_
+#     strings.txt) = "Continue" - same case-select-then-confirm UX already
+#     exercised by flows/conditional_enum_in_case_list's m0-f1 "Followup"
+#     entry, whose "tapOn <case name>" then "tapOn Continue" pattern this
+#     flow reuses verbatim.
+#   modules-1/forms-0.xml ("Save to case test Reg"): 3 plain input
+#     questions in order - enter_case_name (xsd:string, itext "Enter case
+#     name"), enter_an_int (xsd:int, itext "Enter an int"), define_text
+#     (xsd:string, itext "Define text"). A <save_to_case> block creates a
+#     case_type='stc' case whose case_name/int/text properties are
+#     calculate-bound directly from those 3 answers - i.e. "Register a
+#     case" (Save-to-case-1) IS this form.
+#   modules-1/forms-1.xml ("Save to case update"): 3 plain input questions
+#     whose values are POPULATED via xforms-ready setvalue expressions
+#     reading straight back off the selected case's own case_name/int/text
+#     properties (case_name_should_appear_here, your_int_should_appear_here,
+#     your_text_should_appear_here) - no further editing/re-save happens in
+#     this form, it exists purely to prove save-to-case's round-trip, which
+#     is exactly "Update a case"/Save-to-case-2's "verify prepopulated data
+#     from registration matches" step. Asserting each of those 3 values
+#     equals what Save-to-case-1 entered is this flow's verification.
+#
+# SAVE-TO-CASE-3 ("Verify case list report") ORDERING NOTE: the sheet gives
+# no detailed steps for this row. Module m1 has no THIRD, separate
+# "view case list" menu command distinct from the two described above -
+# the only on-device case-list surface in this module is the case-select
+# screen (m1_case_short detail, single "Name" column) that m1-f1 ("Save to
+# case update") itself shows before you can pick a case to update. Since
+# that surface is reached mid-way through Save-to-case-2's own navigation
+# (you must open "Save to case update" to see it), this flow performs
+# Save-to-case-3's assertion (the newly-registered case's name is visible
+# in that list) BEFORE tapping the case name to continue into
+# Save-to-case-2's prepopulated-data check, even though the sheet numbers
+# it 3rd - there is no separate menu path that would let it come after.
+# This is judged Automatable (an on-device case-list assertion), NOT the
+# HQ-web "Case List Report" the task's own fallback guidance warns about -
+# module m0 ("Case List") has its own separate, unrelated case_type='case'
+# list (m0_case_short) that would never show our case_type='stc' case, so
+# m1's own case-select screen is the only on-device list this row can
+# plausibly mean.
+#
+# Test data is fixed/literal (not randomly generated) - same convention as
+# flows/conditional_enum_in_case_list's "Test One"/"Test Two" case names -
+# since Maestro has no built-in random-string primitive and each
+# BrowserStack run starts from clearState:true (a fresh casedb), so a fixed
+# name is safe from collision within a single run.
+- runFlow:
+    file: ../common/install_app_as_web_user.yaml
+    env:
+      APP_NAME: ".*Case Managements!$"
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- assertVisible: "Start"
+
+# === Save-to-case-1: "Register a case" ===
+- tapOn: "Start"
+- tapOn: "Save to case test"
+- tapOn: "Save to case test Reg"
+- inputText: "STC Automation Case"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+- inputText: "42"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+- inputText: "Automation Text"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_finish"
+    timeout: 10000
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"
+- assertVisible: "Start"
+
+# === Save-to-case-3: "Verify case list report" (see header note on why
+# this comes before Save-to-case-2's own steps below) ===
+- tapOn: "Start"
+- tapOn: "Save to case test"
+- tapOn: "Save to case update"
+- assertVisible:
+    id: "org.commcare.dalvik:id/screen_suite_menu_list"
+- assertVisible: "STC Automation Case"
+
+# === Save-to-case-2: "Update a case" - select the case just registered,
+# confirm, then verify the update form's 3 fields are prepopulated with
+# exactly what Save-to-case-1 entered. ===
+- tapOn: "STC Automation Case"
+- tapOn: "Continue"
+- assertVisible: "STC Automation Case"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+- assertVisible: "42"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+- assertVisible: "Automation Text"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_finish"
+    timeout: 10000
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"
+- assertVisible: "Start"

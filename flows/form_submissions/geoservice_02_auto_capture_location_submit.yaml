@@ -1,0 +1,59 @@
+appId: org.commcare.dalvik
+tags:
+  - form_submissions
+  - partial
+---
+# Master Mobile Plan (2026) > Form Submissions > "Geoservice 2" - "Auto
+# Capture Location". The sheet's actual verification step is "submit any
+# form, then go to Submit History > View Form > Raw XML" on CommCareHQ's
+# web UI to confirm a location got captured into the submission's metadata -
+# that half is a desktop-browser HQ report inspection, out of scope for this
+# device-only Maestro harness (same class of gap as every other
+# "HQ Submit History ..." row already marked Not automatable elsewhere in
+# coverage_matrix.csv, e.g. Multimedia's "Image Resize 27/28", "Media 4").
+#
+# This flow automates ONLY the ON-DEVICE half - "submit any form" - since
+# that's a genuine prerequisite step Maestro CAN drive, and the location
+# capture itself (if the CommCare build/app has "Auto Capture Location"
+# enabled) happens transparently as part of any ordinary form submission,
+# with no distinct on-screen UI of its own to interact with or assert
+# against; the only way to actually confirm the capture succeeded is the
+# HQ-side raw XML inspection this flow deliberately does NOT attempt.
+#
+# NOT flows/common/submit_only_form.yaml - that generic subflow blindly taps
+# the sole row of a single-module/single-form app (built for the dedicated
+# "Rate Limiting" app); "[Master] Basic Tests" has ~30 modules, so a blind
+# single-item-list tap would land on whatever module happens to sort first,
+# not a specific known-good form. Reuses the exact same concrete
+# "Basic Form Tests" > "Basic Form" navigation already verified against
+# this app's real content by
+# flows/trigger_device_logs/device_logs_1_submit_form.yaml (see that file's
+# header for the underlying en/app_strings.txt + modules-0/forms-0.xml
+# citations - modules.m0="Basic Form Tests", forms.m0f0="Basic Form", whose
+# only real question is /data/enter_a_name, auto-focused so `inputText`
+# alone reaches it with no preceding tap needed).
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: ".*Basic Tests$") - a
+# fresh BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
+# null.
+- runFlow:
+    file: ../common/install_app_as_web_user.yaml
+    env:
+      APP_NAME: ".*Basic Tests$"
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- tapOn: "Start"
+- tapOn: "Basic Form Tests"
+- tapOn: "Basic Form"
+- inputText: "Geoservice 2 Auto Capture Location"
+- hideKeyboard
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_finish"
+    timeout: 10000
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"

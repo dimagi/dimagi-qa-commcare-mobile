@@ -1,0 +1,153 @@
+appId: org.commcare.dalvik
+tags:
+  - form_submissions
+  - partial
+---
+# Master Mobile Plan (2026) > Form Submissions > "Repeat Groups 1" through
+# "Repeat Groups 5" - Start -> Basic Form Tests -> Repeats: add repeat-group
+# iterations via the "Add Group"/"Do Not Add" dialog, page through the rest
+# of the form, submit. All five sheet rows walk the same "Repeats" form (the
+# sheet doesn't split them across different forms/screens), so one flow file
+# covers all five coverage_matrix.csv rows - same one-file-many-rows
+# convention as flows/mobile_pins/pin_01_prompt_shown_on_first_login.yaml.
+#
+# PARTIAL: the sheet's own verification for this section is largely a
+# VISUAL judgment call - it describes a progress bar that should visibly
+# shorten/lengthen as repeat groups are added/removed, turn GREEN, and show
+# "FINISH" text at the end. Maestro can assert that specific TEXT is visible
+# (done below: this flow asserts "FINISH" appears on nav_btn_finish once the
+# form's last screen is reached), but it has no API to inspect a view's
+# rendered length or color - judging whether a progress bar visually
+# shortened/lengthened or turned the correct shade of green is a human visual
+# check with no text/accessibility-tree equivalent, so that specific part of
+# "Repeat Groups 1-5" is NOT automated here and stays a documented gap
+# (same convention as flows/menu_badges/menu_badges_03_04_badge_loads.yaml's
+# own PARTIAL header, which flags an analogous "legible/not fuzzy" visual-only
+# check as out of scope while still automating everything else on that
+# screen). Everything ELSE checkable - creating repeat-group iterations via
+# the real "Add Group"/"Do Not Add" dialog buttons, and submitting - is fully
+# automated below.
+#
+# Form structure verified against the real CCZ (read-only reference, not
+# committed): resources/qateam - [Master] Basic Tests - v1141.ccz, unzipped
+# and inspected -
+#   en/app_strings.txt: forms.m0f2=Repeats.
+#   modules-0/forms-2.xml: the real question order/appearances/binds. Its
+#     intro text literally instructs "Please create two, and enter values
+#     for them" for the first (user-addable) repeat group
+#     (/data/question1, itext id new_intro-label) - this flow creates
+#     exactly two.
+#   /data/question1/question3 (bind required="true()") and
+#     /data/question1/question2 (bind required="true()", a select1 with
+#     choices One/Two) are the only required fields inside that
+#     user-addable repeat - answered below for both iterations so
+#     navigation isn't blocked by a validation error. Every other question
+#     in the form (the fixed-count 3x repeat, the nested 2x3 outer/inner
+#     repeat, num_repeats and its own repeat, the County/City lookup
+#     selects) has NO required bind, so those sections are paged through
+#     via a generic next-loop without answering, per this repo's
+#     established generic-navigation convention (see
+#     flows/common/navigate_form_no_errors.yaml).
+#
+# "Add Group"/"Do Not Add" button text verified against commcare-android
+# source (read-only reference, never modified) -
+# android_translatable_strings.txt: repeat.dialog.add="Add Group",
+# repeat.dialog.leave="Do Not Add", repeat.dialog.exit="Do Not Add. I'm
+# Finished." (the "leave" vs "exit" variant depends on internal repeat-count
+# bookkeeping this flow can't predict in advance, hence the regex match
+# below covering both). form.entry.finish.button="FINISH"
+# (android_translatable_strings.txt:173) backs the literal "FINISH" text
+# assertion. nav_btn_next/nav_btn_finish ids and
+# form.entry.complete.save.success="Form successfully completed"
+# (android_translatable_strings.txt:169) verified the same way, same
+# regex-assertion convention as
+# flows/recovery_measures/point_release_flow.yaml.
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: ".*Basic Tests$") - a
+# fresh BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
+# null.
+- runFlow:
+    file: ../common/install_app_as_web_user.yaml
+    env:
+      APP_NAME: ".*Basic Tests$"
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- tapOn: "Start"
+- tapOn: "Basic Form Tests"
+- tapOn: "Repeats"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_next"
+    timeout: 10000
+# new_intro trigger -> lands on the empty repeat's "Add Group" prompt.
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+
+# --- Repeat iteration 1 ---
+- tapOn: "Add Group"
+- inputText: "Repeat one"
+- hideKeyboard
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+# full_address / street / zip_code - optional, skipped.
+- repeat:
+    times: 3
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/nav_btn_next"
+# required select1 question2 (label "Choose an option:", choices One/Two).
+- tapOn: "One"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+
+# --- Repeat iteration 2 ---
+- tapOn: "Add Group"
+- inputText: "Repeat two"
+- hideKeyboard
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+- repeat:
+    times: 3
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/nav_btn_next"
+- tapOn: "Two"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+
+# Stop at exactly two iterations - matches either the mid-form "Do Not Add"
+# or the end-of-form "Do Not Add. I'm Finished." button label.
+- tapOn:
+    text: "(?i)do not add.*"
+
+# Rest of the form (fixed 3x repeat, "toofew"/"repeat_total" info triggers,
+# nested 2x3 outer/inner repeat, num_repeats + its own repeat, intro_label,
+# County/City lookup selects) - all optional per header CAVEAT, paged
+# through generically. times: 40 is a generous upper bound; the `while`
+# condition stops the loop as soon as nav_btn_next disappears (i.e. the last
+# screen, with nav_btn_finish instead, is reached).
+- repeat:
+    times: 40
+    while:
+      visible:
+        id: "org.commcare.dalvik:id/nav_btn_next"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/nav_btn_next"
+
+# PARTIAL boundary: this confirms the literal "FINISH" text is present (the
+# one sub-part of the progress-bar/FINISH-state check Maestro CAN verify -
+# see header comment) - it does NOT judge the progress bar's color/length.
+- assertVisible: "FINISH"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"
+- assertVisible:
+    text: "(?i).*form.*success.*completed.*"
+- assertNotVisible:
+    text: "(?i).*unexpected error.*"
+- assertNotVisible:
+    text: "(?i).*commcare will now restart.*"

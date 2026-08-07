@@ -1,0 +1,118 @@
+appId: org.commcare.dalvik
+tags:
+  - form_submissions
+  - automatable
+---
+# Master Mobile Plan (2026) > Form Submissions > "Multiple Submissions" -
+# Basic Form Tests -> Basic Form, submit ~10 times in a loop, background the
+# app, verify forms sync.
+#
+# Form structure verified against the real CCZ (read-only reference, not
+# committed): resources/qateam - [Master] Basic Tests - v1141.ccz, unzipped
+# and inspected -
+#   en/app_strings.txt: forms.m0f0=Basic Form.
+#   modules-0/forms-0.xml: just two questions - /data/enter_a_name (text,
+#     relevant only when "./question-name=2" - effectively always true in
+#     practice, not required) and a trailing minimal-appearance
+#     Pragma-Form-Descriptor trigger - a genuinely tiny 1-2-screen form,
+#     well suited to a submit-10x loop.
+#
+# BACKGROUNDING (NOT a caveat - fully automatable): Maestro's `pressKey`
+# command supports a "home" key value that backgrounds the current
+# foreground app WITHOUT stopping its process (confirmed against Maestro's
+# published command reference,
+# https://docs.maestro.dev/reference/commands-available/presskey) - this
+# repo already relies on exactly this mechanism in
+# flows/common/login_and_background.yaml (see that file's own BACKGROUNDING
+# comment for the full citation). `launchApp` with `stopApp: false`
+# afterward brings CommCare back to the foreground without restarting it or
+# losing the queued-but-unsent forms, the same pattern
+# flows/externalapp_tests/external_app_02_start_commcare_submit_form.yaml
+# documents for returning to an already-running CommCare.
+#
+# SYNC VERIFICATION: the CommCare home screen shows a live "Unsent Forms: N"
+# indicator under the Sync button (android_translatable_strings.txt:65,
+# home.unsent.forms.indicator="Unsent Forms: ${0}"; wired up in
+# app/src/org/commcare/utils/SyncDetailCalculations.java's
+# updateUsentFormsUI()) - a real, visible, checkable sync-count indicator,
+# not a manual/visual-only judgment call. This flow taps
+# "Sync with Server" (android_translatable_strings.txt:64, home.sync) and
+# waits for that indicator to read "Unsent Forms: 0". NOTE: since this is a
+# QA/BrowserStack environment, whether the sync round-trip actually succeeds
+# depends on real network connectivity and a real HQ submission endpoint
+# accepting these forms - if the sync itself fails for environmental reasons
+# (not a defect in the on-device flow below), the final wait will time out;
+# this flow only automates driving the sync action and reading its own
+# on-screen result, it cannot guarantee the server side succeeds.
+#
+# nav_btn_next/nav_btn_finish ids and form.entry.complete.save.success="Form
+# successfully completed" (android_translatable_strings.txt:169) verified
+# against commcare-android source (read-only reference, never modified),
+# same regex-assertion convention as
+# flows/recovery_measures/point_release_flow.yaml. Home-screen container id
+# org.commcare.dalvik:id/nsv_home_screen per
+# flows/common/login_and_background.yaml's own citation.
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: ".*Basic Tests$") - a
+# fresh BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
+# null.
+- runFlow:
+    file: ../common/install_app_as_web_user.yaml
+    env:
+      APP_NAME: ".*Basic Tests$"
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nsv_home_screen"
+    timeout: 10000
+
+# Submit the "Basic Form" 10 times in a row.
+- repeat:
+    times: 10
+    commands:
+      - tapOn: "Start"
+      - tapOn: "Basic Form Tests"
+      - tapOn: "Basic Form"
+      - extendedWaitUntil:
+          visible:
+            id: "org.commcare.dalvik:id/nav_btn_next"
+          timeout: 10000
+      - inputText: "Maestro loop submission"
+      - hideKeyboard
+      - tapOn:
+          id: "org.commcare.dalvik:id/nav_btn_next"
+      - extendedWaitUntil:
+          visible:
+            id: "org.commcare.dalvik:id/nav_btn_finish"
+          timeout: 10000
+      - tapOn:
+          id: "org.commcare.dalvik:id/nav_btn_finish"
+      - assertVisible:
+          text: "(?i).*form.*success.*completed.*"
+
+# Background CommCare (Home key) without logging out or killing the app -
+# see BACKGROUNDING citation above.
+- pressKey: "home"
+- launchApp:
+    appId: org.commcare.dalvik
+    stopApp: false
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nsv_home_screen"
+    timeout: 10000
+
+# Verify forms sync - see SYNC VERIFICATION citation above.
+- tapOn: "Sync with Server"
+- extendedWaitUntil:
+    visible:
+      text: "(?i).*unsent forms:\\s*0.*"
+    timeout: 60000
+- assertNotVisible:
+    text: "(?i).*unexpected error.*"
+- assertNotVisible:
+    text: "(?i).*commcare will now restart.*"
