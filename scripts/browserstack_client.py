@@ -98,8 +98,15 @@ class BrowserStackClient:
         resp.raise_for_status()
         return resp.json()
 
-    def wait_for_build(self, build_id, poll_seconds=30, timeout_seconds=1800):
-        """Poll until the build leaves the 'running'/'queued' state or times out."""
+    def wait_for_build(self, build_id, poll_seconds=30, timeout_seconds=5400):
+        """Poll until the build leaves the 'running'/'queued' state or times out.
+
+        5400s (90min) headroom: a single build can hold dozens of flows
+        (BrowserStack's own test-suite chunking only splits by the execute
+        array's serialized length, not by flow count/runtime) executing
+        sequentially on one real device - confirmed live when a 33-flow
+        mobile_pins build was still genuinely 'running' (not stuck) after the
+        previous 1800s default elapsed."""
         deadline = time.monotonic() + timeout_seconds
         while True:
             build = self.get_build(build_id)
