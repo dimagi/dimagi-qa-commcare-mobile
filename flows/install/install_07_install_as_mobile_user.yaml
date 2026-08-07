@@ -38,21 +38,25 @@ tags:
 - tapOn:
     id: "org.commcare.dalvik:id/edit_password"
 - inputText: "${HQ_MOBILE_WORKER_PASSWORD}"
-# UPDATE - do NOT use hideKeyboard here (this file previously did, repeated
-# 3x below this comment's old position): confirmed against Maestro's own
-# docs, on Android hideKeyboard ALWAYS sends a back-button press (there's no
-# OS-level "hide keyboard" API Maestro can call directly), regardless of
-# whether a keyboard is actually showing - and a real BrowserStack failure
-# (on flows/common/install_app_as_web_user.yaml, which shares this same
-# screen/pattern) showed the SAMSUNG HOME LAUNCHER on screen at the
-# get_apps_button wait, meaning repeated hideKeyboard calls had backed all
-# the way out of org.commcare.dalvik. Tapping a non-interactive area (the
-# screen's own title TextView, id/feature_prompt) drops focus and dismisses
-# the IME the same way a user tapping empty space would, without that risk -
-# this replaces the old "hideKeyboard has proven flaky" workaround below,
-# which was itself the cause of the flakiness, not a fix for it.
-- tapOn:
-    id: "org.commcare.dalvik:id/feature_prompt"
+# UPDATE (2nd correction) - a single hideKeyboard call (this file's original,
+# pre-session version) IS correct and was never the actual problem: on
+# Android a back-press's FIRST effect, when an IME is genuinely showing, is
+# to dismiss ONLY the keyboard, not navigate the activity back - that only
+# happens on a SECOND back-press once no keyboard remains. The real bug was
+# the "repeat hideKeyboard 3x" block this file used to have right after this
+# point: once that single call had already dismissed the keyboard, each
+# repeat then fell through to a real back-navigation, and enough of them
+# exited the app entirely - confirmed via a real BrowserStack failure (on
+# flows/common/install_app_as_web_user.yaml, which shares this same
+# screen/pattern) whose commandlogs hierarchy dump showed the SAMSUNG HOME
+# LAUNCHER on screen at the get_apps_button wait. A previous edit here
+# overcorrected by removing hideKeyboard entirely and tapping
+# id/feature_prompt instead - confirmed via a real BrowserStack screenshot
+# that this does NOT dismiss the keyboard at all (tapping a plain,
+# non-focusable TextView doesn't reliably steal focus away from an EditText
+# on Android), leaving the keyboard covering get_apps_button. Restored the
+# single hideKeyboard call; the repeat block stays removed.
+- hideKeyboard
 - tapOn:
     text: "Skip"
     optional: true
