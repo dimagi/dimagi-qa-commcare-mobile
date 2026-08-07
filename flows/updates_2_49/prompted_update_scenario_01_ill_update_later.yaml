@@ -38,14 +38,14 @@ tags:
 #     update.later.button.text = "I'll update later" (line 34)
 #     home.start = "Start" (line 59) - used below as a home-screen landmark.
 #
-# Prepends install_app_as_web_user.yaml (APP_NAME: "Basic Tests") - a fresh
+# Prepends install_app_as_web_user.yaml (APP_NAME: "Basic Tests$") - a fresh
 # BrowserStack session has no app installed until this runs; see
 # DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
 # null.
 - runFlow:
     file: ../common/install_app_as_web_user.yaml
     env:
-      APP_NAME: "Basic Tests"
+      APP_NAME: "Basic Tests$"
 - runFlow:
     file: ../common/login.yaml
     env:

@@ -15,7 +15,7 @@ tags:
 # flow creates itself. Also needs HQ web-user install
 # (install_app_as_web_user.yaml).
 #
-# Prepends install_app_as_web_user.yaml (APP_NAME: "Basic Tests") - a fresh
+# Prepends install_app_as_web_user.yaml (APP_NAME: "Basic Tests$") - a fresh
 # BrowserStack session has no app installed until this runs; see
 # DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
 # null.
@@ -43,7 +43,7 @@ tags:
 - runFlow:
     file: ../common/install_app_as_web_user.yaml
     env:
-      APP_NAME: "Basic Tests"
+      APP_NAME: "Basic Tests$"
 - runFlow:
     file: ../common/login.yaml
     env:

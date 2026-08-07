@@ -16,6 +16,17 @@ tags:
     timeout: 20000
 - tapOn: "More options"
 - tapOn: "See Apps for My User"
+# Waits for switch_button rather than tapping it blindly, same reasoning as
+# the "More options" wait above: "See Apps for My User" navigates into a
+# new activity (InstallFromListActivity), and a real BrowserStack failure
+# (on flows/common/install_app_as_web_user.yaml, which shares this exact
+# sequence) showed "Element not found: Id matching regex:
+# .../switch_button" here - most likely that activity hadn't finished
+# rendering yet immediately after the navigating tap.
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/switch_button"
+    timeout: 15000
 - tapOn:
     id: "org.commcare.dalvik:id/switch_button"
 - tapOn:

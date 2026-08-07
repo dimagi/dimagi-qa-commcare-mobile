@@ -91,7 +91,7 @@ tags:
 - runFlow:
     file: ../common/install_app_as_web_user.yaml
     env:
-      APP_NAME: "Basic Tests"
+      APP_NAME: "Basic Tests$"
 - runFlow:
     file: ../common/login.yaml
     env:

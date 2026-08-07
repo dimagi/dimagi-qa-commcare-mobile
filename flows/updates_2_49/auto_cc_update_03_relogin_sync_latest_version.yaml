@@ -36,7 +36,7 @@ tags:
 #     inside the R.id.dialog_text TextView of the scrolling_info_dialog
 #     layout - this is where the on-device "latest version" text lives.
 #
-# Prepends install_app_as_web_user.yaml (APP_NAME: "Basic Tests") - a fresh
+# Prepends install_app_as_web_user.yaml (APP_NAME: "Basic Tests$") - a fresh
 # BrowserStack session has no app installed until this runs; see
 # DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
 # null. "Basic Tests" is a guess by proximity (no specific app is named in
@@ -47,7 +47,7 @@ tags:
 - runFlow:
     file: ../common/install_app_as_web_user.yaml
     env:
-      APP_NAME: "Basic Tests"
+      APP_NAME: "Basic Tests$"
 - runFlow:
     file: ../common/login.yaml
     env:

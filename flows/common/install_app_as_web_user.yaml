@@ -15,6 +15,17 @@ appId: org.commcare.dalvik
 # every flow originally using the literal "[Master] Basic Tests" here had
 # to be corrected to "Basic Tests" for this exact reason.
 #
+# SECOND CAVEAT, learned from a real BrowserStack "Apps Available for
+# Install" screenshot: the qateam domain has SEVERAL apps whose name
+# contains "Basic Tests" as a substring ("[KD Copy Master] Basic Tests1",
+# "[Master] Basic Tests NS Copy!!", plus the real target "[Master] Basic
+# Tests") - a bare substring match is ambiguous between them. Anchor the
+# END of the substring with a real regex `$` (e.g. "Basic Tests$") to
+# exclude anything with trailing characters after it, while still avoiding
+# the bracket-escaping problem above (only anchoring the end, not `^...$`,
+# since the row's accessibility text may include additional
+# domain/whitespace content this subflow hasn't independently verified).
+#
 # Same "See Apps for My User" -> web-user-mode -> Get Apps mechanism as
 # flows/install/install_08_install_as_web_user.yaml (verified against
 # InstallFromListTest.kt's testAppInstall_usingWebWorkerDetails), except
@@ -61,6 +72,16 @@ appId: org.commcare.dalvik
     timeout: 20000
 - tapOn: "More options"
 - tapOn: "See Apps for My User"
+# Waits for switch_button rather than tapping it blindly, same reasoning as
+# the "More options" wait above: "See Apps for My User" navigates into a
+# new activity (InstallFromListActivity), and a real BrowserStack failure
+# showed "Element not found: Id matching regex: .../switch_button" here -
+# most likely that activity hadn't finished rendering yet immediately after
+# the navigating tap.
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/switch_button"
+    timeout: 15000
 - tapOn:
     id: "org.commcare.dalvik:id/switch_button"
 - tapOn:

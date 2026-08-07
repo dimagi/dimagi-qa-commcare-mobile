@@ -8,7 +8,7 @@ tags:
 # Prompted Update Scenario 2 - clicking through the forced-update completion
 # and confirming no further prompt - rather than introducing new UI.)
 #
-# Prepends install_app_as_web_user.yaml (APP_NAME: "Basic Tests") -
+# Prepends install_app_as_web_user.yaml (APP_NAME: "Basic Tests$") -
 # a fresh BrowserStack session has no app installed until this runs; see
 # DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
 # null. Only needed once, before the first login below - the later
@@ -16,7 +16,7 @@ tags:
 - runFlow:
     file: ../common/install_app_as_web_user.yaml
     env:
-      APP_NAME: "Basic Tests"
+      APP_NAME: "Basic Tests$"
 - runFlow:
     file: ../common/login.yaml
     env:

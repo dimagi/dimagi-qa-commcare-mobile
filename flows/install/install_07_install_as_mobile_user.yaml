@@ -17,6 +17,17 @@ tags:
     timeout: 20000
 - tapOn: "More options"
 - tapOn: "See Apps for My User"
+# Waits for edit_username rather than tapping it blindly, same reasoning as
+# the "More options" wait above: "See Apps for My User" navigates into a
+# new activity (InstallFromListActivity), and a real BrowserStack failure
+# (on flows/common/install_app_as_web_user.yaml, which hits the equivalent
+# switch_button element right after this same navigating tap) showed
+# "Element not found" here - most likely that activity hadn't finished
+# rendering yet immediately after the navigating tap.
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/edit_username"
+    timeout: 15000
 - tapOn:
     id: "org.commcare.dalvik:id/edit_username"
 # Confirmed against several real BrowserStack runs: the FIRST tap that opens
