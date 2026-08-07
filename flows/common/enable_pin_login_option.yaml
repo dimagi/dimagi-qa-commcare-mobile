@@ -48,6 +48,18 @@ appId: org.commcare.dalvik
 - tapOn: "More options"
 - tapOn: "Settings"
 - tapOn: "Developer Options"
+# UPDATE, found via a real BrowserStack failure: Developer Options is a long
+# scrollable preference list (confirmed live - the failing run's own
+# hierarchyRoot dump showed "Detect and Trigger Purge on Form Save" and
+# "Certificate Transparency" on screen, but not this row) - same
+# below-the-fold issue as the "Apps Available for Install" list in
+# install_app_as_web_user.yaml's FOURTH CAVEAT. scrollUntilVisible is a
+# no-op if already visible.
+- scrollUntilVisible:
+    element:
+      text: "Give option to use PIN for login"
+    direction: DOWN
+    timeout: 15000
 - tapOn: "Give option to use PIN for login"
 - tapOn: "Enabled"
 - back

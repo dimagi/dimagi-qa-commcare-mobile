@@ -144,42 +144,80 @@ def run_all_builds(bs, flow_files, app_url, args, env_variables, other_app_urls,
     return build_ids, test_results
 
 
-def run_build(bs, flow_files, app_url, args, env_variables, other_app_urls, tmp_dir, build_name=None):
+def _is_testsuite_parse_error(result):
+    """True if every device/session in a build result came back as a total
+    BROWSERSTACK_TESTSUITE_PARSE_ERROR ("No Tests Ran", testcases.count==0) -
+    confirmed live (repeatedly, deterministically for identical re-uploads of
+    the exact same small flow sets, while much larger uploads parsed fine)
+    that this is a real, unexplained BrowserStack-side parsing failure, not a
+    zip-structure or flow-content bug - re-uploading the identical content as
+    a fresh test-suite (new bs:// id) reliably clears it. --retry-failed
+    can't help here since match_flow_files has no failed test NAMES to match
+    against when the whole build reports zero testcases."""
+    if not isinstance(result, dict):
+        return False
+    for device in result.get("devices", []):
+        for session in device.get("sessions", []):
+            error = session.get("error") or {}
+            count = (session.get("testcases") or {}).get("count", 0)
+            if count == 0 and (
+                "PARSE_ERROR" in (error.get("message") or "")
+                or error.get("short_error_message") == "No Tests Ran"
+            ):
+                continue
+            return False
+    return bool(result.get("devices"))
+
+
+def run_build(bs, flow_files, app_url, args, env_variables, other_app_urls, tmp_dir, build_name=None,
+              max_parse_retries=2):
     """Zip the given flow files, upload as a test suite, trigger a build, and
     wait for it. Shared by the main run and the --retry-failed re-run so both
-    go through the exact same upload/trigger/poll path."""
-    zip_path = build_flows_zip(flow_files, tmp_dir)
-    print(f"Uploading test suite ({len(flow_files)} flow file(s)) to BrowserStack ...")
-    suite_resp = bs.upload_test_suite(str(zip_path))
+    go through the exact same upload/trigger/poll path.
 
-    # BrowserStack only auto-discovers flows at the zip's root by default;
-    # ours live under flows/<workflow>/*.yaml, so pass explicit paths
-    # (relative to the zip's root "flows/" folder) for everything that isn't
-    # a flows/common/*.yaml helper (those are only reachable via runFlow,
-    # never meant to be executed directly as top-level tests).
+    Retries the WHOLE upload+trigger+wait cycle (fresh zip, fresh test-suite
+    upload) up to max_parse_retries times if the build comes back as a total
+    testsuite parse error - see _is_testsuite_parse_error's docstring."""
     execute = [f.relative_to(FLOWS_DIR).as_posix() for f in flow_files if f.parent.name != "common"]
 
-    build_resp = bs.trigger_build(
-        app_url=app_url,
-        test_suite_url=suite_resp["test_suite_url"],
-        devices=[d.strip() for d in args.devices.split(",")],
-        project=args.project,
-        build_name=build_name,
-        execute=execute,
-        env_variables=env_variables,
-        other_apps=other_app_urls,
-    )
-    print(f"Build triggered: {json.dumps(build_resp, indent=2)}")
+    for attempt in range(max_parse_retries + 1):
+        zip_path = build_flows_zip(flow_files, tmp_dir)
+        print(f"Uploading test suite ({len(flow_files)} flow file(s)) to BrowserStack ..."
+              + (f" (attempt {attempt + 1}/{max_parse_retries + 1})" if attempt else ""))
+        suite_resp = bs.upload_test_suite(str(zip_path))
 
-    build_id = build_resp.get("build_id") or build_resp.get("id")
-    if not build_id:
-        print("No build_id in response - can't poll for status.")
-        return None, None
-    if args.no_wait:
-        return build_id, None
-    print(f"Waiting for build {build_id} ...")
-    result = bs.wait_for_build(build_id)
-    print(json.dumps(result, indent=2))
+        # BrowserStack only auto-discovers flows at the zip's root by default;
+        # ours live under flows/<workflow>/*.yaml, so pass explicit paths
+        # (relative to the zip's root "flows/" folder) for everything that isn't
+        # a flows/common/*.yaml helper (those are only reachable via runFlow,
+        # never meant to be executed directly as top-level tests).
+        build_resp = bs.trigger_build(
+            app_url=app_url,
+            test_suite_url=suite_resp["test_suite_url"],
+            devices=[d.strip() for d in args.devices.split(",")],
+            project=args.project,
+            build_name=build_name,
+            execute=execute,
+            env_variables=env_variables,
+            other_apps=other_app_urls,
+        )
+        print(f"Build triggered: {json.dumps(build_resp, indent=2)}")
+
+        build_id = build_resp.get("build_id") or build_resp.get("id")
+        if not build_id:
+            print("No build_id in response - can't poll for status.")
+            return None, None
+        if args.no_wait:
+            return build_id, None
+        print(f"Waiting for build {build_id} ...")
+        result = bs.wait_for_build(build_id)
+        print(json.dumps(result, indent=2))
+
+        if not _is_testsuite_parse_error(result):
+            return build_id, result
+        if attempt < max_parse_retries:
+            print(f"Build {build_id} was a total BROWSERSTACK_TESTSUITE_PARSE_ERROR "
+                  f"(0 tests ran) - retrying with a fresh upload ...")
     return build_id, result
 
 
