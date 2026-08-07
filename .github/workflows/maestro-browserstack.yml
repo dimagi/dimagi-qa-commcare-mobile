@@ -4,9 +4,32 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Run only flows carrying this tag (e.g. mobile_pins). Leave blank to run everything."
+        description: "Run only flows carrying this tag. Pick All to run everything."
         required: false
-        default: ""
+        type: choice
+        default: "All"
+        options:
+          - "All"
+          - case_filters
+          - conditional_enum_in_case_list
+          - date_widgets
+          - externalapp_tests
+          - form_submissions
+          - install
+          - login
+          - menu_badges
+          - mobile_pins
+          - multimedia
+          - other_error_tests
+          - prompted_updates
+          - recovery_measures
+          - right_to_left_text
+          - session_expiration
+          - support_menus
+          - trigger_device_logs
+          - update
+          - updates_2_49
+          - updates_partial_failed
       release_tag:
         description: "commcare-android GitHub release tag to test (e.g. commcare_2.63.4). Leave blank for latest."
         required: false
@@ -67,7 +90,8 @@ jobs:
           HQ_WEB_USER_PASSWORD: ${{ secrets.HQ_WEB_USER_PASSWORD }}
         run: |
           ARGS=(--devices "${{ github.event.inputs.devices || 'Samsung Galaxy S20-10.0' }}")
-          if [ -n "${{ github.event.inputs.tag }}" ]; then ARGS+=(--tag "${{ github.event.inputs.tag }}"); fi
+          TAG="${{ github.event.inputs.tag }}"
+          if [ -n "$TAG" ] && [ "$TAG" != "All" ]; then ARGS+=(--tag "$TAG"); fi
           if [ -n "${{ github.event.inputs.release_tag }}" ]; then ARGS+=(--release-tag "${{ github.event.inputs.release_tag }}"); fi
           if [ -n "${{ github.event.inputs.hq_setup }}" ]; then ARGS+=(--hq-setup "${{ github.event.inputs.hq_setup }}"); fi
           python scripts/run_suite.py "${ARGS[@]}"
