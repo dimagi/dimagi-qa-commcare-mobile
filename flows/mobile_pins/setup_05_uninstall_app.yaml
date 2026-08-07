@@ -8,15 +8,23 @@ tags:
 # resets the "Create a PIN?" first-login-prompt / PIN-set state between the
 # Pin 1..14 cycle and "Setup 6"'s reinstall (see
 # hq_setup/mobile_pins/setup_06_reinstall_application.json).
-# ASSUMES a single CCZ app is already installed & seated on the device (per
-# "Setup 2"/"Setup 4"'s HQ-publish + barcode-claim steps - both out of scope
-# here; see hq_setup/mobile_pins/setup_02_install_application.json's header
-# comment). coverage_matrix.csv's own Dependency/Reason column notes this
-# could also be done via `adb uninstall` instead of on-screen navigation -
-# this flow implements the on-screen App Manager path instead, since that's
-# what the sheet's test case actually exercises (adb uninstall would remove
-# the CommCare Android app entirely, not just the CCZ, and wouldn't exercise
-# the app's own uninstall-confirmation UI the sheet is checking).
+# coverage_matrix.csv's own Dependency/Reason column notes this could also be
+# done via `adb uninstall` instead of on-screen navigation - this flow
+# implements the on-screen App Manager path instead, since that's what the
+# sheet's test case actually exercises (adb uninstall would remove the
+# CommCare Android app entirely, not just the CCZ, and wouldn't exercise the
+# app's own uninstall-confirmation UI the sheet is checking).
+#
+# UPDATE, found via a real BrowserStack failure: this flow used to assume an
+# app was already installed/seated (its own launchApp had no preceding
+# install step) - but per this framework's "every flow runnable in
+# isolation" convention, a fresh BrowserStack session has NOTHING installed,
+# so "Go To App Manager" isn't even a valid menu option yet (the failing
+# run's hierarchy dump showed only "Offline Install"/"See Apps for My User" -
+# the two options shown when no app is seated at all). Added the standard
+# install_app_as_web_user.yaml step every other self-contained flow in this
+# repo already uses, and removed the now-redundant bare launchApp (that
+# subflow's own launchApp with clearState:true covers it).
 #
 # Selectors verified against commcare-android source (read-only reference,
 # never modified by this repo):
@@ -41,8 +49,10 @@ tags:
 #     uninstall your app and then reboot to save changes."), positive button
 #     getString(R.string.ok) ("OK") -> SingleAppManagerActivity.uninstall().
 #   app/res/values/strings.xml: uninstall_app="Uninstall" (button text).
-- launchApp:
-    clearState: true
+- runFlow:
+    file: ../common/install_app_as_web_user.yaml
+    env:
+      APP_NAME: ".*Basic Tests$"
 - tapOn: "More options"
 - tapOn: "Go To App Manager"
 - assertVisible:

@@ -141,6 +141,12 @@ tags:
     id: "org.commcare.dalvik:id/install_app_button"
     retryTapIfNoChange: false
     optional: true
+# Optional per install_app_as_web_user.yaml's own SIXTH CAVEAT - a CCZ can
+# require a newer CommCare APK version than BrowserStack's release build,
+# showing an update-prompt dialog that would otherwise block this flow.
+- tapOn:
+    text: "I.LL UPDATE LATER"
+    optional: true
 # Optional per install_app_as_web_user.yaml's own FIFTH CAVEAT - this
 # transitional screen doesn't reliably render long enough (or at all) to
 # catch with a poll-based wait; the login screen wait right after it is the

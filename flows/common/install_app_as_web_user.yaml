@@ -184,6 +184,19 @@ appId: org.commcare.dalvik
     id: "org.commcare.dalvik:id/install_app_button"
     retryTapIfNoChange: false
     optional: true
+# SIXTH CAVEAT, learned from a real BrowserStack failure on "Case
+# Managements!": some apps' published CCZ requires a newer CommCare APK
+# version than the "release" build BrowserStack tests against (seen live:
+# "The application requires CommCare version 2.64.0. You are currently
+# running 2.63.4." with "UPDATE COMMCARE VIA THE PLAY STORE" / "I'LL UPDATE
+# LATER" buttons) - a genuine app/APK version drift, not a flow bug. Dismiss
+# with "I'LL UPDATE LATER" if it appears so the flow can proceed; this is an
+# environmental mismatch worth flagging to a human if the resulting app then
+# misbehaves, but blocking every caller of this shared subflow over it would
+# be worse.
+- tapOn:
+    text: "I.LL UPDATE LATER"
+    optional: true
 # FIFTH CAVEAT, learned from a real BrowserStack failure: this
 # extendedWaitUntil used to be a hard (non-optional) assertion, and it timed
 # out after the full 60s on 15/16 flows in one build - "Setting Up App" is

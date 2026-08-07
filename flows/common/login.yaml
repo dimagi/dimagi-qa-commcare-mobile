@@ -13,3 +13,16 @@ appId: org.commcare.dalvik
 - hideKeyboard
 - tapOn:
     id: "org.commcare.dalvik:id/login_button"
+# A first (or post-reinstall) login triggers a data restore/sync that shows
+# "Processing Data from Server" with a live progress counter (e.g.
+# "Completed: 4613/5807") - confirmed via a real BrowserStack failure whose
+# view-hierarchy dump showed exactly this screen still on-screen when the
+# CALLER's very next assertion fired. Every flow using this shared subflow
+# asserts on whatever screen comes AFTER login, so the wait belongs here
+# rather than being duplicated in each caller. notVisible succeeds
+# immediately if this screen never appears (e.g. a login with nothing to
+# restore), so this is safe to run unconditionally.
+- extendedWaitUntil:
+    notVisible:
+      text: "Processing Data from Server"
+    timeout: 120000
