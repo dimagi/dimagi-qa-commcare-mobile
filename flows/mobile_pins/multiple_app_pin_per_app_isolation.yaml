@@ -164,6 +164,12 @@ tags:
     env:
       USERNAME: ${CC_TEST_USERNAME}
       PASSWORD: ${CC_TEST_PASSWORD}
+# Per-app-profile SharedPreferences (CommCareApp.getPreferencesFilename()
+# keys by the app's own applicationId), so this must be enabled separately
+# for EACH app profile, not just once - see the second occurrence below for
+# "Case Managements!". Same root-cause fix as every pin_XX flow - see
+# flows/common/enable_pin_login_option.yaml's header.
+- runFlow: ../common/enable_pin_login_option.yaml
 - runFlow:
     file: ../common/set_pin_via_dialog.yaml
     env:
@@ -201,6 +207,7 @@ tags:
     env:
       USERNAME: ${CC_TEST_USERNAME}
       PASSWORD: ${CC_TEST_PASSWORD}
+- runFlow: ../common/enable_pin_login_option.yaml
 - runFlow:
     file: ../common/set_pin_via_dialog.yaml
     env:

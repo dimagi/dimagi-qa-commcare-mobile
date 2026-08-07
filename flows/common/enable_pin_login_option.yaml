@@ -1,0 +1,54 @@
+appId: org.commcare.dalvik
+---
+# Reusable subflow: unlocks CommCare's "Developer Options" (via the classic
+# "About CommCare" x4 dismiss trick) and turns on the "Give option to use
+# PIN for login" developer preference (cc-offer-pin-for-login). Needed
+# before ANY "Create a PIN?" dialog will ever appear on login - confirmed
+# via commcare-android source (HomeScreenBaseActivity.checkForPinLaunchConditions()):
+# the dialog is gated behind DeveloperPreferences.shouldOfferPinForLogin(),
+# which defaults to NO/false on every fresh install (no HQ/restore-side
+# config sets it). This was the real root cause behind every mobile_pins
+# flow failing its very first "Create a PIN?" assertion on a live
+# BrowserStack run (build 5ad48d6e60be25f5ef8fbfe92eedb8618b5c3999) - the
+# toggle was simply never turned on; the dialog isn't purely "first login",
+# it's "first login AND this dev preference is enabled".
+#
+# Call once, right after the FIRST login.yaml in a flow and before expecting
+# the PIN prompt. The preference is a plain app-level SharedPreferences
+# value, not tied to a user session, so it persists across any
+# logout.yaml/login.yaml cycles later in the same flow - no need to call
+# this again after re-logins within one flow run.
+#
+# Verified against commcare-android source (read-only reference, not modified):
+#   app/src/org/commcare/activities/HomeScreenBaseActivity.java
+#     checkForPinLaunchConditions()/handleDeveloperModeClicks() (~line
+#     1674-1684): 4 dismissals of the "About CommCare" dialog sets
+#     cc-superuser-enabled=yes locally, unlocking the "Developer Options"
+#     Settings entry (same mechanism as
+#     flows/mobile_pins/setup_03_enable_developer_options.yaml).
+#   app/res/xml/preferences_developer.xml line 81-82: cc-offer-pin-for-login,
+#     a ListPreference titled "Give option to use PIN for login" with
+#     entries Enabled/Disabled (values yes/no) - app/res/values/strings.xml
+#     line 600-607. No stable per-row resource-id (shared
+#     androidx.preference RecyclerView row layout) - matched by visible
+#     title text instead. Tapping the row opens a single-choice dialog;
+#     selecting "Enabled" writes the value and auto-dismisses (standard
+#     ListPreferenceDialogFragmentCompat behavior - no separate OK tap).
+#   app/res/menu/menu_app_home.xml: R.id.action_about ("About CommCare"),
+#     R.id.action_preferences ("Settings").
+- repeat:
+    times: 4
+    commands:
+      - tapOn: "More options"
+      - tapOn: "About CommCare"
+      - tapOn: "OK"
+- assertVisible:
+    text: "Developer Mode Enabled"
+    optional: true # toast may dismiss before Maestro's screenshot poll catches it
+- tapOn: "More options"
+- tapOn: "Settings"
+- tapOn: "Developer Options"
+- tapOn: "Give option to use PIN for login"
+- tapOn: "Enabled"
+- back
+- back

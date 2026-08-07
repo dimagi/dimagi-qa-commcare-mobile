@@ -21,6 +21,7 @@ tags:
     env:
       USERNAME: ${CC_TEST_USERNAME}
       PASSWORD: ${CC_TEST_PASSWORD}
+- runFlow: ../common/enable_pin_login_option.yaml
 - runFlow:
     file: ../common/set_pin_via_dialog.yaml
     env:

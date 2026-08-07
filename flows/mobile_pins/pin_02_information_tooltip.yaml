@@ -19,6 +19,7 @@ tags:
     env:
       USERNAME: ${CC_TEST_USERNAME}
       PASSWORD: ${CC_TEST_PASSWORD}
+- runFlow: ../common/enable_pin_login_option.yaml
 - assertVisible: "Create a PIN?"
 - tapOn:
     id: "org.commcare.dalvik:id/extra_info_button"
