@@ -42,7 +42,7 @@ tags:
 #       the server later." (line 141) - shown via Toast.makeText(..,
 #       LENGTH_LONG), so it self-dismisses after a few seconds.
 #
-# Prepends install_app_as_web_user.yaml (APP_NAME: "Rate limited submission
+# Prepends install_app_as_web_user.yaml (APP_NAME: ".*Rate limited submission
 # app") - a fresh BrowserStack session has no app installed until this
 # runs; see DispatchActivity.java's CommCareSetupActivity routing when
 # currentApp == null. This repo's other comments call this app "Rate
@@ -58,7 +58,7 @@ tags:
 - runFlow:
     file: ../common/install_app_as_web_user.yaml
     env:
-      APP_NAME: "Rate limited submission app"
+      APP_NAME: ".*Rate limited submission app"
 - runFlow:
     file: ../common/login.yaml
     env:

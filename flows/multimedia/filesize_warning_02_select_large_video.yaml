@@ -7,7 +7,7 @@ tags:
 - runFlow:
     file: ../common/install_app_as_web_user.yaml
     env:
-      APP_NAME: "Multimedia"
+      APP_NAME: ".*Multimedia"
 # Master Mobile Plan (2026) > Multimedia > "Filesize Warning 2" - continuing
 # from a video-capture question, select a previously-recorded large video
 # and expect a "File Too Large ... 15 MB" error.

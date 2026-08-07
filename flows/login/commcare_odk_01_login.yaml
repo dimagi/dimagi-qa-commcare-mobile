@@ -7,7 +7,7 @@ tags:
 # username/password, verify the "logging in" progress message appears, and
 # confirm the home screen is reached.
 #
-# Prepends install_app_as_web_user.yaml (APP_NAME: "Basic Tests$") - a fresh
+# Prepends install_app_as_web_user.yaml (APP_NAME: ".*Basic Tests$") - a fresh
 # BrowserStack session has no app installed until this runs; see
 # DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
 # null. Uses the same "[Master] Basic Tests" app (cdfa6c85eb594b23b0c08729cd2beff1)
@@ -30,7 +30,7 @@ tags:
 - runFlow:
     file: ../common/install_app_as_web_user.yaml
     env:
-      APP_NAME: "Basic Tests$"
+      APP_NAME: ".*Basic Tests$"
 - tapOn:
     id: "org.commcare.dalvik:id/edit_username"
 - inputText: "${CC_TEST_USERNAME}"

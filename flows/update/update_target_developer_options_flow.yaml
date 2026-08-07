@@ -68,14 +68,14 @@ tags:
 #     update check finds nothing to install - this is the literal live text
 #     DeveloperOptionsTests.kt asserts, so it's used here in preference to
 #     the notification-only "notification.install.uptodate.detail" string.
-# Prepends install_app_as_web_user.yaml (APP_NAME: "Update Test Alternate!
+# Prepends install_app_as_web_user.yaml (APP_NAME: ".*Update Test Alternate!
 # Alternating test update") - a fresh BrowserStack session has no app
 # installed until this runs; see DispatchActivity.java's CommCareSetupActivity
 # routing when currentApp == null.
 - runFlow:
     file: ../common/install_app_as_web_user.yaml
     env:
-      APP_NAME: "Update Test Alternate! Alternating test update"
+      APP_NAME: ".*Update Test Alternate! Alternating test update"
 - runFlow:
     file: ../common/login.yaml
     env:

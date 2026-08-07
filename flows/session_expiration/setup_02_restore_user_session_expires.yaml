@@ -33,7 +33,7 @@ tags:
 - runFlow:
     file: ../common/install_app_as_web_user.yaml
     env:
-      APP_NAME: "Session Expiration Test"
+      APP_NAME: ".*Session Expiration Test"
 - tapOn:
     id: "org.commcare.dalvik:id/edit_username"
 - inputText: "test_session_1"

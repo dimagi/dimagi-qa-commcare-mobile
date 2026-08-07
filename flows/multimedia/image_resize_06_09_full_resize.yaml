@@ -34,7 +34,7 @@ tags:
 - runFlow:
     file: ../common/install_app_as_web_user.yaml
     env:
-      APP_NAME: "Multimedia"
+      APP_NAME: ".*Multimedia"
 - runFlow:
     file: ../common/login.yaml
     env:

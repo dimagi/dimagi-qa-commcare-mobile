@@ -6,7 +6,7 @@ tags:
 - runFlow:
     file: ../common/install_app_as_web_user.yaml
     env:
-      APP_NAME: "Multimedia"
+      APP_NAME: ".*Multimedia"
 # Master Mobile Plan (2026) > Multimedia > "Gif" - Gif renders in first
 # question of the "Gif/Remove Image" form.
 #

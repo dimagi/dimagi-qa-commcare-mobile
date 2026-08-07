@@ -18,7 +18,7 @@ tags:
 # visual-rendering judgment call, deliberately NOT attempted here - see its
 # own coverage_matrix.csv row (Not automatable).
 #
-# Prepends install_app_as_web_user.yaml (APP_NAME: "Performance Testing") -
+# Prepends install_app_as_web_user.yaml (APP_NAME: ".*Performance Testing") -
 # a fresh BrowserStack session has no app installed until this runs; see
 # DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
 # null. Real HQ name confirmed from resources/'s committed CCZ filename
@@ -35,7 +35,7 @@ tags:
 - runFlow:
     file: ../common/install_app_as_web_user.yaml
     env:
-      APP_NAME: "Performance Testing"
+      APP_NAME: ".*Performance Testing"
 - tapOn:
     id: "org.commcare.dalvik:id/edit_username"
 - inputText: "case_load"

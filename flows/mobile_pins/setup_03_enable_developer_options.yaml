@@ -5,7 +5,7 @@ tags:
 ---
 # Master Mobile Plan (2026) > Mobile Pins > "Setup 3" - Enable Developer
 # Options (tap About CommCare 4x from the home screen).
-# NOTE: Prepends install_app_as_web_user.yaml (APP_NAME: "[Master] Basic
+# NOTE: Prepends install_app_as_web_user.yaml (APP_NAME: ".*[Master] Basic
 # Tests") - a fresh BrowserStack session has no app installed until this
 # runs; see DispatchActivity.java's CommCareSetupActivity routing when
 # currentApp == null.
@@ -39,7 +39,7 @@ tags:
 - runFlow:
     file: ../common/install_app_as_web_user.yaml
     env:
-      APP_NAME: "Basic Tests$"
+      APP_NAME: ".*Basic Tests$"
 - runFlow:
     file: ../common/login.yaml
     env:

@@ -7,7 +7,7 @@ tags:
 - runFlow:
     file: ../common/install_app_as_web_user.yaml
     env:
-      APP_NAME: "Multimedia"
+      APP_NAME: ".*Multimedia"
 # Master Mobile Plan (2026) > Multimedia > "Filesize 1" - Trigger the
 # oversized-file warning.
 #

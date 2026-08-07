@@ -20,13 +20,13 @@ tags:
 #   app/assets/locales/android_translatable_strings.txt:
 #     home.menu.locale.change=Change Language
 #     home.menu.locale.select=Choose your Language
-# Prepends install_app_as_web_user.yaml (APP_NAME: "Right to Left Tests!") - a
+# Prepends install_app_as_web_user.yaml (APP_NAME: ".*Right to Left Tests!") - a
 # fresh BrowserStack session has no app installed until this runs; see
 # DispatchActivity.java's CommCareSetupActivity routing when currentApp == null.
 - runFlow:
     file: ../common/install_app_as_web_user.yaml
     env:
-      APP_NAME: "Right to Left Tests!"
+      APP_NAME: ".*Right to Left Tests!"
 - launchApp:
     clearState: true
 - assertVisible:

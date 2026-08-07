@@ -87,7 +87,7 @@ tags:
 - runFlow:
     file: ../common/install_app_as_web_user.yaml
     env:
-      APP_NAME: "Case Managements!"
+      APP_NAME: ".*Case Managements!$"
 # Install Basic Tests SECOND, inlined rather than a second runFlow to
 # install_app_as_web_user.yaml - that subflow's own launchApp now uses
 # clearState: true (see its header for why), which would wipe the
@@ -125,7 +125,7 @@ tags:
     visible:
       id: "org.commcare.dalvik:id/apps_list_view"
     timeout: 30000
-- tapOn: "Basic Tests$"
+- tapOn: ".*Basic Tests$"
 - tapOn:
     id: "org.commcare.dalvik:id/install_app_button"
     retryTapIfNoChange: false
@@ -158,7 +158,7 @@ tags:
 - tapOn: "Go To App Manager"
 - assertVisible:
     id: "org.commcare.dalvik:id/apps_list_view"
-- tapOn: "Case Management"
+- tapOn: ".*Case Managements!$"
 - assertVisible:
     id: "org.commcare.dalvik:id/app_name"
 - tapOn:
@@ -197,7 +197,7 @@ tags:
 - tapOn: "Go To App Manager"
 - assertVisible:
     id: "org.commcare.dalvik:id/apps_list_view"
-- tapOn: "Basic Tests"
+- tapOn: ".*Basic Tests$"
 - tapOn: "Uninstall"
 - assertVisible: "CommCare will uninstall your app and then reboot to save changes."
 - tapOn: "OK"

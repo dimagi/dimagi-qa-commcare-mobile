@@ -52,7 +52,7 @@ tags:
 - runFlow:
     file: ../common/install_app_as_web_user.yaml
     env:
-      APP_NAME: "Conditional Enum in Case List"
+      APP_NAME: ".*Conditional Enum in Case List"
 - runFlow:
     file: ../common/login.yaml
     env:

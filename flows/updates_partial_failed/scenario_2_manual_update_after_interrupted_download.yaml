@@ -31,14 +31,14 @@ tags:
 # device auto-logging out (its final "Update to version X & log out" tap), so
 # this flow logs back in before checking the post-update version and forms.
 #
-# Prepends install_app_as_web_user.yaml (APP_NAME: "Mobile Updates - Test
+# Prepends install_app_as_web_user.yaml (APP_NAME: ".*Mobile Updates - Test
 # 1_2") - a fresh BrowserStack session has no app installed until this
 # runs; see DispatchActivity.java's CommCareSetupActivity routing when
 # currentApp == null.
 - runFlow:
     file: ../common/install_app_as_web_user.yaml
     env:
-      APP_NAME: "Mobile Updates - Test 1_2"
+      APP_NAME: ".*Mobile Updates - Test 1_2"
 - runFlow:
     file: ../common/login.yaml
     env:

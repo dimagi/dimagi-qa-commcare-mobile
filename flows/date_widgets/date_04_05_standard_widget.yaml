@@ -14,7 +14,7 @@ tags:
 # fixed string - matching this repo's convention of not hardcoding a moving
 # target.
 #
-# Prepends install_app_as_web_user.yaml (APP_NAME: "Date Widgets") - a fresh
+# Prepends install_app_as_web_user.yaml (APP_NAME: ".*Date Widgets") - a fresh
 # BrowserStack session has no app installed until this runs; see
 # DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
 # null.
@@ -35,7 +35,7 @@ tags:
 - runFlow:
     file: ../common/install_app_as_web_user.yaml
     env:
-      APP_NAME: "Date Widgets"
+      APP_NAME: ".*Date Widgets"
 - runFlow:
     file: ../common/login.yaml
     env:

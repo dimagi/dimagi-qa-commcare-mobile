@@ -14,7 +14,7 @@ tags:
 # through the form and completing it, not the visual IME-key verification
 # itself.
 #
-# Prepends install_app_as_web_user.yaml (APP_NAME: "Other") - a fresh
+# Prepends install_app_as_web_user.yaml (APP_NAME: ".*Other") - a fresh
 # BrowserStack session has no app installed until this runs; see
 # DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
 # null. Same "Other" app as xform_error_01_04.yaml - see that file's header
@@ -29,7 +29,7 @@ tags:
 - runFlow:
     file: ../common/install_app_as_web_user.yaml
     env:
-      APP_NAME: "Other"
+      APP_NAME: ".*Other"
 - runFlow:
     file: ../common/login.yaml
     env:

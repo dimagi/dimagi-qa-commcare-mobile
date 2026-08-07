@@ -19,12 +19,22 @@ appId: org.commcare.dalvik
 # Install" screenshot: the qateam domain has SEVERAL apps whose name
 # contains "Basic Tests" as a substring ("[KD Copy Master] Basic Tests1",
 # "[Master] Basic Tests NS Copy!!", plus the real target "[Master] Basic
-# Tests") - a bare substring match is ambiguous between them. Anchor the
-# END of the substring with a real regex `$` (e.g. "Basic Tests$") to
-# exclude anything with trailing characters after it, while still avoiding
-# the bracket-escaping problem above (only anchoring the end, not `^...$`,
-# since the row's accessibility text may include additional
-# domain/whitespace content this subflow hasn't independently verified).
+# Tests") - a bare substring match is ambiguous between them.
+#
+# THIRD CAVEAT, learned from a real BrowserStack failure: Maestro's tapOn
+# text matching is a FULL match against the element's text, not a
+# "contains"/search match, despite the first caveat above's original
+# (incorrect) assumption. A bare end-anchored "Basic Tests$" genuinely
+# failed to match "[Master] Basic Tests" live ("Element not found: Text
+# matching regex: Basic Tests$") - the leading "[Master] " prefix meant the
+# regex never matched the WHOLE string. Fixed by prepending a wildcard
+# prefix: ".*Basic Tests$" fullmatches "[Master] Basic Tests" (".*" absorbs
+# the "[Master] " prefix, "Basic Tests" matches the literal remainder, "$"
+# anchors the end) while still correctly excluding "...Basic Tests1" and
+# "...Basic Tests NS Copy!!" (neither ends in exactly "Basic Tests"). This
+# ".*<substring>$" shape is now this subflow's standard APP_NAME pattern -
+# use it for any app name that isn't already known to be the row's ENTIRE
+# text.
 #
 # Same "See Apps for My User" -> web-user-mode -> Get Apps mechanism as
 # flows/install/install_08_install_as_web_user.yaml (verified against

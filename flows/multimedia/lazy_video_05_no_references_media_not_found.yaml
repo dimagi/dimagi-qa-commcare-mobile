@@ -6,7 +6,7 @@ tags:
 - runFlow:
     file: ../common/install_app_as_web_user.yaml
     env:
-      APP_NAME: "Multimedia"
+      APP_NAME: ".*Multimedia"
 # Master Mobile Plan (2026) > Multimedia > "Lazy Video 5" - 'Media not
 # found' message for unreferenced videos.
 #

@@ -10,7 +10,7 @@ tags:
 # "XForm Error Tests" module, dismissing each error back to the same form
 # list).
 #
-# Prepends install_app_as_web_user.yaml (APP_NAME: "Other") - a fresh
+# Prepends install_app_as_web_user.yaml (APP_NAME: ".*Other") - a fresh
 # BrowserStack session has no app installed until this runs; see
 # DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
 # null. Real HQ name confirmed from resources/'s committed CCZ filename
@@ -36,7 +36,7 @@ tags:
 - runFlow:
     file: ../common/install_app_as_web_user.yaml
     env:
-      APP_NAME: "Other"
+      APP_NAME: ".*Other"
 - runFlow:
     file: ../common/login.yaml
     env:
