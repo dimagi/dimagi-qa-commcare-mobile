@@ -7,13 +7,17 @@ tags:
 # Search Matches in Settings), "2" (locate exact match by typing letters
 # incrementally, highlighted green), "3" (locate a fuzzy/misspelled match).
 #
-# PARTIAL: assumes a case named "Christy" already exists in this app (the
-# sheet's own prerequisite note: "in order to complete this test you will
-# have to have one case with the associated name 'Christy'") - no case-
-# creation step for that specific name exists elsewhere in this repo, so
-# this is a real, undischarged test-data dependency, not something this
-# flow creates itself. Also needs HQ web-user install
-# (install_app_as_web_user.yaml).
+# PARTIAL: the sheet's own prerequisite note says "in order to complete this
+# test you will have to have one case with the associated name 'Christy'" -
+# this used to be treated as an undischarged test-data dependency (no case
+# named "Christy" actually exists in this app's live data - confirmed live
+# via a real BrowserStack failure: searching "Krist" surfaced an unrelated
+# "Case List Test" case, not "Christy"). Now self-contained: this flow
+# registers its own "Christy" case first via Case Tests -> Create a Case
+# (same registration pattern as flows/form_submissions/case_name_size_01_02_
+# length_warning_and_not_saved.yaml), matching this repo's "every flow
+# runnable in isolation" convention. Still PARTIAL for a separate reason:
+# also needs HQ web-user install (install_app_as_web_user.yaml).
 #
 # Prepends install_app_as_web_user.yaml (APP_NAME: ".*Basic Tests$") - a fresh
 # BrowserStack session has no app installed until this runs; see
@@ -49,6 +53,20 @@ tags:
     env:
       USERNAME: ${CC_TEST_USERNAME}
       PASSWORD: ${CC_TEST_PASSWORD}
+- assertVisible: "Start"
+
+# --- Setup: register the "Christy" case this flow's own search steps
+# depend on (see PARTIAL note above for why this is here now). ---
+- tapOn: "Start"
+- tapOn: "Case Tests"
+- tapOn: "Create a Case"
+- inputText: "Christy"
+- hideKeyboard
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+- tapOn: "Confirm - Please create this case."
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"
 - assertVisible: "Start"
 
 # --- Fuzzy Search 1: enable Fuzzy Search Matches in Settings. ---
