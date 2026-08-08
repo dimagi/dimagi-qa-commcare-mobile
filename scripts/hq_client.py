@@ -170,7 +170,8 @@ class HQClient:
         resp.raise_for_status()
         return resp.json()["apps"]
 
-    def get_app_install_code(self, app_id, saved_app_id=None, release_first=True, max_commcare_version=None):
+    def get_app_install_code(self, app_id, saved_app_id=None, release_first=True, max_commcare_version=None,
+                              include_media=True):
         """
         Return the short alphanumeric "Enter app code on installation screen"
         code shown in HQ's Releases page "Download to Android > Online
@@ -206,18 +207,33 @@ class HQClient:
         was asked to automate, and a released build is what a real "Online
         Install" user is expected to land on.
 
+        `include_media=True` (default) requests the "short_odk_media_url"
+        code rather than the app-only "short_odk_url" one - confirmed live
+        (2026-08-08) that the no-media code installs an app fine but then
+        gets permanently stuck on CommCareVerificationActivity's "Some of
+        your application's multimedia has not been installed... press
+        retry" screen (id/screen_multimedia_retry) whenever the app has real
+        media references (seen on "Performance Testing"/menu_badges) - NOT
+        a timing issue, retrying never helps, and it reproduces identically
+        across multiple different builds of the same app. Requesting media
+        for an app that has none should be a safe no-op (there's simply
+        nothing to fetch), so True is the default rather than something
+        callers must remember to opt into per app - re-verify against a
+        media-less app (e.g. Date Widgets) if this default is ever
+        suspected of causing a regression.
+
         Source: static/webpack/app_manager/app_manager.bundle.js (minified,
         no non-minified source available locally) - the release-manager
         Knockout view model's `base_url`/`generate_short_url`/
-        `parse_bitly_url` functions:
+        `parse_bitly_url`/`get_odk_url_type` functions:
             n.base_url = () => "/a/" + domain + "/apps/odk/" + id + "/"
             n.generate_short_url = (type) => ajax({url: base_url()+type+"/?profile="+build_profile})
             n.parse_bitly_url = (url) => last path segment of url (word chars only)
-        where `id` is the BUILD's own doc id (saved_app_id), `type` is
-        "short_odk_url" (no media) - confirmed live: GET
-        /a/<domain>/apps/odk/<saved_app_id>/short_odk_url/?profile= returns
-        a bare bit.ly URL body (e.g. "https://bit.ly/3U0MUXW"); the code is
-        that URL's last path segment.
+            n.get_odk_url_type = () => include_media() ? "short_odk_media_url" : "short_odk_url"
+        where `id` is the BUILD's own doc id (saved_app_id) - confirmed
+        live: GET /a/<domain>/apps/odk/<saved_app_id>/<url_type>/?profile=
+        returns a bare bit.ly URL body (e.g. "https://bit.ly/3U0MUXW"); the
+        code is that URL's last path segment.
         """
         if saved_app_id is None:
             if max_commcare_version is None:
@@ -246,12 +262,13 @@ class HQClient:
         if release_first and not already_released:
             self.mark_build_status(app_id, saved_app_id, is_released=True)
 
-        url = self._apps_url(f"odk/{saved_app_id}/short_odk_url/")
+        url_type = "short_odk_media_url" if include_media else "short_odk_url"
+        url = self._apps_url(f"odk/{saved_app_id}/{url_type}/")
         resp = self.session.get(url, params={"profile": ""})
         resp.raise_for_status()
         match = re.match(r"^https?://.*/(\w+)/?$", resp.text.strip())
         if not match:
-            raise RuntimeError(f"Could not parse an app code out of short_odk_url response: {resp.text!r}")
+            raise RuntimeError(f"Could not parse an app code out of {url_type} response: {resp.text!r}")
         return match.group(1)
 
     def download_ccz(self, build_id, dest_path, poll_seconds=3, timeout_seconds=180):

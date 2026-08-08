@@ -58,9 +58,11 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
+      start_epoch: ${{ steps.set-matrix.outputs.start_epoch }}
     steps:
       - id: set-matrix
         run: |
+          echo "start_epoch=$(date +%s)" >> "$GITHUB_OUTPUT"
           TAG="${{ github.event.inputs.tag }}"
           if [ -z "$TAG" ] || [ "$TAG" = "All" ]; then
             # Each group mixes in at least one of the historically slow/large
@@ -129,7 +131,7 @@ jobs:
           retention-days: 30
 
   merge-reports:
-    needs: maestro-tests
+    needs: [prepare, maestro-tests]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -177,6 +179,22 @@ jobs:
           path: reports/
           retention-days: 30
 
+      # Formats needs.prepare.outputs.start_epoch (captured at the very
+      # start of the prepare job, before matrix fan-out) against "now" into
+      # "1h 23m" / "45m" - this job runs last, so its own start time is a
+      # reasonable proxy for "when the whole run finished".
+      - name: Compute run duration
+        id: duration
+        run: |
+          elapsed=$(( $(date +%s) - ${{ needs.prepare.outputs.start_epoch }} ))
+          hours=$(( elapsed / 3600 ))
+          minutes=$(( (elapsed % 3600) / 60 ))
+          if [ "$hours" -gt 0 ]; then
+            echo "text=${hours}h ${minutes}m" >> "$GITHUB_OUTPUT"
+          else
+            echo "text=${minutes}m" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Post Slack notification
         if: always()
         env:
@@ -184,4 +202,5 @@ jobs:
           SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
           REPORT_ARTIFACT_URL: ${{ steps.upload_report.outputs.artifact-url }}
           RUN_TAG: ${{ github.event.inputs.tag }}
+          RUN_DURATION: ${{ steps.duration.outputs.text }}
         run: python scripts/slack_notify.py

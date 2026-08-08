@@ -85,6 +85,32 @@ appId: org.commcare.dalvik
 - tapOn:
     id: "org.commcare.dalvik:id/btn_start_install"
     optional: true
+# Confirmed live (2026-08-08, full-suite validation run 31250864473, on the
+# Performance Testing app used by menu_badges): CommCareVerificationActivity
+# (missing_multimedia_layout) can show "Some of your application's
+# multimedia has not been installed..." with a Retry button - unlike a CCZ
+# install (which bundles media locally, so this check always passes
+# immediately), online/Enter-Code install fetches media as a background
+# resource-install task that may not have finished by the time this
+# verification screen first renders. id/skip_verification_button (see
+# CommCareVerificationActivity.java) is NOT an option here - it's only
+# shown when launched with fromManager=true, which this entry point isn't -
+# so retrying (giving the background fetch more time) is the only path
+# through. Same bounded repeat-while-visible pattern as
+# flows/multimedia/lazy_video_02_file_missing_popup.yaml.
+- repeat:
+    times: 6
+    while:
+      visible:
+        id: "org.commcare.dalvik:id/screen_multimedia_retry"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/screen_multimedia_retry"
+      - extendedWaitUntil:
+          visible:
+            id: "org.commcare.dalvik:id/edit_username"
+          timeout: 15000
+          optional: true
 - extendedWaitUntil:
     visible:
       id: "org.commcare.dalvik:id/edit_username"

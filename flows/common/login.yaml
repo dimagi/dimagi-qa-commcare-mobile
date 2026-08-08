@@ -6,9 +6,17 @@ appId: org.commcare.dalvik
 #   app/src/org/commcare/activities/LoginActivity.java (R.id.edit_username / edit_password / login_button)
 - tapOn:
     id: "org.commcare.dalvik:id/edit_username"
+# Confirmed (2026-08-08, user report + video): CommCare's username field
+# keeps its last-used value even after logout, so a bare inputText here
+# would concatenate onto whatever's already there (e.g. "test1" + "test1"
+# -> "test1test1"), silently breaking login on any second-or-later use of
+# this subflow in the same app install. eraseText is a no-op on an already-
+# empty field, so this is safe on a fresh install too.
+- eraseText
 - inputText: "${USERNAME}"
 - tapOn:
     id: "org.commcare.dalvik:id/edit_password"
+- eraseText
 - inputText: "${PASSWORD}"
 - hideKeyboard
 - tapOn:

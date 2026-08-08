@@ -215,6 +215,19 @@ appId: org.commcare.dalvik
 - tapOn:
     text: "I.LL UPDATE LATER"
     optional: true
+# NINTH CAVEAT, learned from a real BrowserStack failure on "Performance
+# Testing" (menu_badges) and confirmed by re-watching the recorded video:
+# dismissing the version-mismatch dialog above does NOT resume the install
+# by itself - it drops back onto the SAME "Almost there!" screen from the
+# EIGHTH CAVEAT, needing a second tap on the same "Start Install" button to
+# actually proceed. Without this, every caller whose app hits the version
+# mismatch was silently stuck here (previously misdiagnosed - on a first
+# look this looked identical to a missing-multimedia problem, since both
+# leave the flow stuck before edit_username ever appears). Optional since
+# this only matters when the version-mismatch detour happened at all.
+- tapOn:
+    text: "Start Install"
+    optional: true
 # FIFTH CAVEAT, learned from a real BrowserStack failure: this
 # extendedWaitUntil used to be a hard (non-optional) assertion, and it timed
 # out after the full 60s on 15/16 flows in one build - "Setting Up App" is

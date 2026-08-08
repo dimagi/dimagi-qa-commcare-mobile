@@ -10,6 +10,15 @@ should ever hardcode a literal code.
 app_id/domain come from each app's HQ Releases page URL, .../a/<domain>/
 apps/view/<APP_ID>/releases/, cross-referenced against the Master Mobile
 Plan (2026) sheet's own per-tab Domain links (2026-08-08).
+
+Every entry gets the media-inclusive code (get_app_install_code's own
+include_media=True default) rather than tracking per-app whether it "has"
+multimedia - confirmed live on Performance Testing: the no-media code
+installs the app fine but then gets permanently stuck on a "multimedia has
+not been installed" screen, reproducing identically across multiple
+different builds (not a timing/version issue). Requesting media for an app
+that has none is a safe no-op, so there's no reason to special-case this
+per app and risk missing the next one.
 """
 
 APP_REGISTRY = {

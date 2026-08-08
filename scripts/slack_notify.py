@@ -43,7 +43,6 @@ import report_generator
 SLACK_API = "https://slack.com/api"
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 REPORTS_DIR = report_generator.REPORTS_DIR
-MAX_FAILED_LISTED = 10
 
 
 def _slack_post(method, token, **kwargs):
@@ -113,9 +112,12 @@ def build_message(counts, failed_results, report_artifact_url, run_url):
 
     version_path = REPORTS_DIR / "apk_version.txt"
     apk_version = version_path.read_text(encoding="utf-8").strip() if version_path.exists() else None
+    run_duration = os.environ.get("RUN_DURATION")
     branch_line = f"Branch `{ref}` · triggered by {actor}"
     if apk_version:
         branch_line += f" · CommCare `{apk_version}`"
+    if run_duration:
+        branch_line += f" · took {run_duration}"
 
     lines = [
         f"{status_icon} :bar_chart: *[{tag}] {workflow} Run #{run_number} Test Summary Charts "
@@ -138,18 +140,22 @@ def build_message(counts, failed_results, report_artifact_url, run_url):
         # renders ``` as a light-bordered monospace box) for the table body.
         lines.append("")
         lines.append(":red_circle: *Failed Tests*")
-        shown = failed_results[:MAX_FAILED_LISTED]
-        workflow_width = max(len(r["workflow"]) for r in shown)
+        # UPDATE: used to hard-truncate at MAX_FAILED_LISTED with a plain
+        # "... +N more" text line - confirmed via user screenshot this isn't
+        # expandable at all, just permanently hidden. Slack's own client
+        # already collapses long messages behind a real "Show more" toggle,
+        # so listing every failure here gets that for free instead of a
+        # dead end. Not a real risk of hitting Slack's message-size limit -
+        # even ~100 failures at this table's row width is well under it.
+        workflow_width = max(len(r["workflow"]) for r in failed_results)
         header = f"{'Workflow'.ljust(workflow_width)} | Test"
         table = ["```", header, "-" * len(header)]
-        for r in shown:
+        for r in failed_results:
             name = r["name"]
             prefix = f"{r['workflow']}/"
             if name.startswith(prefix):
                 name = name[len(prefix):]
             table.append(f"{r['workflow'].ljust(workflow_width)} | {name}")
-        if len(failed_results) > len(shown):
-            table.append(f"... +{len(failed_results) - len(shown)} more")
         table.append("```")
         lines.extend(table)
 
