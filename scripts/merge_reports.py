@@ -31,6 +31,7 @@ def main():
         raise SystemExit("Usage: python scripts/merge_reports.py <artifact_dir> [<artifact_dir> ...]")
 
     all_results = []
+    apk_version = None
     for d in dirs:
         results_path = d / "latest_results.json"
         if not results_path.exists():
@@ -41,8 +42,22 @@ def main():
         all_results.extend(report_generator.TestResult(**item) for item in data)
         print(f"Loaded {len(data)} result(s) from {results_path}")
 
+        # Every matrix job runs with the same --release-tag input, so any one
+        # artifact's apk_version.txt (written by run_suite.py) speaks for the
+        # whole run - carried forward so slack_notify.py can read it from the
+        # merged reports/ dir, same as history.json.
+        if apk_version is None:
+            version_path = d / "apk_version.txt"
+            if version_path.exists():
+                apk_version = version_path.read_text(encoding="utf-8").strip()
+
     if not all_results:
         raise SystemExit("No results found in any artifact directory - nothing to merge.")
+
+    if apk_version:
+        pathlib.Path("reports").mkdir(exist_ok=True)
+        pathlib.Path("reports/apk_version.txt").write_text(apk_version, encoding="utf-8")
+        print(f"CommCare APK version: {apk_version}")
 
     build_id = os.environ.get("GITHUB_RUN_ID", "merged")
     report_path = report_generator.generate_report(build_id, all_results, enrich=False)

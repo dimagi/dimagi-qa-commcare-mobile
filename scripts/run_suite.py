@@ -408,11 +408,19 @@ def main():
         hq_client_module.run_pre_step(spec, client=client)
 
     apk_path = args.apk
+    apk_commcare_version = None
     if not apk_path:
         release, asset = download_apk.resolve(args.release_tag)
         apk_path = f"apks/{asset['name']}"
         print(f"Downloading {asset['name']} from {release['tag_name']} ...")
         download_apk.download(asset["browser_download_url"], apk_path)
+        # release['tag_name'] is like "commcare_2.63.4" - strip the prefix so
+        # both get_app_install_code's max_commcare_version comparison and the
+        # Slack notification (reports/apk_version.txt) get a bare "2.63.4".
+        apk_commcare_version = release["tag_name"].removeprefix("commcare_")
+        REPORTS_DIR = REPO_ROOT / "reports"
+        REPORTS_DIR.mkdir(exist_ok=True)
+        (REPORTS_DIR / "apk_version.txt").write_text(apk_commcare_version, encoding="utf-8")
 
     flow_files = select_flow_files(tags=args.tags, explicit_flows=args.flows)
     if not flow_files:
@@ -446,7 +454,8 @@ def main():
         if needed_keys:
             print(f"Resolving install codes for: {', '.join(sorted(needed_keys))} ...")
             env_variables.update(hq_client_module.resolve_app_codes(
-                {k: APP_REGISTRY[k] for k in needed_keys}
+                {k: APP_REGISTRY[k] for k in needed_keys},
+                max_commcare_version=apk_commcare_version,
             ))
 
         # See DEFAULT_WALL_CLOCK_BUDGET_SECONDS's own comment - computed once

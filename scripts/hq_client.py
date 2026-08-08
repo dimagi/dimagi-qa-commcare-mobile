@@ -170,7 +170,7 @@ class HQClient:
         resp.raise_for_status()
         return resp.json()["apps"]
 
-    def get_app_install_code(self, app_id, saved_app_id=None, release_first=True):
+    def get_app_install_code(self, app_id, saved_app_id=None, release_first=True, max_commcare_version=None):
         """
         Return the short alphanumeric "Enter app code on installation screen"
         code shown in HQ's Releases page "Download to Android > Online
@@ -179,7 +179,23 @@ class HQClient:
 
         If `saved_app_id` isn't given, uses the app's single most recent
         build (whether or not it's released), matching what the Releases
-        page's top accordion (the "Publish" button's target) shows.
+        page's top accordion (the "Publish" button's target) shows - UNLESS
+        `max_commcare_version` is given, in which case the newest build
+        whose own `build_spec.version` requirement is <= it is used instead.
+
+        `max_commcare_version` matters because a build's minimum-CommCare-
+        version requirement is enforced HARD by the online-install ("Enter
+        Code") path: confirmed live (2026-08-08, date_widgets validation
+        runs 31247897876/31248486050/31249076393) that dismissing the
+        resulting "The application requires CommCare version X..." dialog
+        ("I'LL UPDATE LATER") does NOT let the install proceed - it loops
+        back to the same dialog no matter how many times Start Install is
+        retapped. (install_app_as_web_user.yaml's CCZ-based install doesn't
+        hit this same hard block, which is why this never surfaced before -
+        confirmed on Date Widgets: top build v40 requires CommCare 2.64.0,
+        which doesn't exist as a GitHub release yet, while v38 only requires
+        2.62.0.) Callers should pass the actual CommCare APK version under
+        test (e.g. from download_apk.resolve()'s release tag).
 
         `release_first=True` (default) marks that build Released before
         generating the code, matching the "click Publish where the release
@@ -204,11 +220,26 @@ class HQClient:
         that URL's last path segment.
         """
         if saved_app_id is None:
-            releases = self.list_releases(app_id, only_show_released=False, limit=1)
-            if not releases:
-                raise RuntimeError(f"App {app_id} has no builds at all - nothing to release/code.")
-            saved_app_id = releases[0]["id"]
-            already_released = releases[0]["is_released"]
+            if max_commcare_version is None:
+                releases = self.list_releases(app_id, only_show_released=False, limit=1)
+                if not releases:
+                    raise RuntimeError(f"App {app_id} has no builds at all - nothing to release/code.")
+                chosen = releases[0]
+            else:
+                releases = self.list_releases(app_id, only_show_released=False, limit=20)
+                ceiling = _version_tuple(max_commcare_version)
+                chosen = next(
+                    (r for r in releases if _version_tuple(r["build_spec"]["version"]) <= ceiling),
+                    None,
+                )
+                if chosen is None:
+                    raise RuntimeError(
+                        f"App {app_id} has no build (of its {len(releases)} most recent) requiring "
+                        f"CommCare <= {max_commcare_version} - every candidate needs a newer APK "
+                        f"than the one under test."
+                    )
+            saved_app_id = chosen["id"]
+            already_released = chosen["is_released"]
         else:
             already_released = None
 
@@ -312,7 +343,7 @@ class HQClient:
         return resp
 
 
-def resolve_app_codes(registry, base_url=None, username=None, password=None):
+def resolve_app_codes(registry, base_url=None, username=None, password=None, max_commcare_version=None):
     """
     Resolve {"APP_CODE_<KEY>": code} for every (domain, app_id) in `registry`
     (see scripts/app_registry.py's APP_REGISTRY) - meant to be called once per
@@ -327,6 +358,10 @@ def resolve_app_codes(registry, base_url=None, username=None, password=None):
     Defaults to HQ_WEB_USER_EMAIL/HQ_WEB_USER_PASSWORD (not login()'s own
     HQ_API_USERNAME/PASSWORD default) since that's the account confirmed to
     work without a 2FA prompt (see login()'s own CAVEAT ON LOGIN docstring).
+
+    `max_commcare_version` should be the actual CommCare APK version under
+    test (see get_app_install_code's own docstring for why - a build newer
+    than what's installed can never finish an online/Enter-Code install).
     """
     username = username or os.environ.get("HQ_WEB_USER_EMAIL")
     password = password or os.environ.get("HQ_WEB_USER_PASSWORD")
@@ -337,8 +372,14 @@ def resolve_app_codes(registry, base_url=None, username=None, password=None):
             clients[domain] = HQClient(base_url=base_url, domain=domain).login(
                 username=username, password=password,
             )
-        codes[f"APP_CODE_{key}"] = clients[domain].get_app_install_code(app_id)
+        codes[f"APP_CODE_{key}"] = clients[domain].get_app_install_code(
+            app_id, max_commcare_version=max_commcare_version,
+        )
     return codes
+
+
+def _version_tuple(v):
+    return tuple(int(p) for p in v.split("."))
 
 
 def _domain_of(url):

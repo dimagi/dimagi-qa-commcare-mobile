@@ -111,10 +111,16 @@ def build_message(counts, failed_results, report_artifact_url, run_url):
     actor = os.environ.get("GITHUB_ACTOR", "?")
     status_icon = ":white_check_mark:" if counts["failed"] == 0 else ":x:"
 
+    version_path = REPORTS_DIR / "apk_version.txt"
+    apk_version = version_path.read_text(encoding="utf-8").strip() if version_path.exists() else None
+    branch_line = f"Branch `{ref}` · triggered by {actor}"
+    if apk_version:
+        branch_line += f" · CommCare `{apk_version}`"
+
     lines = [
         f"{status_icon} :bar_chart: *[{tag}] {workflow} Run #{run_number} Test Summary Charts "
         f"triggered by {event_label} event*",
-        f"Branch `{ref}` · triggered by {actor}",
+        branch_line,
         "",
         (f"*Pass rate:* {counts['pass_rate']:.1f}% ({counts['passed'] + counts['rerun']}/{counts['total']})   "
          f"*Total:* {counts['total']}   *Passed:* {counts['passed']}   *Failed:* {counts['failed']}   "
