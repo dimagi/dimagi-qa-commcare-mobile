@@ -76,6 +76,15 @@ appId: org.commcare.dalvik
 - tapOn:
     text: "I.LL UPDATE LATER"
     optional: true
+# Confirmed live (2026-08-08, retest run 31248486050): dismissing the
+# version-mismatch dialog above doesn't resume the install - it drops back
+# onto this SAME InstallConfirmFragment ("Almost there! Press the button
+# below to install your app.") screen, needing a second tap on the same
+# btn_start_install to actually proceed. Optional since this whole detour
+# only happens when the version-mismatch dialog showed in the first place.
+- tapOn:
+    id: "org.commcare.dalvik:id/btn_start_install"
+    optional: true
 - extendedWaitUntil:
     visible:
       id: "org.commcare.dalvik:id/edit_username"
