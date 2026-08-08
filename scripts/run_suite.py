@@ -15,6 +15,7 @@ import pathlib
 import shutil
 import sys
 import tempfile
+import time
 
 import yaml
 from dotenv import load_dotenv
@@ -116,7 +117,20 @@ def chunk_flows_by_execute_length(non_common_files, flows_dir, limit=900):
     return chunks
 
 
-def run_all_builds(bs, flow_files, app_url, args, env_variables, other_app_urls, tmp_dir, build_name=None):
+# Overall wall-clock ceiling for a whole run_suite.py invocation. Discovered
+# live: a run with several slow/parse-error-prone flows chained enough
+# 90-minute wait_for_build retries and per-file fallback attempts (see
+# run_build's own docstring) to exceed GitHub Actions' hard 6-hour job limit
+# - the job was killed mid-poll with NO report, NO Slack notification, and
+# no indication anything had even gone wrong beyond the job simply vanishing.
+# Checked before starting each new chunk/retry/fallback attempt - comfortably
+# under 6h so the report-generation and Slack-notification steps that run
+# AFTER run_suite.py still have time to execute once this returns.
+DEFAULT_WALL_CLOCK_BUDGET_SECONDS = 5 * 3600
+
+
+def run_all_builds(bs, flow_files, app_url, args, env_variables, other_app_urls, tmp_dir, build_name=None,
+                    deadline=None):
     """Runs flow_files as one or more BrowserStack builds - chunked per
     chunk_flows_by_execute_length when the execute list would be too long for
     a single build - and returns (build_ids, combined normalized test
@@ -124,13 +138,36 @@ def run_all_builds(bs, flow_files, app_url, args, env_variables, other_app_urls,
     report/retry against the combined list, not per-chunk. common/ subflows
     are always pulled in fresh here (not from flow_files) since every chunk
     needs the full set for runFlow references, independent of which
-    top-level flows that chunk executes."""
+    top-level flows that chunk executes.
+
+    deadline is a time.monotonic() timestamp (see DEFAULT_WALL_CLOCK_BUDGET_
+    SECONDS) - any chunk not yet started once it's passed is skipped outright
+    (synthesized as "failed" with a clear reason) rather than risking the
+    open-ended retry/fallback chain that caused the 6-hour hang above."""
     non_common_files = [f for f in flow_files if f.parent.name != "common"]
     common_files = list((FLOWS_DIR / "common").glob("*.yaml"))
     chunks = chunk_flows_by_execute_length(non_common_files, FLOWS_DIR)
 
+    def synthesize_missing(files, reason):
+        return [report_generator.TestResult(
+            name=f"{f.parent.name}/{f.stem}",
+            workflow=f.parent.name,
+            status="failed",
+            error=reason,
+        ) for f in files]
+
     build_ids, test_results = [], []
     for i, chunk in enumerate(chunks):
+        if deadline is not None and time.monotonic() > deadline:
+            print(f"Wall-clock budget exceeded - skipping remaining {len(chunks) - i} chunk(s) "
+                  f"({sum(len(c) for c in chunks[i:])} flow file(s)) outright.")
+            test_results.extend(synthesize_missing(
+                [f for c in chunks[i:] for f in c],
+                "Skipped: this run's overall wall-clock budget was exceeded before this "
+                "flow's chunk could even be attempted (see DEFAULT_WALL_CLOCK_BUDGET_SECONDS "
+                "in run_suite.py).",
+            ))
+            break
         chunk_name = f"{build_name}-part{i + 1}" if build_name and len(chunks) > 1 else build_name
         if len(chunks) > 1:
             print(f"Build part {i + 1}/{len(chunks)}: {len(chunk)} flow file(s)")
@@ -141,13 +178,10 @@ def run_all_builds(bs, flow_files, app_url, args, env_variables, other_app_urls,
         # uniformly.
         for build_id, result, covered_files, upload_attempts in run_build(
                 bs, chunk + common_files, app_url, args, env_variables, other_app_urls, tmp_dir,
-                build_name=chunk_name):
-            if build_id is None:
-                continue
-            build_ids.append(build_id)
-            if result is None:
-                continue
-            normalized = report_generator.normalize_build(result, bs_client=bs)
+                build_name=chunk_name, deadline=deadline):
+            if build_id is not None:
+                build_ids.append(build_id)
+            normalized = report_generator.normalize_build(result, bs_client=bs) if result else []
             if upload_attempts > 1:
                 # Not the same thing as the existing "rerun" status (that's
                 # for a flow that genuinely EXECUTED and failed, then passed
@@ -160,24 +194,24 @@ def run_all_builds(bs, flow_files, app_url, args, env_variables, other_app_urls,
                 for r in normalized:
                     r.error = f"{r.error} {note}".strip() if r.error else note
             test_results.extend(normalized)
-            # A flow whose build stayed a total parse error has no
-            # testcases.data at all (see run_build's docstring) - normalize
-            # can't produce anything for it, so it would otherwise vanish
-            # from the report's totals instead of counting as a failure.
-            # Synthesize an explicit failed result for any covered flow with
-            # no matching normalized entry.
+            # A flow whose build stayed a total parse error (or ran out of
+            # wall-clock budget before even being attempted) has no
+            # testcases.data at all - normalize can't produce anything for
+            # it, so it would otherwise vanish from the report's totals
+            # instead of counting as a failure. Synthesize an explicit
+            # failed result for any covered flow with no matching
+            # normalized entry.
             seen_names = {r.name for r in normalized}
-            for f in covered_files:
-                expected_name = f"{f.parent.name}/{f.stem}"
-                if expected_name not in seen_names:
-                    test_results.append(report_generator.TestResult(
-                        name=expected_name,
-                        workflow=f.parent.name,
-                        status="failed",
-                        error=f"BrowserStack build {build_id} was a total testsuite parse "
-                              f"error - this flow never actually ran (see the CI log for "
-                              f"retry/fallback details).",
-                    ))
+            missing = [f for f in covered_files if f"{f.parent.name}/{f.stem}" not in seen_names]
+            test_results.extend(synthesize_missing(
+                missing,
+                f"BrowserStack build {build_id} was a total testsuite parse error - this "
+                f"flow never actually ran (see the CI log for retry/fallback details)."
+                if build_id else
+                "Skipped: this run's overall wall-clock budget was exceeded before this "
+                "flow could even be attempted (see DEFAULT_WALL_CLOCK_BUDGET_SECONDS in "
+                "run_suite.py).",
+            ))
     return build_ids, test_results
 
 
@@ -244,7 +278,7 @@ def _run_build_once(bs, flow_files, app_url, args, env_variables, other_app_urls
 
 
 def run_build(bs, flow_files, app_url, args, env_variables, other_app_urls, tmp_dir, build_name=None,
-              max_parse_retries=2):
+              max_parse_retries=1, deadline=None):
     """Zip the given flow files, upload as a test suite, trigger a build, and
     wait for it. Shared by the main run and the --retry-failed re-run so both
     go through the exact same upload/trigger/poll path. Returns a LIST of
@@ -296,6 +330,10 @@ def run_build(bs, flow_files, app_url, args, env_variables, other_app_urls, tmp_
     non_common = [f for f in flow_files if f.parent.name != "common"]
     common = [f for f in flow_files if f.parent.name == "common"]
 
+    if deadline is not None and time.monotonic() > deadline:
+        print(f"Wall-clock budget already exceeded - skipping {[str(f.name) for f in non_common]} outright.")
+        return [(None, None, non_common, 0)]
+
     build_id, result = None, None
     for attempt in range(max_parse_retries + 1):
         build_id, result = _run_build_once(bs, flow_files, app_url, args, env_variables,
@@ -303,18 +341,31 @@ def run_build(bs, flow_files, app_url, args, env_variables, other_app_urls, tmp_
         if not _is_testsuite_parse_error(result):
             return [(build_id, result, non_common, attempt + 1)]
         if attempt < max_parse_retries:
+            if deadline is not None and time.monotonic() > deadline:
+                print(f"Wall-clock budget exceeded mid-retry for build {build_id} - "
+                      f"accepting its last parse-error result rather than retrying further.")
+                break
             print(f"Build {build_id} was a total BROWSERSTACK_TESTSUITE_PARSE_ERROR "
                   f"(0 tests ran) - retrying with a fresh upload ...")
 
     if len(non_common) <= 1:
         return [(build_id, result, non_common, max_parse_retries + 1)]
+    if deadline is not None and time.monotonic() > deadline:
+        print(f"Wall-clock budget exceeded - skipping the per-file fallback for "
+              f"{[str(f.name) for f in non_common]} outright.")
+        return [(None, None, non_common, 0)]
     print(f"Build {build_id} stayed a total parse error after {max_parse_retries + 1} attempts - "
           f"falling back to {len(non_common)} individual single-flow builds ...")
     quads = []
     for i, f in enumerate(non_common):
+        if deadline is not None and time.monotonic() > deadline:
+            print(f"Wall-clock budget exceeded - skipping remaining fallback file(s) outright.")
+            quads.append((None, None, non_common[i:], 0))
+            break
         sub_name = f"{build_name}-single{i + 1}" if build_name else None
         quads.extend(run_build(bs, [f] + common, app_url, args, env_variables, other_app_urls,
-                                tmp_dir, build_name=sub_name, max_parse_retries=max_parse_retries))
+                                tmp_dir, build_name=sub_name, max_parse_retries=max_parse_retries,
+                                deadline=deadline))
     return quads
 
 
@@ -383,8 +434,14 @@ def main():
 
         env_variables = {k: v for k in FLOW_ENV_VARS if (v := os.environ.get(k))}
 
+        # See DEFAULT_WALL_CLOCK_BUDGET_SECONDS's own comment - computed once
+        # here so it covers the WHOLE run (main pass + --retry-failed pass),
+        # not reset per call.
+        deadline = time.monotonic() + DEFAULT_WALL_CLOCK_BUDGET_SECONDS
+
         build_ids, test_results = run_all_builds(bs, flow_files, app_resp["app_url"], args,
-                                                  env_variables, other_app_urls, tmp, build_name=args.build_name)
+                                                  env_variables, other_app_urls, tmp,
+                                                  build_name=args.build_name, deadline=deadline)
         if not build_ids or args.no_wait:
             return
 
@@ -398,7 +455,8 @@ def main():
                 print(f"Retrying {len(retry_files)} failed flow(s) ...")
                 retry_build_name = f"{args.build_name}-retry" if args.build_name else None
                 _, retry_test_results = run_all_builds(bs, retry_files, app_resp["app_url"], args,
-                                                        env_variables, other_app_urls, tmp, build_name=retry_build_name)
+                                                        env_variables, other_app_urls, tmp,
+                                                        build_name=retry_build_name, deadline=deadline)
                 if retry_test_results:
                     test_results = report_generator.merge_rerun(test_results, retry_test_results)
 
