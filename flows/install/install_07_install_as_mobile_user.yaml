@@ -31,24 +31,36 @@ tags:
     timeout: 15000
 - tapOn:
     id: "org.commcare.dalvik:id/edit_username"
-# Confirmed against several real BrowserStack runs: the FIRST tap that opens
-# the keyboard on a fresh device session can trigger Gboard's one-time
-# "Get Smart content directly in the keyboard" system consent dialog, which
-# is a full-screen OS-level overlay completely unrelated to this app. It
-# blocks every subsequent tap until dismissed (this was the real cause of
-# several confusing earlier failures, including an apparent "password field
-# got silently cleared" - a hardware Back press was actually dismissing this
-# dialog, not the keyboard, at that moment). Dismiss it defensively wherever
-# it might appear; `optional: true` makes it a no-op when it doesn't.
+# Confirmed against several real BrowserStack runs: tapping into any of
+# this screen's 3 fields for the first time can trigger Gboard's one-time
+# "Get Smart content directly in the keyboard" system consent dialog, a
+# full-screen OS-level overlay completely unrelated to this app. It's NOT
+# reliably tied to just the very FIRST tap of the whole session - confirmed
+# live (2026-08-08, frame-by-frame video review) it can appear only after
+# username AND domain are already filled, right as the password field gets
+# focus, and dismissing it there doesn't cleanly resume the form: the
+# following hideKeyboard call (with no real IME left to dismiss, since the
+# dialog already consumed that "back" semantically) fell through to a REAL
+# back-press that exited the app to the home screen entirely - reproducing
+# the same class of bug documented elsewhere in this repo as "an apparent
+# password field got silently cleared". Fix: check for and dismiss it
+# before EVERY field tap, not just the first - `optional: true` makes each
+# check a no-op when it doesn't appear.
 - tapOn:
     text: "Skip"
     optional: true
 - inputText: "${HQ_MOBILE_WORKER_USERNAME}"
 - tapOn:
     id: "org.commcare.dalvik:id/edit_domain"
+- tapOn:
+    text: "Skip"
+    optional: true
 - inputText: "${HQ_DOMAIN}"
 - tapOn:
     id: "org.commcare.dalvik:id/edit_password"
+- tapOn:
+    text: "Skip"
+    optional: true
 - inputText: "${HQ_MOBILE_WORKER_PASSWORD}"
 # UPDATE (2nd correction) - a single hideKeyboard call (this file's original,
 # pre-session version) IS correct and was never the actual problem: on
@@ -94,6 +106,21 @@ tags:
     id: "org.commcare.dalvik:id/install_app_button"
     retryTapIfNoChange: false
     optional: true
+# UPDATE, confirmed live (2026-08-08, full-suite run 31256655977) on
+# install_08 (same inlined pattern, same failure): this used to be a hard
+# (non-optional) assertion and failed even though the install genuinely
+# succeeded. Same root cause flows/common/install_app_as_web_user.yaml's
+# own FIFTH CAVEAT already documents and fixed there: "Setting Up App" is
+# only a transitional loading screen that doesn't reliably render long
+# enough (or at all) to be caught by a poll-based wait - this standalone
+# file's copy of the sequence never got that same fix. Made optional, with
+# the mobile-worker credentials already entered above meaning a successful
+# install lands straight on the home screen ("Start") rather than another
+# login prompt - asserted afterward as this flow's real success criterion.
 - extendedWaitUntil:
     visible: "Setting Up App"
     timeout: 60000
+    optional: true
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 90000

@@ -135,9 +135,20 @@ appId: org.commcare.dalvik
 # reliably steal focus away from an EditText on Android), leaving the
 # keyboard covering get_apps_button. Restored the single hideKeyboard calls,
 # kept the repeat block removed.
+# TENTH CAVEAT, confirmed live (2026-08-08, frame-by-frame video review of
+# install_07_install_as_mobile_user.yaml's identical pattern): the Gboard
+# popup above isn't reliably tied to just the very FIRST tap of the whole
+# session - it can appear only once THIS field gets focus, after email was
+# already typed successfully. Dismissing it without a matching check here
+# left a stray hideKeyboard call falling through to a real back-press that
+# exited the app entirely (the same "password field got silently cleared"
+# class of bug this file's own earlier UPDATE comment already names).
 - hideKeyboard
 - tapOn:
     id: "org.commcare.dalvik:id/edit_password"
+- tapOn:
+    text: "Skip"
+    optional: true
 - inputText: "${HQ_WEB_USER_PASSWORD}"
 - hideKeyboard
 - tapOn:

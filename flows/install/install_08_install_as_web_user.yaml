@@ -32,11 +32,17 @@ tags:
     id: "org.commcare.dalvik:id/switch_button"
 - tapOn:
     id: "org.commcare.dalvik:id/edit_email"
-# Confirmed against real BrowserStack runs: the FIRST tap that opens the
-# keyboard on a fresh device session can trigger Gboard's one-time "Get Smart
-# content directly in the keyboard" system consent dialog - a full-screen
-# OS-level overlay unrelated to this app that blocks every subsequent tap
-# until dismissed. `optional: true` makes this a no-op when it doesn't appear.
+# Confirmed against real BrowserStack runs: tapping into EITHER of this
+# screen's 2 fields for the first time can trigger Gboard's one-time "Get
+# Smart content directly in the keyboard" system consent dialog - a
+# full-screen OS-level overlay unrelated to this app. It's NOT reliably
+# tied to just the very FIRST tap of the whole session - confirmed live
+# (2026-08-08, frame-by-frame video review of install_07's identical
+# pattern) it can appear only once a LATER field gets focus, and dismissing
+# it there without a matching check can leave a stray hideKeyboard call
+# falling through to a real back-press that exits the app entirely. Check
+# before EVERY field tap, not just the first - `optional: true` makes each
+# check a no-op when it doesn't appear.
 - tapOn:
     text: "Skip"
     optional: true
@@ -59,6 +65,9 @@ tags:
 - hideKeyboard
 - tapOn:
     id: "org.commcare.dalvik:id/edit_password"
+- tapOn:
+    text: "Skip"
+    optional: true
 - inputText: "${HQ_WEB_USER_PASSWORD}"
 - hideKeyboard
 - tapOn:
@@ -98,6 +107,21 @@ tags:
     id: "org.commcare.dalvik:id/install_app_button"
     retryTapIfNoChange: false
     optional: true
+# UPDATE, confirmed live (2026-08-08, full-suite run 31256655977): this used
+# to be a hard (non-optional) assertion and failed even though the install
+# genuinely succeeded - the failure screenshot showed the app already
+# sitting on the login screen ("Welcome back! Please log in."). Same root
+# cause flows/common/install_app_as_web_user.yaml's own FIFTH CAVEAT
+# already documents and fixed there: "Setting Up App" is only a
+# transitional loading screen that doesn't reliably render long enough (or
+# at all) to be caught by a poll-based wait - this standalone file's copy
+# of the sequence never got that same fix. Made optional, with the actual
+# login screen (this flow's real success criterion) asserted afterward.
 - extendedWaitUntil:
     visible: "Setting Up App"
     timeout: 60000
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/edit_username"
+    timeout: 90000

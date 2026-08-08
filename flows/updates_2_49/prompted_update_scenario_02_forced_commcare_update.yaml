@@ -62,10 +62,16 @@ tags:
 # null. Same "Basic Tests" default as
 # prompted_update_scenario_01_ill_update_later.yaml (this row's own header
 # says it's "analogous to" that one).
+#
+# Uses APP_CODE_BASIC_TESTS_LATEST (not the regular, version-filtered
+# APP_CODE_BASIC_TESTS every other Basic Tests flow uses) - same reasoning
+# as scenario_01: this test's whole point is the forced CommCare-APK-
+# version-mismatch blocker screen below actually appearing. See
+# scripts/app_registry.py's NO_VERSION_FILTER_KEYS for the full reasoning.
 - runFlow:
     file: ../common/install_app_by_code.yaml
     env:
-      APP_CODE: ${APP_CODE_BASIC_TESTS}
+      APP_CODE: ${APP_CODE_BASIC_TESTS_LATEST}
 - runFlow:
     file: ../common/login.yaml
     env:

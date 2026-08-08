@@ -185,6 +185,7 @@ jobs:
       # reasonable proxy for "when the whole run finished".
       - name: Compute run duration
         id: duration
+        if: always()
         run: |
           elapsed=$(( $(date +%s) - ${{ needs.prepare.outputs.start_epoch }} ))
           hours=$(( elapsed / 3600 ))

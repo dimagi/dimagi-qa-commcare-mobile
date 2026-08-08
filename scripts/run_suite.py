@@ -24,6 +24,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 import download_apk
 import hq_client as hq_client_module
 import report_generator
+import app_registry
 from app_registry import APP_REGISTRY
 from browserstack_client import BrowserStackClient
 
@@ -451,11 +452,22 @@ def main():
         # in use so a single-tag run doesn't need every domain's credentials.
         selected_text = "\n".join(f.read_text(encoding="utf-8") for f in flow_files)
         needed_keys = {key for key in APP_REGISTRY if f"APP_CODE_{key}" in selected_text}
-        if needed_keys:
-            print(f"Resolving install codes for: {', '.join(sorted(needed_keys))} ...")
+        # NO_VERSION_FILTER_KEYS (e.g. BASIC_TESTS_LATEST) deliberately skip
+        # the max_commcare_version safety filter - see app_registry.py's own
+        # comment on that set for why (some tests need the CommCare-APK-
+        # version-mismatch dialog to actually appear).
+        filtered_keys = needed_keys - app_registry.NO_VERSION_FILTER_KEYS
+        unfiltered_keys = needed_keys & app_registry.NO_VERSION_FILTER_KEYS
+        if filtered_keys:
+            print(f"Resolving install codes for: {', '.join(sorted(filtered_keys))} ...")
             env_variables.update(hq_client_module.resolve_app_codes(
-                {k: APP_REGISTRY[k] for k in needed_keys},
+                {k: APP_REGISTRY[k] for k in filtered_keys},
                 max_commcare_version=apk_commcare_version,
+            ))
+        if unfiltered_keys:
+            print(f"Resolving install codes (unfiltered) for: {', '.join(sorted(unfiltered_keys))} ...")
+            env_variables.update(hq_client_module.resolve_app_codes(
+                {k: APP_REGISTRY[k] for k in unfiltered_keys},
             ))
 
         # See DEFAULT_WALL_CLOCK_BUDGET_SECONDS's own comment - computed once

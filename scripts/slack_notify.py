@@ -176,14 +176,27 @@ def main():
     token = os.environ["SLACK_BOT_TOKEN"]
     channel_id = os.environ["SLACK_CHANNEL_ID"]
 
+    results_path = REPORTS_DIR / "latest_results.json"
+    # UPDATE, confirmed live (2026-08-08, run 31256655977, force-cancelled
+    # mid-run): merge_reports.py raises (rather than writing this file) when
+    # every matrix job's own artifact was cancelled before uploading any
+    # results - if that happens, history.json is untouched THIS run, and
+    # history[-1] below would silently be a STALE entry from whatever
+    # earlier run last completed successfully, posted as if it were this
+    # run's real result. Bail out honestly instead of doing that.
+    if not results_path.exists():
+        print(f"{results_path} doesn't exist - this run produced no results (likely "
+              f"cancelled or crashed before merge_reports.py could run) - skipping "
+              f"notification rather than posting stale history data.")
+        return
+
     history = report_generator.load_history()
     if not history:
         print("reports/history.json is empty - nothing to notify about.")
         return
     counts = history[-1]
 
-    results_path = REPORTS_DIR / "latest_results.json"
-    results = json.loads(results_path.read_text(encoding="utf-8")) if results_path.exists() else []
+    results = json.loads(results_path.read_text(encoding="utf-8"))
     failed_results = [r for r in results if r["status"] == "failed"]
 
     report_artifact_url = os.environ.get("REPORT_ARTIFACT_URL", "")

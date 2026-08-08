@@ -42,10 +42,18 @@ tags:
 # BrowserStack session has no app installed until this runs; see
 # DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
 # null.
+#
+# Uses APP_CODE_BASIC_TESTS_LATEST (not the regular, version-filtered
+# APP_CODE_BASIC_TESTS every other Basic Tests flow uses) - this test's
+# whole point is the CommCare-APK-version-mismatch dialog below actually
+# appearing, which needs the single most recent build (whatever its own
+# HQ pre-step set its required CommCare version to), not a build
+# deliberately chosen to avoid triggering that dialog. See
+# scripts/app_registry.py's NO_VERSION_FILTER_KEYS for the full reasoning.
 - runFlow:
     file: ../common/install_app_by_code.yaml
     env:
-      APP_CODE: ${APP_CODE_BASIC_TESTS}
+      APP_CODE: ${APP_CODE_BASIC_TESTS_LATEST}
 - runFlow:
     file: ../common/login.yaml
     env:

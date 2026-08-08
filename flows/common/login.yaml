@@ -6,6 +6,16 @@ appId: org.commcare.dalvik
 #   app/src/org/commcare/activities/LoginActivity.java (R.id.edit_username / edit_password / login_button)
 - tapOn:
     id: "org.commcare.dalvik:id/edit_username"
+# Confirmed (2026-08-08, user report + video, on install_07/08's identical
+# fields): tapping into a text field for the first time can trigger
+# Gboard's one-time "Get Smart content directly in the keyboard" system
+# consent dialog - a full-screen OS-level overlay unrelated to this app.
+# It's NOT reliably tied to just the very first keyboard tap of the whole
+# session, so both fields below check for it, not just this one.
+# `optional: true` makes each check a no-op when it doesn't appear.
+- tapOn:
+    text: "Skip"
+    optional: true
 # Confirmed (2026-08-08, user report + video): CommCare's username field
 # keeps its last-used value even after logout, so a bare inputText here
 # would concatenate onto whatever's already there (e.g. "test1" + "test1"
@@ -16,6 +26,9 @@ appId: org.commcare.dalvik
 - inputText: "${USERNAME}"
 - tapOn:
     id: "org.commcare.dalvik:id/edit_password"
+- tapOn:
+    text: "Skip"
+    optional: true
 - eraseText
 - inputText: "${PASSWORD}"
 - hideKeyboard

@@ -35,4 +35,23 @@ APP_REGISTRY = {
     "PERFORMANCE_TESTING": ("qateam", "4a1189cb56c44277906e9fc058838ebc"),
     "CONDITIONAL_ENUM": ("qateam", "2b3f11fa7e4f4d1a9d94aa9a93272e80"),
     "EXTERNAL_APP_FIXTURE": ("sansar", "e45245362793f25c9692791c58d10b15"),
+    # Same app/domain as BASIC_TESTS, but deliberately NOT run through
+    # max_commcare_version filtering (see NO_VERSION_FILTER_KEYS below) -
+    # this is Basic Tests' single most recent build, whatever it requires.
+    "BASIC_TESTS_LATEST": ("qateam", "cdfa6c85eb594b23b0c08729cd2beff1"),
 }
+
+# Keys that must always resolve to the app's single most recent build,
+# bypassing get_app_install_code's max_commcare_version safety filter -
+# confirmed live (2026-08-08, per docs/[Master] Mobile Plan (2026).xlsx's
+# "Updates" tab, the "2.49 Tests" section): flows/updates_2_49/
+# prompted_update_scenario_01_ill_update_later.yaml and
+# _02_forced_commcare_update.yaml deliberately need the CommCare-APK-
+# version-mismatch dialog ("New version of CommCare is Available"/
+# "...is Required") to actually appear - that dialog is the feature under
+# test, not an installation obstacle. Their own HQ pre-step
+# (setup_02_commcare_version_plus_one.json) sets the Basic Tests app's top
+# build to require one CommCare version ahead of what's installed
+# specifically to trigger it; picking an older, version-filtered build
+# instead would make the dialog never appear and both tests meaningless.
+NO_VERSION_FILTER_KEYS = {"BASIC_TESTS_LATEST"}
