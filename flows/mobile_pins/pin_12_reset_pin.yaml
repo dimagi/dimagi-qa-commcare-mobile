@@ -13,9 +13,9 @@ tags:
 # (pin.dialog.prompt.reset) using the same PaneledChoiceDialog as the initial
 # "Create a PIN?" prompt, with the same three choice strings.
 - runFlow:
-    file: ../common/install_app_as_web_user.yaml
+    file: ../common/install_app_by_code.yaml
     env:
-      APP_NAME: ".*Basic Tests$"
+      APP_CODE: ${APP_CODE_BASIC_TESTS}
 - runFlow:
     file: ../common/login.yaml
     env:

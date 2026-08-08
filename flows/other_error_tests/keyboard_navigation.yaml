@@ -27,9 +27,9 @@ tags:
 #     matches this tab's own "Start -> Interface -> Keyboard Tests"
 #     navigation exactly.
 - runFlow:
-    file: ../common/install_app_as_web_user.yaml
+    file: ../common/install_app_by_code.yaml
     env:
-      APP_NAME: ".*Other"
+      APP_CODE: ${APP_CODE_OTHER}
 - runFlow:
     file: ../common/login.yaml
     env:

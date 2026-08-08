@@ -24,6 +24,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 import download_apk
 import hq_client as hq_client_module
 import report_generator
+from app_registry import APP_REGISTRY
 from browserstack_client import BrowserStackClient
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -433,6 +434,20 @@ def main():
                 other_app_urls.append(bs.upload_app(other_apk)["app_url"])
 
         env_variables = {k: v for k in FLOW_ENV_VARS if (v := os.environ.get(k))}
+
+        # Resolve a fresh install code for whichever apps the selected flows
+        # actually reference (flows/common/install_app_by_code.yaml callers
+        # pass env: {APP_CODE: ${APP_CODE_<KEY>}}) - NEVER hardcoded, since a
+        # code is tied to one specific build and goes stale the moment
+        # someone cuts + publishes a new version. Only resolves keys actually
+        # in use so a single-tag run doesn't need every domain's credentials.
+        selected_text = "\n".join(f.read_text(encoding="utf-8") for f in flow_files)
+        needed_keys = {key for key in APP_REGISTRY if f"APP_CODE_{key}" in selected_text}
+        if needed_keys:
+            print(f"Resolving install codes for: {', '.join(sorted(needed_keys))} ...")
+            env_variables.update(hq_client_module.resolve_app_codes(
+                {k: APP_REGISTRY[k] for k in needed_keys}
+            ))
 
         # See DEFAULT_WALL_CLOCK_BUDGET_SECONDS's own comment - computed once
         # here so it covers the WHOLE run (main pass + --retry-failed pass),

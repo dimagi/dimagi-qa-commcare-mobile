@@ -56,9 +56,9 @@ tags:
 # account can see), so this only works if HQ_WEB_USER_EMAIL has access to
 # rate-limited too - flag for correction if it doesn't.
 - runFlow:
-    file: ../common/install_app_as_web_user.yaml
+    file: ../common/install_app_by_code.yaml
     env:
-      APP_NAME: ".*Rate limited submission app"
+      APP_CODE: ${APP_CODE_RATE_LIMITED}
 - runFlow:
     file: ../common/login.yaml
     env:

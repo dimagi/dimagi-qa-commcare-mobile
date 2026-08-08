@@ -63,9 +63,9 @@ tags:
 # prompted_update_scenario_01_ill_update_later.yaml (this row's own header
 # says it's "analogous to" that one).
 - runFlow:
-    file: ../common/install_app_as_web_user.yaml
+    file: ../common/install_app_by_code.yaml
     env:
-      APP_NAME: ".*Basic Tests$"
+      APP_CODE: ${APP_CODE_BASIC_TESTS}
 - runFlow:
     file: ../common/login.yaml
     env:

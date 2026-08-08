@@ -50,9 +50,9 @@ tags:
 #     real PickerActions.setDate - Maestro has no equivalent structured
 #     date-set action, hence the swipe-based best-effort here instead).
 - runFlow:
-    file: ../common/install_app_as_web_user.yaml
+    file: ../common/install_app_by_code.yaml
     env:
-      APP_NAME: ".*Conditional Enum in Case List"
+      APP_CODE: ${APP_CODE_CONDITIONAL_ENUM}
 - runFlow:
     file: ../common/login.yaml
     env:

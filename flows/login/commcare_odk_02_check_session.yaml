@@ -28,9 +28,9 @@ tags:
 #   Expiration Test's 45-second one, so only presence is checked here, not
 #   an actual wait-for-expiry.
 - runFlow:
-    file: ../common/install_app_as_web_user.yaml
+    file: ../common/install_app_by_code.yaml
     env:
-      APP_NAME: ".*Basic Tests$"
+      APP_CODE: ${APP_CODE_BASIC_TESTS}
 - runFlow:
     file: ../common/login.yaml
     env:

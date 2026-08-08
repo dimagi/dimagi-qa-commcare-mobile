@@ -85,14 +85,24 @@ tags:
 # whichever app is installed most recently is the one DispatchActivity lands
 # on afterward.
 - runFlow:
-    file: ../common/install_app_as_web_user.yaml
+    file: ../common/install_app_by_code.yaml
     env:
-      APP_NAME: ".*Case Managements!$"
+      APP_CODE: ${APP_CODE_CASE_MANAGEMENTS}
 # Install Basic Tests SECOND, inlined rather than a second runFlow to
 # install_app_as_web_user.yaml - that subflow's own launchApp now uses
 # clearState: true (see its header for why), which would wipe the
 # Case Managements! install this flow just did. This block is that same
 # subflow's steps verbatim, minus its leading launchApp.
+#
+# DELIBERATELY NOT migrated to install_app_by_code.yaml like the first
+# install above: the "Enter Code" screen (SelectInstallModeFragment) only
+# renders from a fresh CommCareSetupActivity launch when currentApp == null
+# (see this file's own UPDATE note above and install_app_by_code.yaml's own
+# header) - once Case Managements! is installed and seated, currentApp is no
+# longer null, and whether "Enter Code" is reachable at all from "See Apps
+# for My User" on an already-running install is unverified. The CCZ/app-list
+# path below is proven to work for this exact same-session second-app case,
+# so it stays as-is rather than risk an unverified swap.
 - tapOn: "More options"
 - tapOn: "See Apps for My User"
 - extendedWaitUntil:

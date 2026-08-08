@@ -4,9 +4,9 @@ tags:
   - partial
 ---
 - runFlow:
-    file: ../common/install_app_as_web_user.yaml
+    file: ../common/install_app_by_code.yaml
     env:
-      APP_NAME: ".*Multimedia"
+      APP_CODE: ${APP_CODE_MULTIMEDIA}
 # Master Mobile Plan (2026) > Multimedia > "Lazy Video 3" - for each
 # question, click the download button, wait for "Download complete", verify
 # the download button becomes a play button, verify it plays, submit.

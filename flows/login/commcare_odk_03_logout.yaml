@@ -15,9 +15,9 @@ tags:
 # "Log out of CommCare" selector citation (InstrumentationUtility.kt
 # logout(), swipes the home NestedScrollView into view first).
 - runFlow:
-    file: ../common/install_app_as_web_user.yaml
+    file: ../common/install_app_by_code.yaml
     env:
-      APP_NAME: ".*Basic Tests$"
+      APP_CODE: ${APP_CODE_BASIC_TESTS}
 - runFlow:
     file: ../common/login.yaml
     env:

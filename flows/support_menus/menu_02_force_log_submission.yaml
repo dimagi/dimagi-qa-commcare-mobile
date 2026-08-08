@@ -25,9 +25,9 @@ tags:
 #     Submission" (line 911), notification.logger.serialized.title="Device
 #     Logs Pending" (line 684) - the notification this flow asserts absent.
 - runFlow:
-    file: ../common/install_app_as_web_user.yaml
+    file: ../common/install_app_by_code.yaml
     env:
-      APP_NAME: ".*Basic Tests$"
+      APP_CODE: ${APP_CODE_BASIC_TESTS}
 - runFlow:
     file: ../common/login.yaml
     env:

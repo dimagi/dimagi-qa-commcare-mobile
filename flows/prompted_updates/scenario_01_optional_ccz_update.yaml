@@ -29,9 +29,9 @@ tags:
 # null. Only needed once, before the first login below - the later
 # re-logins in this same flow reuse the app that's still installed.
 - runFlow:
-    file: ../common/install_app_as_web_user.yaml
+    file: ../common/install_app_by_code.yaml
     env:
-      APP_NAME: ".*Basic Tests$"
+      APP_CODE: ${APP_CODE_BASIC_TESTS}
 - runFlow:
     file: ../common/login.yaml
     env:

@@ -88,9 +88,9 @@ tags:
 # Credentials: CC_TEST_USERNAME/CC_TEST_PASSWORD (test1/123 per
 # .env.example), same as every other flow in this repo.
 - runFlow:
-    file: ../common/install_app_as_web_user.yaml
+    file: ../common/install_app_by_code.yaml
     env:
-      APP_NAME: ".*Basic Tests$"
+      APP_CODE: ${APP_CODE_BASIC_TESTS}
 
 # === "Clear user Data - session not logged in": App Manager > Advanced,
 # before any login attempt (LoginActivity is still on the back stack - it

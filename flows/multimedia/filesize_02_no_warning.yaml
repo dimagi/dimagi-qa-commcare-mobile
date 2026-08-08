@@ -5,9 +5,9 @@ tags:
   - blocked_missing_asset
 ---
 - runFlow:
-    file: ../common/install_app_as_web_user.yaml
+    file: ../common/install_app_by_code.yaml
     env:
-      APP_NAME: ".*Multimedia"
+      APP_CODE: ${APP_CODE_MULTIMEDIA}
 # Master Mobile Plan (2026) > Multimedia > "Filesize 2" - update the app to
 # the "No Warning" release-note build, upload the two specifically-named
 # large-but-allowed files, verify no size warning appears.

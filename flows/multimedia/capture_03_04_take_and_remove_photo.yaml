@@ -4,9 +4,9 @@ tags:
   - partial
 ---
 - runFlow:
-    file: ../common/install_app_as_web_user.yaml
+    file: ../common/install_app_by_code.yaml
     env:
-      APP_NAME: ".*Basic Tests$"
+      APP_CODE: ${APP_CODE_BASIC_TESTS}
 # Prepends install_app_as_web_user.yaml (APP_NAME: Basic Tests) - a fresh
 # BrowserStack session has no app installed until this runs; see DispatchActivity.java's
 # CommCareSetupActivity routing when currentApp == null.

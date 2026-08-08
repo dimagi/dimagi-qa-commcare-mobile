@@ -31,9 +31,9 @@ tags:
 #     repo's recovery_measures flows already reach the separate system file
 #     picker (SAF) via plain text selectors.
 - runFlow:
-    file: ../common/install_app_as_web_user.yaml
+    file: ../common/install_app_by_code.yaml
     env:
-      APP_NAME: ".*Session Expiration Test"
+      APP_CODE: ${APP_CODE_SESSION_EXPIRATION}
 - tapOn:
     id: "org.commcare.dalvik:id/edit_username"
 - inputText: "test_session_1"

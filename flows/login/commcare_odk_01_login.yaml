@@ -28,9 +28,9 @@ tags:
 #   android_translatable_strings.txt home.start=Start - the home-screen
 #     landmark asserted below (same as every other flow in this repo).
 - runFlow:
-    file: ../common/install_app_as_web_user.yaml
+    file: ../common/install_app_by_code.yaml
     env:
-      APP_NAME: ".*Basic Tests$"
+      APP_CODE: ${APP_CODE_BASIC_TESTS}
 - tapOn:
     id: "org.commcare.dalvik:id/edit_username"
 - inputText: "${CC_TEST_USERNAME}"

@@ -28,9 +28,9 @@ tags:
 # fresh BrowserStack session has no app installed until this runs; see
 # DispatchActivity.java's CommCareSetupActivity routing when currentApp == null.
 - runFlow:
-    file: ../common/install_app_as_web_user.yaml
+    file: ../common/install_app_by_code.yaml
     env:
-      APP_NAME: ".*Right to Left Tests!"
+      APP_CODE: ${APP_CODE_RIGHT_TO_LEFT}
 - runFlow:
     file: ../common/login.yaml
     env:

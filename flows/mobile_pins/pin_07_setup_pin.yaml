@@ -13,9 +13,9 @@ tags:
 # -> createPinChoice -> launchPinCreateScreen), unlike the menu-driven "Set My PIN"
 # path in pin_04 which requires password auth first.
 - runFlow:
-    file: ../common/install_app_as_web_user.yaml
+    file: ../common/install_app_by_code.yaml
     env:
-      APP_NAME: ".*Basic Tests$"
+      APP_CODE: ${APP_CODE_BASIC_TESTS}
 - runFlow:
     file: ../common/login.yaml
     env:

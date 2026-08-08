@@ -1,0 +1,71 @@
+appId: org.commcare.dalvik
+---
+# Reusable "install a specific app via its short alphanumeric HQ install
+# code" subflow. Params: APP_CODE (e.g. "455h9iR" for "[Master] Basic
+# Tests" - get this from the app's Releases page on HQ: Download to Android
+# > Online Install > "Enter app code on installation screen: <code>").
+#
+# Replaces install_app_as_web_user.yaml's much longer "More options -> See
+# Apps for My User -> web-user login -> Get Apps -> scroll the (often very
+# long, alphabetically-sorted) app list -> tap by name" sequence with a
+# single direct entry point - no HQ web-user credentials, no scrolling, no
+# app-list ambiguity between similarly-named apps. This is the SAME "Online
+# Install" mechanism CommCareHQ's own web UI surfaces per-app (distinct from
+# "Offline Install", which is the CCZ-file-based path install_app_as_web_
+# user.yaml drives) - confirmed live via a recorded screen capture of that
+# HQ Releases-page dialog.
+#
+# Verified against commcare-android source (read-only reference, not modified):
+#   CommCareSetupActivity (@ManagedUi(R.layout.first_start_screen_modern),
+#     app/src/org/commcare/activities/CommCareSetupActivity.java) hosts
+#     SelectInstallModeFragment in its default initial UiState
+#     (CHOOSE_INSTALL_ENTRY_METHOD) - the very first screen after a fresh
+#     launch, no navigation needed to reach it.
+#   select_install_mode_fragment.xml line 110-118: id/enter_app_location, a
+#     SquareButtonWithText with hardcoded (non-@string) subtitle "Enter
+#     Code" - tapping it (SelectInstallModeFragment.java:102-117) swaps in
+#     SetupEnterURLFragment and sets uiState = IN_URL_ENTRY.
+#   fragment_setup_enter_url.xml line 56-65: id/edit_profile_location (NOT
+#     "profile_code" - that id doesn't exist anywhere in this codebase,
+#     despite appearing in a sibling repo's older Appium test; flag for
+#     correction if a future commcare-android version renames this again),
+#     hint "Enter code here".
+#   fragment_setup_enter_url.xml line 68-78 + SetupEnterURLFragment.java
+#     line 46-61: id/start_install, text "Start Install" (strings.xml line
+#     111, install_button_start) - starts DISABLED, only enables once text
+#     is typed (a TextWatcher), so inputText must happen before this tap.
+#     Clicking it sets uiState = READY_TO_INSTALL
+#     (CommCareSetupActivity.java line 319-324).
+#   install_confirm_fragment.xml line 74-83 + InstallConfirmFragment.java
+#     line 42-44: id/btn_start_install - a SECOND, DIFFERENT-ID button that
+#     ALSO renders as "Start Install" (same install_button_start string,
+#     different screen) - there is no button anywhere in this flow whose
+#     text is literally just "Install". Do not "fix" this to search for
+#     that text - it doesn't exist.
+#   CommCareSetupActivity.java line 696-713 (reportSuccess): if the code
+#     resolves to an app that's already installed and current, this shows a
+#     Toast "App is up to date" (android_translatable_strings.txt line 8,
+#     updates.success) instead of a "new app installed" path - both cases
+#     land on the login screen either way, so this flow doesn't need to
+#     branch on it.
+#   strings.xml line 118 (install_wrong_code): a wrong/unresolvable code
+#     shows "The app code you have entered is incorrect. Please try
+#     scanning barcode or entering correct code." back on the entry-method
+#     screen - if this flow ever fails waiting for edit_username, check for
+#     that text first before assuming a different bug.
+- launchApp:
+    clearState: true
+- tapOn:
+    id: "org.commcare.dalvik:id/enter_app_location"
+- tapOn:
+    id: "org.commcare.dalvik:id/edit_profile_location"
+- inputText: "${APP_CODE}"
+- hideKeyboard
+- tapOn:
+    id: "org.commcare.dalvik:id/start_install"
+- tapOn:
+    id: "org.commcare.dalvik:id/btn_start_install"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/edit_username"
+    timeout: 90000

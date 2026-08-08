@@ -11,9 +11,9 @@ tags:
 # "Forgot PIN?" (login.menu.password.mode) lives in the login screen's own
 # options menu and toggles the field back to password mode in place.
 - runFlow:
-    file: ../common/install_app_as_web_user.yaml
+    file: ../common/install_app_by_code.yaml
     env:
-      APP_NAME: ".*Basic Tests$"
+      APP_CODE: ${APP_CODE_BASIC_TESTS}
 - runFlow:
     file: ../common/login.yaml
     env:

@@ -18,8 +18,8 @@ tags:
 #     APP_NAME = "Session Expiration Test" - the exact string this flow
 #     passes through to the shared subflow.
 - runFlow:
-    file: ../common/install_app_as_web_user.yaml
+    file: ../common/install_app_by_code.yaml
     env:
-      APP_NAME: ".*Session Expiration Test"
+      APP_CODE: ${APP_CODE_SESSION_EXPIRATION}
 - assertVisible:
     id: "org.commcare.dalvik:id/edit_username"

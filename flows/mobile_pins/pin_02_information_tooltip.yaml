@@ -11,9 +11,9 @@ tags:
 # The grey 'i' is R.id.extra_info_button; its text panel is R.id.extra_info_content,
 # toggled visible/gone by PaneledChoiceDialog.toggleExtraInfoVisibility().
 - runFlow:
-    file: ../common/install_app_as_web_user.yaml
+    file: ../common/install_app_by_code.yaml
     env:
-      APP_NAME: ".*Basic Tests$"
+      APP_CODE: ${APP_CODE_BASIC_TESTS}
 - runFlow:
     file: ../common/login.yaml
     env:

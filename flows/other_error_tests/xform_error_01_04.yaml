@@ -34,9 +34,9 @@ tags:
 #     error substrings ("Error in calculation for /data/immediate_fail" etc.)
 #     and the dismiss-back-to-"XForm Error Tests" pattern reused below.
 - runFlow:
-    file: ../common/install_app_as_web_user.yaml
+    file: ../common/install_app_by_code.yaml
     env:
-      APP_NAME: ".*Other"
+      APP_CODE: ${APP_CODE_OTHER}
 - runFlow:
     file: ../common/login.yaml
     env:

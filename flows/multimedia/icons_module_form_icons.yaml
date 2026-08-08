@@ -4,9 +4,9 @@ tags:
   - partial
 ---
 - runFlow:
-    file: ../common/install_app_as_web_user.yaml
+    file: ../common/install_app_by_code.yaml
     env:
-      APP_NAME: ".*Multimedia"
+      APP_CODE: ${APP_CODE_MULTIMEDIA}
 # Master Mobile Plan (2026) > Multimedia > "Icons" - View module and form
 # icons, verify icons + audio buttons present, tap audio buttons.
 #

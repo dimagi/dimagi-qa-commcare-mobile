@@ -87,9 +87,9 @@ tags:
 # BrowserStack run starts from clearState:true (a fresh casedb), so a fixed
 # name is safe from collision within a single run.
 - runFlow:
-    file: ../common/install_app_as_web_user.yaml
+    file: ../common/install_app_by_code.yaml
     env:
-      APP_NAME: ".*Case Managements!$"
+      APP_CODE: ${APP_CODE_CASE_MANAGEMENTS}
 - runFlow:
     file: ../common/login.yaml
     env:

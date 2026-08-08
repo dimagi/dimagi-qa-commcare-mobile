@@ -11,9 +11,9 @@ tags:
 # Self-contained: sets a PIN first (state pin_07 would otherwise have left
 # behind), then verifies the PIN can be used to log in.
 - runFlow:
-    file: ../common/install_app_as_web_user.yaml
+    file: ../common/install_app_by_code.yaml
     env:
-      APP_NAME: ".*Basic Tests$"
+      APP_CODE: ${APP_CODE_BASIC_TESTS}
 - runFlow:
     file: ../common/login.yaml
     env:

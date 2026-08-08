@@ -22,9 +22,9 @@ tags:
 # DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
 # null.
 - runFlow:
-    file: ../common/install_app_as_web_user.yaml
+    file: ../common/install_app_by_code.yaml
     env:
-      APP_NAME: ".*Multimedia"
+      APP_CODE: ${APP_CODE_MULTIMEDIA}
 - runFlow:
     file: ../common/login.yaml
     env:

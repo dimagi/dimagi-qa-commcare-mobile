@@ -38,9 +38,9 @@ tags:
 # install of this app, which is a prerequisite for that out-of-scope setup
 # to even begin.
 - runFlow:
-    file: ../common/install_app_as_web_user.yaml
+    file: ../common/install_app_by_code.yaml
     env:
-      APP_NAME: ".*Mobile Updates - Test 1_2"
+      APP_CODE: ${APP_CODE_MOBILE_UPDATES_1_2}
 - runFlow:
     file: ../common/login.yaml
     env:

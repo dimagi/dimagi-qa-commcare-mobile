@@ -33,9 +33,9 @@ tags:
 #     text, and the "553" badge count waited for via Espresso's
 #     waitForView - the on-device basis for this flow's extendedWaitUntil.
 - runFlow:
-    file: ../common/install_app_as_web_user.yaml
+    file: ../common/install_app_by_code.yaml
     env:
-      APP_NAME: ".*Performance Testing"
+      APP_CODE: ${APP_CODE_PERFORMANCE_TESTING}
 - tapOn:
     id: "org.commcare.dalvik:id/edit_username"
 - inputText: "case_load"

@@ -170,6 +170,59 @@ class HQClient:
         resp.raise_for_status()
         return resp.json()["apps"]
 
+    def get_app_install_code(self, app_id, saved_app_id=None, release_first=True):
+        """
+        Return the short alphanumeric "Enter app code on installation screen"
+        code shown in HQ's Releases page "Download to Android > Online
+        Install" panel (the same code flows/common/install_app_by_code.yaml's
+        APP_CODE param expects) - e.g. "455h9iR" for "[Master] Basic Tests".
+
+        If `saved_app_id` isn't given, uses the app's single most recent
+        build (whether or not it's released), matching what the Releases
+        page's top accordion (the "Publish" button's target) shows.
+
+        `release_first=True` (default) marks that build Released before
+        generating the code, matching the "click Publish where the release
+        toggle is on for the existing top build" action confirmed live
+        against HQ's own UI/DevTools (2026-08-08) - NOT because the endpoint
+        below technically requires it (confirmed live it also works against
+        an unreleased build), but because that's the deliberate action this
+        was asked to automate, and a released build is what a real "Online
+        Install" user is expected to land on.
+
+        Source: static/webpack/app_manager/app_manager.bundle.js (minified,
+        no non-minified source available locally) - the release-manager
+        Knockout view model's `base_url`/`generate_short_url`/
+        `parse_bitly_url` functions:
+            n.base_url = () => "/a/" + domain + "/apps/odk/" + id + "/"
+            n.generate_short_url = (type) => ajax({url: base_url()+type+"/?profile="+build_profile})
+            n.parse_bitly_url = (url) => last path segment of url (word chars only)
+        where `id` is the BUILD's own doc id (saved_app_id), `type` is
+        "short_odk_url" (no media) - confirmed live: GET
+        /a/<domain>/apps/odk/<saved_app_id>/short_odk_url/?profile= returns
+        a bare bit.ly URL body (e.g. "https://bit.ly/3U0MUXW"); the code is
+        that URL's last path segment.
+        """
+        if saved_app_id is None:
+            releases = self.list_releases(app_id, only_show_released=False, limit=1)
+            if not releases:
+                raise RuntimeError(f"App {app_id} has no builds at all - nothing to release/code.")
+            saved_app_id = releases[0]["id"]
+            already_released = releases[0]["is_released"]
+        else:
+            already_released = None
+
+        if release_first and not already_released:
+            self.mark_build_status(app_id, saved_app_id, is_released=True)
+
+        url = self._apps_url(f"odk/{saved_app_id}/short_odk_url/")
+        resp = self.session.get(url, params={"profile": ""})
+        resp.raise_for_status()
+        match = re.match(r"^https?://.*/(\w+)/?$", resp.text.strip())
+        if not match:
+            raise RuntimeError(f"Could not parse an app code out of short_odk_url response: {resp.text!r}")
+        return match.group(1)
+
     def download_ccz(self, build_id, dest_path, poll_seconds=3, timeout_seconds=180):
         """
         Download a specific build's CCZ (NOT the master app_id - `build_id`
@@ -257,6 +310,35 @@ class HQClient:
         )
         resp.raise_for_status()
         return resp
+
+
+def resolve_app_codes(registry, base_url=None, username=None, password=None):
+    """
+    Resolve {"APP_CODE_<KEY>": code} for every (domain, app_id) in `registry`
+    (see scripts/app_registry.py's APP_REGISTRY) - meant to be called once per
+    run_suite.py invocation, right before uploading to BrowserStack, so every
+    flow gets a code for whatever the CURRENT top build is instead of a
+    literal that goes stale the next time someone cuts a version.
+
+    Logs in once per distinct domain (a HQClient's session/CSRF token isn't
+    reusable across domains needing separate permission checks) rather than
+    once per app, since several registry entries commonly share a domain.
+
+    Defaults to HQ_WEB_USER_EMAIL/HQ_WEB_USER_PASSWORD (not login()'s own
+    HQ_API_USERNAME/PASSWORD default) since that's the account confirmed to
+    work without a 2FA prompt (see login()'s own CAVEAT ON LOGIN docstring).
+    """
+    username = username or os.environ.get("HQ_WEB_USER_EMAIL")
+    password = password or os.environ.get("HQ_WEB_USER_PASSWORD")
+    clients = {}
+    codes = {}
+    for key, (domain, app_id) in registry.items():
+        if domain not in clients:
+            clients[domain] = HQClient(base_url=base_url, domain=domain).login(
+                username=username, password=password,
+            )
+        codes[f"APP_CODE_{key}"] = clients[domain].get_app_install_code(app_id)
+    return codes
 
 
 def _domain_of(url):

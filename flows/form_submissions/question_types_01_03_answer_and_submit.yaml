@@ -76,9 +76,9 @@ tags:
 # sheet's prose when they disagree, but here the sheet and this batch's own
 # instructions already agree on test1/123).
 - runFlow:
-    file: ../common/install_app_as_web_user.yaml
+    file: ../common/install_app_by_code.yaml
     env:
-      APP_NAME: ".*Basic Tests$"
+      APP_CODE: ${APP_CODE_BASIC_TESTS}
 - runFlow:
     file: ../common/login.yaml
     env:

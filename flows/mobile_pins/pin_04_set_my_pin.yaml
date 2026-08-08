@@ -15,9 +15,9 @@ tags:
 #   app/src/org/commcare/activities/CreatePinActivity.java (pin_entry, pin_confirm_button)
 #   android_translatable_strings.txt (pin.auth.prompt.password / pin.directive.new / pin.directive.confirm / pin.set.success)
 - runFlow:
-    file: ../common/install_app_as_web_user.yaml
+    file: ../common/install_app_by_code.yaml
     env:
-      APP_NAME: ".*Basic Tests$"
+      APP_CODE: ${APP_CODE_BASIC_TESTS}
 - runFlow:
     file: ../common/login.yaml
     env:

@@ -44,9 +44,9 @@ tags:
 #     custom widget's real ids, reused below; "1 form sent to server!"
 #     toast confirms successful submission.
 - runFlow:
-    file: ../common/install_app_as_web_user.yaml
+    file: ../common/install_app_by_code.yaml
     env:
-      APP_NAME: ".*Date Widgets"
+      APP_CODE: ${APP_CODE_DATE_WIDGETS}
 - runFlow:
     file: ../common/login.yaml
     env:
