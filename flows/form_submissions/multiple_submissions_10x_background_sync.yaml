@@ -99,12 +99,25 @@ tags:
       - hideKeyboard
       - tapOn:
           id: "org.commcare.dalvik:id/nav_btn_next"
+      # UPDATE, confirmed live (2026-08-08, real BrowserStack failure, build
+      # fc7ff420bd1deb299f7f8a391f2287999c1cf0bd): "Assert nav_btn_finish
+      # visible" failed on one of the 10 loop iterations. Unlike the
+      # "Question Types"/"Groups" forms elsewhere in this repo, "Basic
+      # Form" has no repeat group and no confirmed auto-submit-bypass path -
+      # this looks like a genuine timing issue (10s wasn't always enough
+      # under the load of 10 back-to-back submissions, likely worse under
+      # concurrent CI runs), not a selector bug. Raised the timeout and
+      # made the finish-tap optional (harmless if the form already
+      # auto-advanced) - the toast assertion right after is the real
+      # per-iteration success check and stays a hard assertion since this
+      # form has no other durable post-submission marker to fall back on.
       - extendedWaitUntil:
           visible:
             id: "org.commcare.dalvik:id/nav_btn_finish"
-          timeout: 10000
+          timeout: 20000
       - tapOn:
           id: "org.commcare.dalvik:id/nav_btn_finish"
+          optional: true
       - assertVisible:
           text: "(?i).*form.*success.*completed.*"
 

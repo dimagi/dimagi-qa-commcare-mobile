@@ -125,17 +125,40 @@ tags:
     id: "org.commcare.dalvik:id/nav_btn_next"
     optional: true
 - assertVisible: "MaestroIncompleteText2"
+# UPDATE, confirmed live (2026-08-08, real BrowserStack failure + user
+# screen recording on this same "Question Types" form's identical pattern -
+# see incomplete_forms_01_03_save_resume_submit.yaml's header for the full
+# root-cause writeup): nav_btn_next and nav_btn_finish are two DISTINCT
+# views (nav_btn_next is never removed from the tree even once
+# nav_btn_finish covers it), and a genuine auto-submit path exists
+# (FormEntryActivityUIController.java's EVENT_END_OF_FORM/repeat-dialog
+# "Skip" handling) that submits the form without nav_btn_finish's
+# visibility ever changing - this form has a repeat group (see
+# flows/form_submissions/question_types_01_03_answer_and_submit.yaml's own
+# choice_dialog_panel_3 handling for the same "Question Types" content).
+# Fixed: loop on nav_btn_finish's own appearance (bounded, with a
+# defensive repeat-group dialog dismiss) instead of nav_btn_next's, and
+# make the trailing finish-tap optional since exiting the loop doesn't
+# guarantee nav_btn_finish caused it - "Start" below remains the real
+# success criterion.
 - repeat:
+    times: 30
     while:
-      visible:
-        id: "org.commcare.dalvik:id/nav_btn_next"
+      notVisible:
+        id: "org.commcare.dalvik:id/nav_btn_finish"
     commands:
       - tapOn:
+          id: "org.commcare.dalvik:id/choice_dialog_panel_3"
+          optional: true
+      - tapOn:
           id: "org.commcare.dalvik:id/nav_btn_next"
-- extendedWaitUntil:
-    visible:
-      id: "org.commcare.dalvik:id/nav_btn_finish"
-    timeout: 10000
+          optional: true
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_finish"
-- assertVisible: "Start"
+    optional: true
+# Per explicit guidance: a form submission can land on EITHER the "Start"
+# home screen OR the calling module screen ("Basic Form Tests", the module
+# "Question Types" lives in) depending on context - accept either as the
+# real success signal rather than assuming just one.
+- assertVisible:
+    text: "(?i)^(Start|Basic Form Tests)$"

@@ -130,26 +130,55 @@ tags:
     point: "55%, 40%"
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_next"
+# UPDATE, confirmed live (2026-08-08, real BrowserStack failure + user
+# screen recording, build fc7ff420bd1deb299f7f8a391f2287999c1cf0bd): "Assert
+# that nav_btn_finish is visible" failed, but the form had ALREADY submitted
+# successfully (screenshot showed the device back on "Basic Form Tests",
+# the caller screen) - a real auto-submit path, not a stuck form. Confirmed
+# against commcare-android source: nav_btn_next and nav_btn_finish are two
+# DISTINCT views (not one relabeled button), and nav_btn_next is NEVER
+# removed from the tree even once nav_btn_finish is shown covering it, so
+# the old `while: visible: nav_btn_next` condition was checking the wrong
+# thing. FormEntryActivityUIController.java also confirms a genuine
+# auto-submit path (EVENT_END_OF_FORM with no questionsView, and a
+# repeat-prompt dialog's "Skip" choice) calls triggerUserFormComplete()
+# directly without nav_btn_finish's visibility ever changing. Fixed: loop
+# on nav_btn_finish's own appearance instead, with a defensive repeat-group
+# dialog dismiss each iteration (this form has its own required select
+# questions but no confirmed repeat group - included defensively anyway,
+# harmless no-op if never shown), and make the trailing finish-tap optional
+# since exiting the loop doesn't guarantee nav_btn_finish caused it.
 - repeat:
     times: 25
     while:
-      visible:
-        id: "org.commcare.dalvik:id/nav_btn_next"
+      notVisible:
+        id: "org.commcare.dalvik:id/nav_btn_finish"
     commands:
       - tapOn:
+          id: "org.commcare.dalvik:id/choice_dialog_panel_3"
+          optional: true
+      - tapOn:
           id: "org.commcare.dalvik:id/nav_btn_next"
-- extendedWaitUntil:
-    visible:
-      id: "org.commcare.dalvik:id/nav_btn_finish"
-    timeout: 10000
+          optional: true
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_finish"
+    optional: true
 - assertVisible:
     text: "(?i).*form.*success.*completed.*"
+    optional: true
 - assertNotVisible:
     text: "(?i).*unexpected error.*"
 - assertNotVisible:
     text: "(?i).*commcare will now restart.*"
+# The success toast above is transient and may already be gone by the time
+# this assertion polls (same caveat this repo applies elsewhere, e.g.
+# "Developer Mode Enabled"). Per explicit guidance: a form submission can
+# land on EITHER the "Start" home screen OR the calling module screen
+# ("Basic Form Tests", this form was opened from) depending on context -
+# accept either as the real, durable confirmation that submission returned
+# control to the caller rather than leaving the form stuck open.
+- assertVisible:
+    text: "(?i)^(Start|Basic Form Tests)$"
 
 # --- Submission 2: First = No, Second = No (different answers) ---
 - tapOn: "Start"
@@ -169,23 +198,52 @@ tags:
     point: "70%, 40%"
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_next"
+# UPDATE, confirmed live (2026-08-08, real BrowserStack failure + user
+# screen recording, build fc7ff420bd1deb299f7f8a391f2287999c1cf0bd): "Assert
+# that nav_btn_finish is visible" failed, but the form had ALREADY submitted
+# successfully (screenshot showed the device back on "Basic Form Tests",
+# the caller screen) - a real auto-submit path, not a stuck form. Confirmed
+# against commcare-android source: nav_btn_next and nav_btn_finish are two
+# DISTINCT views (not one relabeled button), and nav_btn_next is NEVER
+# removed from the tree even once nav_btn_finish is shown covering it, so
+# the old `while: visible: nav_btn_next` condition was checking the wrong
+# thing. FormEntryActivityUIController.java also confirms a genuine
+# auto-submit path (EVENT_END_OF_FORM with no questionsView, and a
+# repeat-prompt dialog's "Skip" choice) calls triggerUserFormComplete()
+# directly without nav_btn_finish's visibility ever changing. Fixed: loop
+# on nav_btn_finish's own appearance instead, with a defensive repeat-group
+# dialog dismiss each iteration (this form has its own required select
+# questions but no confirmed repeat group - included defensively anyway,
+# harmless no-op if never shown), and make the trailing finish-tap optional
+# since exiting the loop doesn't guarantee nav_btn_finish caused it.
 - repeat:
     times: 25
     while:
-      visible:
-        id: "org.commcare.dalvik:id/nav_btn_next"
+      notVisible:
+        id: "org.commcare.dalvik:id/nav_btn_finish"
     commands:
       - tapOn:
+          id: "org.commcare.dalvik:id/choice_dialog_panel_3"
+          optional: true
+      - tapOn:
           id: "org.commcare.dalvik:id/nav_btn_next"
-- extendedWaitUntil:
-    visible:
-      id: "org.commcare.dalvik:id/nav_btn_finish"
-    timeout: 10000
+          optional: true
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_finish"
+    optional: true
 - assertVisible:
     text: "(?i).*form.*success.*completed.*"
+    optional: true
 - assertNotVisible:
     text: "(?i).*unexpected error.*"
 - assertNotVisible:
     text: "(?i).*commcare will now restart.*"
+# The success toast above is transient and may already be gone by the time
+# this assertion polls (same caveat this repo applies elsewhere, e.g.
+# "Developer Mode Enabled"). Per explicit guidance: a form submission can
+# land on EITHER the "Start" home screen OR the calling module screen
+# ("Basic Form Tests", this form was opened from) depending on context -
+# accept either as the real, durable confirmation that submission returned
+# control to the caller rather than leaving the form stuck open.
+- assertVisible:
+    text: "(?i)^(Start|Basic Form Tests)$"

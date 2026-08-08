@@ -116,8 +116,22 @@ tags:
 
 # --- Case Name Size 2: the oversized-name submission must NOT show up
 # under Saved Forms (it was quarantined, not completed). ---
+# UPDATE, confirmed live (2026-08-08, real BrowserStack failure, build
+# fc7ff420bd1deb299f7f8a391f2287999c1cf0bd): "Assert that 'Saved Forms' is
+# visible" failed - the failing screenshot showed the toolbar title is
+# actually this app's own name (e.g. "[Master] Ba...", truncated), not the
+# literal "Saved Forms" string this header's own citation assumed
+# (app.workflow.saved.heading) - that string may be the Activity's
+# setTitle() value rather than something rendered as visible toolbar text
+# in this CCZ/APK combination, or may simply differ from the citation.
+# "Filter By: All Completed Forms" IS visible on the real screen (a filter
+# chip, not the toolbar title) - matching on that instead confirms we
+# genuinely reached the right screen. The list itself was empty in the
+# failing screenshot too, which is the REAL pass condition this test cares
+# about (the quarantined form correctly absent) - kept as its own
+# assertNotVisible check below, unchanged.
 - tapOn: "Saved"
-- assertVisible: "Saved Forms"
+- assertVisible: "Filter By:"
 - assertNotVisible:
     text: "(?i).*CaseNameTooLong.*"
 - back

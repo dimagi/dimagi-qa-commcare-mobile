@@ -184,17 +184,47 @@ tags:
     timeout: 10000
 - tapOn:
     id: "org.commcare.dalvik:id/jumpBeginningButton"
+# UPDATE, confirmed live (2026-08-08, real BrowserStack failure + user
+# screen recording, build fc7ff420bd1deb299f7f8a391f2287999c1cf0bd): "Assert
+# that nav_btn_finish is visible" failed, but the recording showed the form
+# had ALREADY submitted successfully by that point - a real auto-submit
+# path, not a stuck form. Confirmed against commcare-android source
+# (FormEntryActivityUIController.java): nav_btn_next and nav_btn_finish are
+# two DISTINCT, separately-inflated views (not one relabeled button) -
+# nav_btn_next is NEVER removed from the view tree even once nav_btn_finish
+# is shown covering it, so the old `while: visible: nav_btn_next` loop
+# condition could keep "succeeding" (and, being unbounded with no `times:`,
+# had no safety cap either). Two confirmed code paths
+# (FormEntryActivityUIController.java's EVENT_END_OF_FORM handler when
+# questionsView is null, and a repeat-prompt dialog's "Skip" choice) call
+# triggerUserFormComplete() DIRECTLY, submitting the form without
+# nav_btn_finish's visibility ever being touched - matching this form's own
+# "Question Types" content, which has a repeat group (see
+# flows/form_submissions/question_types_01_03_answer_and_submit.yaml's own
+# choice_dialog_panel_3 handling for the same form). Fixed: loop on
+# nav_btn_finish's own appearance (bounded, with a defensive repeat-group
+# dialog dismiss each iteration) instead of nav_btn_next's, and make the
+# trailing finish-tap optional since the loop exiting doesn't guarantee
+# nav_btn_finish is what caused it to exit (auto-submit could have too) -
+# the real success criterion is "Start" below, unchanged.
 - repeat:
+    times: 30
     while:
-      visible:
-        id: "org.commcare.dalvik:id/nav_btn_next"
+      notVisible:
+        id: "org.commcare.dalvik:id/nav_btn_finish"
     commands:
       - tapOn:
+          id: "org.commcare.dalvik:id/choice_dialog_panel_3"
+          optional: true
+      - tapOn:
           id: "org.commcare.dalvik:id/nav_btn_next"
-- extendedWaitUntil:
-    visible:
-      id: "org.commcare.dalvik:id/nav_btn_finish"
-    timeout: 10000
+          optional: true
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_finish"
-- assertVisible: "Start"
+    optional: true
+# Per explicit guidance: a form submission can land on EITHER the "Start"
+# home screen OR the calling module screen ("Basic Form Tests", the module
+# "Question Types" lives in) depending on context - accept either as the
+# real success signal rather than assuming just one.
+- assertVisible:
+    text: "(?i)^(Start|Basic Form Tests)$"
