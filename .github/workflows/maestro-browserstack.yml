@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Run only flows carrying this tag. Pick All to run everything."
+        description: "Run only flows carrying this tag. Pick All to run everything (splits across 2 parallel jobs)."
         required: false
         type: choice
         default: "All"
@@ -47,8 +47,41 @@ on:
     - cron: "0 3 * * *"
 
 jobs:
-  maestro-tests:
+  # Computes the matrix maestro-tests fans out over. A specific --tag pick
+  # (or nothing typed in, which never happens via the dropdown but covers any
+  # future non-choice trigger) runs as a single matrix entry - no parallelism
+  # needed for one tag. "All" (the dropdown's default, and what the nightly
+  # schedule trigger implies since it has no inputs at all) splits into 2
+  # roughly-balanced groups so the full suite doesn't have to run serially -
+  # see the tag lists below for why they're split this way.
+  prepare:
     runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - id: set-matrix
+        run: |
+          TAG="${{ github.event.inputs.tag }}"
+          if [ -z "$TAG" ] || [ "$TAG" = "All" ]; then
+            # Each group mixes in at least one of the historically slow/large
+            # tags (mobile_pins, multimedia, form_submissions,
+            # recovery_measures) so neither runner ends up idle while the
+            # other carries most of the wall-clock time.
+            MATRIX='{"include":[
+              {"name":"group-a","tags":"mobile_pins multimedia case_filters conditional_enum_in_case_list date_widgets install login menu_badges other_error_tests session_expiration"},
+              {"name":"group-b","tags":"form_submissions recovery_measures externalapp_tests prompted_updates right_to_left_text support_menus trigger_device_logs update updates_2_49 updates_partial_failed"}
+            ]}'
+          else
+            MATRIX="{\"include\":[{\"name\":\"single\",\"tags\":\"$TAG\"}]}"
+          fi
+          echo "matrix=$(echo "$MATRIX" | tr -d '\n')" >> "$GITHUB_OUTPUT"
+
+  maestro-tests:
+    needs: prepare
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.prepare.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v4
 
@@ -58,19 +91,6 @@ jobs:
 
       - name: Install dependencies
         run: pip install -r requirements.txt
-
-      # reports/history.json is what the report's trend chart is drawn from -
-      # each run is a fresh checkout, so without this it'd always show a
-      # single point. Restore keyed on run_id first (never matches) so it
-      # falls through to the newest "report-history-" cache via restore-keys,
-      # then save under this run's own id - a fixed save key would collide
-      # with the previous run's immutable cache entry.
-      - name: Restore report history
-        uses: actions/cache/restore@v4
-        with:
-          path: reports/history.json
-          key: report-history-${{ github.run_id }}
-          restore-keys: report-history-
 
       - name: Run Maestro suite on BrowserStack
         env:
@@ -89,12 +109,57 @@ jobs:
           HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
           HQ_WEB_USER_PASSWORD: ${{ secrets.HQ_WEB_USER_PASSWORD }}
         run: |
-          ARGS=(--devices "${{ github.event.inputs.devices || 'Samsung Galaxy S20-10.0' }}")
-          TAG="${{ github.event.inputs.tag }}"
-          if [ -n "$TAG" ] && [ "$TAG" != "All" ]; then ARGS+=(--tag "$TAG"); fi
+          ARGS=(--devices "${{ github.event.inputs.devices || 'Samsung Galaxy S20-10.0' }}" --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}")
+          for T in ${{ matrix.tags }}; do ARGS+=(--tag "$T"); done
           if [ -n "${{ github.event.inputs.release_tag }}" ]; then ARGS+=(--release-tag "${{ github.event.inputs.release_tag }}"); fi
           if [ -n "${{ github.event.inputs.hq_setup }}" ]; then ARGS+=(--hq-setup "${{ github.event.inputs.hq_setup }}"); fi
           python scripts/run_suite.py "${ARGS[@]}"
+
+      # No report-history cache restore/save here on purpose: each matrix
+      # job's own reports/history.json only reflects ITS slice of tags, not
+      # the full logical run, so it isn't meaningful on its own - the
+      # merge-reports job below is the only place the real persistent trend
+      # history gets read or written, from the properly COMBINED results.
+      - name: Upload HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maestro-report-${{ matrix.name }}
+          path: reports/
+          retention-days: 30
+
+  merge-reports:
+    needs: maestro-tests
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # Same restore/save pattern as before, just moved here - this is now
+      # the only job that reads or writes the real trend history, from the
+      # single combined result set every matrix job's artifact feeds into.
+      - name: Restore report history
+        uses: actions/cache/restore@v4
+        with:
+          path: reports/history.json
+          key: report-history-${{ github.run_id }}
+          restore-keys: report-history-
+
+      - name: Download all matrix job artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: maestro-report-*
+          path: artifacts/
+
+      - name: Merge matrix job reports
+        run: python scripts/merge_reports.py artifacts/*/
 
       - name: Save report history
         if: always()
@@ -103,7 +168,7 @@ jobs:
           path: reports/history.json
           key: report-history-${{ github.run_id }}
 
-      - name: Upload HTML report
+      - name: Upload merged HTML report
         if: always()
         id: upload_report
         uses: actions/upload-artifact@v4
