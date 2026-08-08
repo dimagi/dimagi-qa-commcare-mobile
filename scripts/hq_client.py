@@ -30,6 +30,7 @@ prompt encountered for that account) - if SSO is enforced or the wizard shape
 differs for a different account, use the HQ_SESSION_COOKIE escape hatch instead
 (see login() docstring).
 """
+import html
 import json
 import os
 import re
@@ -100,6 +101,9 @@ class HQClient:
     # ------------------------------------------------------------- app actions
     def _apps_url(self, path):
         return f"{self.base_url}/a/{self.domain}/apps/{path}"
+
+    def _reports_url(self, path):
+        return f"{self.base_url}/a/{self.domain}/reports/{path}"
 
     def mark_build_status(self, app_id, saved_app_id, is_released):
         """
@@ -358,6 +362,104 @@ class HQClient:
         )
         resp.raise_for_status()
         return resp
+
+    def find_recent_submission(self, username, form_path_contains=None, after=None, limit=20):
+        """
+        Search the Submit History report (what a human would use at
+        /a/<domain>/reports/submit_history/) for the most recent form
+        submitted by `username`, optionally filtered to one whose
+        module>form breadcrumb contains `form_path_contains` (case-
+        insensitive substring, e.g. "Markdown" or "Repeats") and submitted
+        after the `after` datetime (tz-aware or naive-UTC) - use this to
+        make sure you're looking at the submission a just-completed Maestro
+        run produced, not an older one from a previous run.
+
+        Returns a dict with keys `form_id` (parsed out of the "View Form"
+        link, usable with get_form_metadata), `submitted_by`, `time`
+        (raw display string), `path` (the module>form breadcrumb), or None
+        if nothing matched within `limit` most-recent submissions overall.
+
+        Source: corehq/apps/reports/standard/inspect.py:SubmitHistory - a
+        GenericTabularReport subclass (ajax_pagination = True), served as
+        JSON via corehq/apps/reports/dispatcher.py's AllowedRenderings.JSON
+        rendering (`json/<report_slug>/` path prefix, confirmed against
+        corehq/apps/reports/const.py) - same datatables-style
+        iDisplayStart/iDisplayLength/aaData shape used by many other HQ
+        reports, not something specific to this one.
+        """
+        url = self._reports_url("json/submit_history/")
+        resp = self.session.get(url, params={"iDisplayStart": 0, "iDisplayLength": limit})
+        resp.raise_for_status()
+        rows = resp.json()["aaData"]
+
+        for view_link, submitted_by, time_str, path in rows:
+            if username not in submitted_by:
+                continue
+            if form_path_contains and form_path_contains.lower() not in path.lower():
+                continue
+            match = re.search(r"/reports/form_data/([\w-]+)/", view_link)
+            if not match:
+                continue
+            if after is not None:
+                submitted_at = _parse_hq_display_time(time_str)
+                if submitted_at is not None and submitted_at < after:
+                    continue
+            return {
+                "form_id": match.group(1),
+                "submitted_by": html.unescape(submitted_by),
+                "time": time_str,
+                "path": html.unescape(path),
+            }
+        return None
+
+    def get_form_metadata(self, form_id):
+        """
+        Return the Form Metadata tab's key/value pairs (timeStart, timeEnd,
+        appVersion, deviceID, received_on, server_modified_on, etc.) for one
+        submitted form, plus `has_multimedia` (whether the form's own
+        multimedia block on this page lists any attachments).
+
+        Source: corehq/apps/reports/views.py:_get_form_metadata_context()
+        (called directly inside FormDataView's own GET, not a separate
+        lazy/AJAX tab - confirmed live the whole dl/dt/dd metadata table is
+        already present in FormDataView's first HTML response) - GET
+        /a/<domain>/reports/form_data/<form_id>/.
+        """
+        url = self._reports_url(f"form_data/{form_id}/")
+        resp = self.session.get(url)
+        resp.raise_for_status()
+        html = resp.text
+
+        meta_section = html.split('id="form-metadata"', 1)[-1]
+        meta_section = meta_section.split('id="form-xml"', 1)[0]
+        pairs = re.findall(
+            r'<dt title="([^"]+)">\s*[^<]*</dt>\s*<dd>\s*(.*?)\s*</dd>',
+            meta_section,
+            re.DOTALL,
+        )
+        metadata = {}
+        for key, raw_value in pairs:
+            time_match = re.search(r"datetime='([^']+)'", raw_value)
+            metadata[key] = time_match.group(1) if time_match else re.sub(r"<[^>]+>", "", raw_value).strip()
+
+        has_multimedia = bool(re.search(r'multimedia|\.(jpg|jpeg|png|mp3|mp4|3gp)"', html, re.IGNORECASE))
+        metadata["has_multimedia"] = has_multimedia
+        return metadata
+
+
+def _parse_hq_display_time(time_str):
+    """Parses SubmitHistory's "Aug 08, 2026 19:46:10 IST" display format.
+    Returns None (rather than raising) on an unrecognized format, since
+    callers treat this as a best-effort recency filter, not a hard
+    requirement."""
+    import datetime
+    match = re.match(r"(\w+ \d{1,2}, \d{4} \d{1,2}:\d{2}:\d{2})", time_str)
+    if not match:
+        return None
+    try:
+        return datetime.datetime.strptime(match.group(1), "%b %d, %Y %H:%M:%S")
+    except ValueError:
+        return None
 
 
 def resolve_app_codes(registry, base_url=None, username=None, password=None, max_commcare_version=None):

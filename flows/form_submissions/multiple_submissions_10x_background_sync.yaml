@@ -53,6 +53,19 @@ tags:
 # org.commcare.dalvik:id/nsv_home_screen per
 # flows/common/login_and_background.yaml's own citation.
 #
+# UPDATE, confirmed live (real BrowserStack failure, reproduced on both the
+# main attempt and its --retry-failed re-run - NOT flaky - build
+# fcff4c622a197b5e216b810db331791689b8573e): this flow failed on its very
+# FIRST nsv_home_screen wait below, immediately after ../common/login.yaml
+# returned - i.e. before any submit-loop or backgrounding ever ran, so this
+# was NOT a backgrounding-timing issue. The build's own screenshot at the
+# timeout showed the device still on a post-login "Communicating with
+# Server" / "Contacting server for sync..." data-pull dialog. Root cause
+# and fix landed in the SHARED flows/common/login.yaml (see that file's own
+# UPDATE comment for the full citation) rather than here, since every flow
+# using that subflow was equally exposed and the repo's own convention is
+# to keep post-login waits centralized there, not duplicated per caller.
+#
 # Prepends install_app_as_web_user.yaml (APP_NAME: ".*Basic Tests$") - a
 # fresh BrowserStack session has no app installed until this runs; see
 # DispatchActivity.java's CommCareSetupActivity routing when currentApp ==

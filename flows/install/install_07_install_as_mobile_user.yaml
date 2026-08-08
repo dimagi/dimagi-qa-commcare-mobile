@@ -29,8 +29,6 @@ tags:
     visible:
       id: "org.commcare.dalvik:id/edit_username"
     timeout: 15000
-- tapOn:
-    id: "org.commcare.dalvik:id/edit_username"
 # Confirmed against several real BrowserStack runs: tapping into any of
 # this screen's 3 fields for the first time can trigger Gboard's one-time
 # "Get Smart content directly in the keyboard" system consent dialog, a
@@ -38,30 +36,84 @@ tags:
 # reliably tied to just the very FIRST tap of the whole session - confirmed
 # live (2026-08-08, frame-by-frame video review) it can appear only after
 # username AND domain are already filled, right as the password field gets
-# focus, and dismissing it there doesn't cleanly resume the form: the
-# following hideKeyboard call (with no real IME left to dismiss, since the
-# dialog already consumed that "back" semantically) fell through to a REAL
-# back-press that exited the app to the home screen entirely - reproducing
-# the same class of bug documented elsewhere in this repo as "an apparent
-# password field got silently cleared". Fix: check for and dismiss it
-# before EVERY field tap, not just the first - `optional: true` makes each
-# check a no-op when it doesn't appear.
-- tapOn:
-    text: "Skip"
-    optional: true
-- inputText: "${HQ_MOBILE_WORKER_USERNAME}"
-- tapOn:
-    id: "org.commcare.dalvik:id/edit_domain"
-- tapOn:
-    text: "Skip"
-    optional: true
-- inputText: "${HQ_DOMAIN}"
-- tapOn:
-    id: "org.commcare.dalvik:id/edit_password"
-- tapOn:
-    text: "Skip"
-    optional: true
-- inputText: "${HQ_MOBILE_WORKER_PASSWORD}"
+# focus.
+#
+# UPDATE, UPDATE (2nd correction), and UPDATE (3rd correction) - three
+# progressively more careful timing-based fixes (re-tap the field after
+# dismissing "Skip"; then also waitForAnimationToEnd before the re-tap)
+# were each confirmed live to reduce but NOT eliminate the bug: dismissing
+# Gboard's popup can reassign Android focus back to a PREVIOUSLY-active
+# field asynchronously, racing with whatever Maestro does next regardless
+# of how many waits/re-taps are inserted (confirmed via a real re-run,
+# build fb330cc0e184ee53e4ad5351b6f1f846cf986b38, then AGAIN on build
+# 1c31858ff60d3f854effd23ffdfbea9527184bf9 even with the wait+re-tap fix in
+# place - both times "qateam123" in the domain field with password left
+# empty). Rather than keep guessing at timing, each field below now
+# SELF-VERIFIES: a bounded repeat-while loop keyed on the combined id+text
+# selector (Maestro ANDs multiple properties on one selector object - both
+# must match the SAME element), which only exits once that specific field
+# visibly holds exactly the intended value. If Gboard's popup (or its focus
+# race) corrupts a field, the loop's condition stays true and it retries
+# (re-tap, dismiss Skip if present, retype) up to 3 times rather than
+# trusting a single attempt's timing to have been correct.
+#
+# UPDATE (4th correction) - the self-verify condition's `text: "^${VALUE}$"`
+# fed the value into a regex with no escaping, so any value containing
+# regex metacharacters could never match itself, keeping the loop running
+# unconditionally and giving the real Gboard focus race extra chances to
+# fire (confirmed live on install_08's identical pattern with an email
+# containing "+"/"." - see that file's own header for the full writeup).
+# None of THIS file's own values (mobile-worker username/domain/password)
+# happen to contain metacharacters, but the \Q...\E literal-quote fix below
+# is applied anyway rather than assuming that stays true.
+- repeat:
+    times: 3
+    while:
+      notVisible:
+        id: "org.commcare.dalvik:id/edit_username"
+        text: "^\\Q${HQ_MOBILE_WORKER_USERNAME}\\E$"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/edit_username"
+      - tapOn:
+          text: "Skip"
+          optional: true
+      - tapOn:
+          id: "org.commcare.dalvik:id/edit_username"
+      - eraseText
+      - inputText: "${HQ_MOBILE_WORKER_USERNAME}"
+- repeat:
+    times: 3
+    while:
+      notVisible:
+        id: "org.commcare.dalvik:id/edit_domain"
+        text: "^\\Q${HQ_DOMAIN}\\E$"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/edit_domain"
+      - tapOn:
+          text: "Skip"
+          optional: true
+      - tapOn:
+          id: "org.commcare.dalvik:id/edit_domain"
+      - eraseText
+      - inputText: "${HQ_DOMAIN}"
+- repeat:
+    times: 3
+    while:
+      notVisible:
+        id: "org.commcare.dalvik:id/edit_password"
+        text: "^\\Q${HQ_MOBILE_WORKER_PASSWORD}\\E$"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/edit_password"
+      - tapOn:
+          text: "Skip"
+          optional: true
+      - tapOn:
+          id: "org.commcare.dalvik:id/edit_password"
+      - eraseText
+      - inputText: "${HQ_MOBILE_WORKER_PASSWORD}"
 # UPDATE (2nd correction) - a single hideKeyboard call (this file's original,
 # pre-session version) IS correct and was never the actual problem: on
 # Android a back-press's FIRST effect, when an IME is genuinely showing, is
@@ -84,16 +136,81 @@ tags:
 - tapOn:
     text: "Skip"
     optional: true
+# UPDATE (4th correction), confirmed live (2026-08-08, self-verify build
+# 3df3f4916d9308f1ca4e575975f869f206b3839d): even the per-field self-verify
+# loops above weren't sufficient - the final screenshot showed domain
+# corrupted to "123" (the PASSWORD value) with password left EMPTY, i.e.
+# the corruption happened AFTER domain's own loop had already verified it
+# correct, while password's field was being interacted with (a LATER,
+# cross-field async event, not a same-field timing issue at all). No
+# amount of retrying a single field in isolation can catch a corruption
+# that originates from a DIFFERENT field's popup handling. Fix: one final
+# all-three-fields correction pass here, at the very end of this screen's
+# interaction (after the keyboard is hidden and any further popups have
+# had their chance to appear/dismiss), re-verifying and re-fixing each
+# field's actual content immediately before moving on - this is the last
+# safe point to catch any residual cross-field corruption before it would
+# otherwise reach get_apps_button undetected. Each loop ends with its OWN
+# hideKeyboard - NOT a trailing standalone one after all three - since a
+# hideKeyboard call when no keyboard is actually showing falls through to a
+# real back-press (see the "2nd correction" comment above); a correction
+# loop that ran zero iterations (the common case, nothing was wrong) must
+# not re-hide a keyboard that's already hidden.
+- repeat:
+    times: 2
+    while:
+      notVisible:
+        id: "org.commcare.dalvik:id/edit_username"
+        text: "^\\Q${HQ_MOBILE_WORKER_USERNAME}\\E$"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/edit_username"
+      - eraseText
+      - inputText: "${HQ_MOBILE_WORKER_USERNAME}"
+      - hideKeyboard
+- repeat:
+    times: 2
+    while:
+      notVisible:
+        id: "org.commcare.dalvik:id/edit_domain"
+        text: "^\\Q${HQ_DOMAIN}\\E$"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/edit_domain"
+      - eraseText
+      - inputText: "${HQ_DOMAIN}"
+      - hideKeyboard
+- repeat:
+    times: 2
+    while:
+      notVisible:
+        id: "org.commcare.dalvik:id/edit_password"
+        text: "^\\Q${HQ_MOBILE_WORKER_PASSWORD}\\E$"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/edit_password"
+      - eraseText
+      - inputText: "${HQ_MOBILE_WORKER_PASSWORD}"
+      - hideKeyboard
 - extendedWaitUntil:
     visible:
       id: "org.commcare.dalvik:id/get_apps_button"
     timeout: 10000
 - tapOn:
     id: "org.commcare.dalvik:id/get_apps_button"
+# UPDATE, confirmed live (2026-08-08, real BrowserStack failures on builds
+# fb330cc0e184ee53e4ad5351b6f1f846cf986b38, 1c31858ff60d3f854effd23ffdfbea9527184bf9,
+# and fc5f54da23d29b9a16e139a2413b0496a0798e12 - this exact wait, 3
+# separate times, unrelated to the Gboard field-corruption bug those same
+# builds were investigating): 30s isn't consistently enough for HQ to
+# return the app list - each failure's log showed exactly a 30.0s gap
+# between "RUNNING" and "FAILED" with no earlier error, i.e. a genuine slow
+# server response, not a wrong selector. Raised to 60s, matching this
+# flow's own "Setting Up App" wait one step below.
 - extendedWaitUntil:
     visible:
       id: "org.commcare.dalvik:id/apps_list_view"
-    timeout: 30000
+    timeout: 60000
 - tapOn:
     id: "org.commcare.dalvik:id/apps_list_view"
 # Confirmed against a real BrowserStack run on install_08: this tap actually
@@ -113,14 +230,28 @@ tags:
 # own FIFTH CAVEAT already documents and fixed there: "Setting Up App" is
 # only a transitional loading screen that doesn't reliably render long
 # enough (or at all) to be caught by a poll-based wait - this standalone
-# file's copy of the sequence never got that same fix. Made optional, with
-# the mobile-worker credentials already entered above meaning a successful
-# install lands straight on the home screen ("Start") rather than another
-# login prompt - asserted afterward as this flow's real success criterion.
+# file's copy of the sequence never got that same fix.
+#
+# UPDATE (2nd correction), confirmed live (2026-08-08, self-verify build
+# fc5f54da23d29b9a16e139a2413b0496a0798e12, AFTER the Gboard field-
+# corruption bug above was genuinely fixed - username/domain/password all
+# verified correct throughout this run): the assumption that mobile-worker
+# credentials entered during "See Apps for My User" carry over into the
+# newly-installed app, landing straight on "Start", was simply wrong - the
+# maestroScreenshot at the "Start" timeout showed a completely FRESH
+# "Welcome back! Please log in." screen with EMPTY username/password
+# fields. This matches install_08's own already-correct pattern exactly
+# (that flow asserts edit_username - a fresh login screen - as ITS success
+# criterion, for the same "Setting Up App" reason): a successful install
+# always lands back on a login screen for the newly-installed app,
+# regardless of whether install-time credentials were mobile-worker or
+# web-user ones. Fixed to match install_08's real, verified success
+# criterion instead of an unverified assumption.
 - extendedWaitUntil:
     visible: "Setting Up App"
     timeout: 60000
     optional: true
 - extendedWaitUntil:
-    visible: "Start"
+    visible:
+      id: "org.commcare.dalvik:id/edit_username"
     timeout: 90000

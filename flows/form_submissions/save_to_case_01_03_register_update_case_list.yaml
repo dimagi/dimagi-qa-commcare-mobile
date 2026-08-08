@@ -86,6 +86,37 @@ tags:
 # since Maestro has no built-in random-string primitive and each
 # BrowserStack run starts from clearState:true (a fresh casedb), so a fixed
 # name is safe from collision within a single run.
+#
+# UPDATE, confirmed live (real BrowserStack failure, reproduced on both the
+# main attempt and its --retry-failed re-run - NOT flaky - build
+# 3a392789bf13a0df595277e4190537c3e820f0df): the SAVE-TO-CASE-3 assertion
+# below originally checked id org.commcare.dalvik:id/screen_suite_menu_list.
+# That id is wrong for this screen - grepping commcare-android confirms
+# screen_suite_menu_list only exists in res/layout/screen_suite_menu.xml,
+# the MODULE/MENU list layout (e.g. the "Save to case test" ->
+# "Save to case test Reg"/"Save to case update" menu, or "Basic Form
+# Tests"' own form list) - NOT the case-select screen this step actually
+# lands on after tapping "Save to case update". The failing build's own
+# screenshot confirmed the device was correctly sitting on a real case
+# list (a "Name"-header, alphabetically-sorted list of case names) when
+# this assertion timed out - i.e. this was a wrong-selector bug, not a
+# navigation bug. The real id, confirmed against
+# res/layout/entity_select_layout.xml, is screen_entity_select_list - the
+# same id this repo already uses correctly for other case-list screens
+# (flows/right_to_left_text/case_list_01_load_case_list.yaml,
+# flows/form_submissions/incomplete_forms_05_06_list_summary_and_timestamp.yaml).
+#
+# SECOND UPDATE from the same live evidence: the qateam domain's stc-type
+# case list is long-lived and shared across every past run of this exact
+# flow (each run's case_type='stc'/status='open' cases are never closed or
+# deleted, only the LOCAL app state is cleared between builds) - the
+# failing build's screenshot showed an alphabetically-sorted list already
+# many rows deep ("18th march" ... "GsgbYd") without yet reaching "STC
+# Automation Case" (which sorts under "S"). A bare tapOn/assertVisible only
+# searches the currently-rendered hierarchy (same FOURTH CAVEAT lesson as
+# flows/common/install_app_as_web_user.yaml's own scrollable list), so a
+# defensive scrollUntilVisible is added below before relying on that case
+# name being on-screen; it's a no-op if the name is already visible.
 - runFlow:
     file: ../common/install_app_by_code.yaml
     env:
@@ -122,7 +153,12 @@ tags:
 - tapOn: "Save to case test"
 - tapOn: "Save to case update"
 - assertVisible:
-    id: "org.commcare.dalvik:id/screen_suite_menu_list"
+    id: "org.commcare.dalvik:id/screen_entity_select_list"
+- scrollUntilVisible:
+    element:
+      text: "STC Automation Case"
+    direction: DOWN
+    timeout: 15000
 - assertVisible: "STC Automation Case"
 
 # === Save-to-case-2: "Update a case" - select the case just registered,

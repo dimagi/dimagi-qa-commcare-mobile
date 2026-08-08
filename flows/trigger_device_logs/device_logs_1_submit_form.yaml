@@ -57,4 +57,23 @@ tags:
     timeout: 10000
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_finish"
+# UPDATE, confirmed live (2026-08-08, real BrowserStack failure, build
+# e45fd74a51806cffdf0c941f9ab6b2cec1663de3): "Tap on Log out of CommCare"
+# failed - the failing screenshot showed the device still on the "Basic
+# Form Tests" MODULE LIST (the screen this flow entered the form from), not
+# the home screen. A successful form submission returns to the CALLING
+# screen (the module list), not all the way back to "Start" - but
+# flows/common/logout.yaml's own header says it must be "run from the home
+# screen" (it swipes/taps against nsv_home_screen and "Log out of
+# CommCare", neither of which exist on a module list). Bounded while-loop
+# back to Start first, same pattern as
+# flows/multimedia/image_resize_01_04_default_setting.yaml's fix, rather
+# than assuming a single hardcoded `back` is enough.
+- repeat:
+    times: 5
+    while:
+      notVisible:
+        text: "Start"
+    commands:
+      - back
 - runFlow: ../common/logout.yaml

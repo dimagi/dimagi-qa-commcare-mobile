@@ -115,12 +115,53 @@ appId: org.commcare.dalvik
     timeout: 15000
 - tapOn:
     id: "org.commcare.dalvik:id/switch_button"
-- tapOn:
-    id: "org.commcare.dalvik:id/edit_email"
-- tapOn:
-    text: "Skip"
-    optional: true
-- inputText: "${HQ_WEB_USER_EMAIL}"
+# ELEVENTH CAVEAT, confirmed live (2026-08-08, follow-up real-device
+# failure on install_07's identical pattern): dismissing the Gboard popup
+# with "Skip" does NOT reliably return focus to the field that was just
+# tapped - it can leave focus on whatever field was active BEFORE the
+# popup interrupted, corrupting whichever field types next.
+#
+# UPDATE (2nd correction) and UPDATE (3rd correction) - two progressively
+# more careful timing-based fixes (re-tap the field after dismissing
+# "Skip"; then also waitForAnimationToEnd before the re-tap) were each
+# confirmed live (on install_07's identical pattern, builds
+# fb330cc0e184ee53e4ad5351b6f1f846cf986b38 and
+# 1c31858ff60d3f854effd23ffdfbea9527184bf9) to reduce but NOT eliminate the
+# bug - dismissing Gboard's popup can reassign Android focus back to a
+# PREVIOUSLY-active field asynchronously regardless of how many
+# waits/re-taps are inserted. Rather than keep guessing at timing, each
+# field below now SELF-VERIFIES: a bounded repeat-while loop keyed on the
+# combined id+text selector (Maestro ANDs multiple properties on one
+# selector object - both must match the SAME element), which only exits
+# once that specific field visibly holds exactly the intended value,
+# retrying (re-tap, dismiss Skip if present, retype) up to 3 times if not.
+#
+# UPDATE (4th correction), confirmed live (2026-08-08, real BrowserStack
+# failure + user-provided screen recording on install_08's identical
+# pattern, HQ_WEB_USER_EMAIL="kbordoloi+maestro@dimagi.com"): the
+# self-verify condition's `text: "^${VALUE}$"` fed the value into a regex
+# with no escaping - "+" and "." in the email are regex metacharacters, so
+# the condition could never actually match itself, keeping the loop running
+# unconditionally and giving the real Gboard focus race extra chances to
+# fire mid-loop (the email field ended up genuinely doubled). Fixed by
+# wrapping the interpolated value in Java regex's \Q...\E literal-quote
+# syntax - see flows/common/login.yaml's own header for the fuller writeup.
+- repeat:
+    times: 3
+    while:
+      notVisible:
+        id: "org.commcare.dalvik:id/edit_email"
+        text: "^\\Q${HQ_WEB_USER_EMAIL}\\E$"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/edit_email"
+      - tapOn:
+          text: "Skip"
+          optional: true
+      - tapOn:
+          id: "org.commcare.dalvik:id/edit_email"
+      - eraseText
+      - inputText: "${HQ_WEB_USER_EMAIL}"
 # UPDATE (2nd correction) - a single hideKeyboard call, exactly where it was
 # originally, IS correct here and was never the actual problem: on Android
 # a back-press's FIRST effect, when an IME is genuinely showing, is to
@@ -144,12 +185,22 @@ appId: org.commcare.dalvik
 # exited the app entirely (the same "password field got silently cleared"
 # class of bug this file's own earlier UPDATE comment already names).
 - hideKeyboard
-- tapOn:
-    id: "org.commcare.dalvik:id/edit_password"
-- tapOn:
-    text: "Skip"
-    optional: true
-- inputText: "${HQ_WEB_USER_PASSWORD}"
+- repeat:
+    times: 3
+    while:
+      notVisible:
+        id: "org.commcare.dalvik:id/edit_password"
+        text: "^\\Q${HQ_WEB_USER_PASSWORD}\\E$"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/edit_password"
+      - tapOn:
+          text: "Skip"
+          optional: true
+      - tapOn:
+          id: "org.commcare.dalvik:id/edit_password"
+      - eraseText
+      - inputText: "${HQ_WEB_USER_PASSWORD}"
 - hideKeyboard
 - tapOn:
     text: "Skip"
@@ -163,16 +214,58 @@ appId: org.commcare.dalvik
 # failure whose commandlogs hierarchy dump showed the SAMSUNG HOME LAUNCHER
 # on screen at this exact point. A single wait for get_apps_button is enough
 # now that the one hideKeyboard call above has dismissed the keyboard.
+#
+# UPDATE (2nd correction), confirmed live (2026-08-08, install_07's
+# identical pattern, self-verify build
+# 3df3f4916d9308f1ca4e575975f869f206b3839d): per-field self-verify loops
+# alone weren't sufficient - a LATER field's popup handling can corrupt an
+# EARLIER field that already verified correct (a cross-field async event,
+# not a same-field timing issue). Fix: one final all-fields correction pass
+# here, at the very end of this screen's interaction, re-verifying and
+# re-fixing each field immediately before moving on. Each loop ends with
+# its OWN hideKeyboard (not a trailing standalone one) since hideKeyboard
+# with no keyboard actually showing falls through to a real back-press - a
+# correction loop that ran zero iterations (the common case) must not
+# re-hide an already-hidden keyboard.
+- repeat:
+    times: 2
+    while:
+      notVisible:
+        id: "org.commcare.dalvik:id/edit_email"
+        text: "^\\Q${HQ_WEB_USER_EMAIL}\\E$"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/edit_email"
+      - eraseText
+      - inputText: "${HQ_WEB_USER_EMAIL}"
+      - hideKeyboard
+- repeat:
+    times: 2
+    while:
+      notVisible:
+        id: "org.commcare.dalvik:id/edit_password"
+        text: "^\\Q${HQ_WEB_USER_PASSWORD}\\E$"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/edit_password"
+      - eraseText
+      - inputText: "${HQ_WEB_USER_PASSWORD}"
+      - hideKeyboard
 - extendedWaitUntil:
     visible:
       id: "org.commcare.dalvik:id/get_apps_button"
     timeout: 10000
 - tapOn:
     id: "org.commcare.dalvik:id/get_apps_button"
+# UPDATE, confirmed live (2026-08-08, real BrowserStack failures on
+# install_07/install_08's identical wait, 3 separate builds): 30s isn't
+# consistently enough for HQ to return the app list - each failure showed
+# exactly a 30.0s gap between RUNNING and FAILED, a genuine slow server
+# response rather than a wrong selector. Raised to 60s.
 - extendedWaitUntil:
     visible:
       id: "org.commcare.dalvik:id/apps_list_view"
-    timeout: 30000
+    timeout: 60000
 # FOURTH CAVEAT, learned from a real BrowserStack failure on "Case
 # Managements!": the apps_list_view is a SCROLLABLE list (confirmed sorted
 # alphabetically per InstallFromListActivity.java line 419), and a bare

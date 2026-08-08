@@ -27,6 +27,21 @@ tags:
 # "Test One" needs no date interaction at all (the widget already defaults
 # to today), so that half is fully Automatable.
 #
+# SECOND PARTIAL CAVEAT, confirmed live (2026-08-08, real BrowserStack
+# failure, build 6088f0f4e51f008e98bcec32581ae4d4c85e7231): "Test One"'s
+# "Appointment Date" showed "Not Today" instead of the expected "Today" -
+# i.e. this run's `tapOn: "Test One"` (even with the scrollUntilVisible fix
+# just above) opened a case with TEST TWO's data. This shared, never-pruned
+# qateam-domain case list accumulates a NEW "Test One"/"Test Two" pair on
+# EVERY run of this flow (case creation isn't scoped to a unique per-run
+# name), so a plain text match against "Test One" is ambiguous once enough
+# stale duplicates from prior runs exist - there is no reliable way from
+# this flow alone to guarantee it lands on the specific case THIS run just
+# created rather than an older one with different (possibly Test-Two-like)
+# data. Not fixed further here since it's an environmental/test-hygiene
+# issue (unbounded case accumulation across runs), not a Maestro selector
+# bug - flagging for whoever owns test-data cleanup for this domain.
+#
 # Verified against commcare-android source (read-only reference, not modified):
 #   app/src/org/commcare/views/widgets/DateWidget.java: wraps a plain
 #     android.widget.DatePicker inflated from R.layout.date_widget, which
@@ -102,6 +117,21 @@ tags:
 - tapOn: "Start"
 - tapOn: "Case List"
 - tapOn: "Followup"
+# UPDATE, confirmed live (2026-08-08, real BrowserStack failure, build
+# e45fd74a51806cffdf0c941f9ab6b2cec1663de3): "Tap on Test One" failed with
+# "Element not found" - the failing screenshot showed the Followup case
+# list's FIRST page full of OTHER cases (dated names like "14th august
+# 2025", "9th october 2025", etc. - this is a shared HQ domain that
+# accumulates cases across every test run over time), with "Test One"
+# nowhere in the visible viewport. A bare tapOn only searches the currently
+# rendered hierarchy - scrollUntilVisible first, same fix this repo already
+# applies elsewhere for growing/long lists (e.g.
+# flows/common/install_app_as_web_user.yaml's "FOURTH CAVEAT").
+- scrollUntilVisible:
+    element:
+      text: "Test One"
+    direction: DOWN
+    timeout: 15000
 - tapOn: "Test One"
 - assertVisible: "Child"
 - assertVisible: "Even"
@@ -122,6 +152,13 @@ tags:
 - tapOn: "Start"
 - tapOn: "Case List"
 - tapOn: "Followup"
+# scrollUntilVisible - same growing-shared-case-list reasoning as
+# "Test One" above (no-op if already on screen).
+- scrollUntilVisible:
+    element:
+      text: "Test Two"
+    direction: DOWN
+    timeout: 15000
 - tapOn: "Test Two"
 - assertVisible: "Adult"
 - assertVisible: "Odd"
@@ -139,8 +176,18 @@ tags:
 - tapOn: "Start"
 - tapOn: "Case List"
 - tapOn: "Followup"
+- scrollUntilVisible:
+    element:
+      text: "Test One"
+    direction: DOWN
+    timeout: 15000
 - tapOn: "Test One"
 - assertVisible: "Seen by doctor"
 - back
+- scrollUntilVisible:
+    element:
+      text: "Test Two"
+    direction: DOWN
+    timeout: 15000
 - tapOn: "Test Two"
 - assertVisible: "Needs followup"

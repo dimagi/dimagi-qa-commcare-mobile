@@ -1,0 +1,116 @@
+appId: org.commcare.dalvik
+tags:
+  - mobile_pins
+  - partial
+---
+# Master Mobile Plan (2026) > Mobile Pins > "Setup 4" - Enable Feature
+# (claim Mobile Privileges).
+#
+# PARTIAL, rescoped 2026-08-08 per explicit direction: the FULL Setup 4
+# sequence (steps 4-10: scan a barcode shown on a separate logged-in
+# browser session at https://www.commcarehq.org/account/mobile_privileges/,
+# confirm "The following privileges are enabled on your device", then
+# enable "Give option to use PIN for login") is genuinely not automatable
+# via Maestro - confirmed via a from-scratch, source-verified investigation
+# of BOTH repos (not just re-citing this repo's own earlier conclusion):
+#   - commcare-android: GlobalPrivilegeClaimingActivity's claim_button
+#     starts a barcode scan via WidgetUtils.createScanIntent() ->
+#     IntentIntegrator (com.journeyapps:zxing-android-embedded) - a
+#     bundled third-party camera-scanner Activity with no intent-filter of
+#     its own, so there is no deep link to trigger instead of a real scan.
+#   - commcare-hq: EnableMobilePrivilegesView (corehq/apps/settings/
+#     views.py) encodes a plain signed JSON payload into the QR image
+#     (qrcode.make()) - not a URI - so there's nothing to feed via
+#     Maestro's openLink even if a link existed.
+#   - BrowserStack's own current docs confirm camera-image-injection (the
+#     one feature that COULD feed a QR code without a real camera) only
+#     works through a live Appium/XCUITest/Espresso WebDriver session via
+#     `browserstack_executor:` - Maestro's separate app-automate API and
+#     YAML flow language have no equivalent hook to invoke it.
+#
+# Rather than have every Pin 1-14 flow's shared setup keep asserting a PIN
+# toggle that can never appear (previously flows/common/
+# enable_pin_login_option.yaml's approach - now abandoned, see that file's
+# own FINAL UPDATE), this flow verifies everything that GENUINELY is
+# automatable: unlocking Developer Options, reaching the Mobile Privileges
+# / Claim Privileges screen, and confirming that tapping "CLAIM PRIVILEGES"
+# actually triggers a real screen transition (the scanner opening) -
+# proving the on-device navigation and button wiring work, without
+# depending on the scan itself completing.
+#
+# Selectors verified against commcare-android source (read-only reference,
+# never modified):
+#   app/src/org/commcare/preferences/DeveloperPreferences.java
+#     onCreateOptionsMenu()/onOptionsItemSelected() (~line 484-501): adds
+#     "Mobile Privileges" (Localization "menu.enable.privileges") to this
+#     screen's own standard options-overflow menu (same "More options"
+#     affordance used everywhere else in this app, not a separate icon) -
+#     selecting it starts GlobalPrivilegeClaimingActivity explicitly.
+#   app/res/layout/privilege_claiming_view.xml +
+#     app/src/org/commcare/activities/GlobalPrivilegeClaimingActivity.java:
+#     R.id.claim_button (MaterialButton, text @string/claim_privilege_button_text
+#     = "CLAIM PRIVILEGES") - tapping it calls
+#     WidgetUtils.createScanIntent() and starts the scanner via
+#     startActivityForResult (request code BARCODE_CAPTURE), so
+#     claim_button itself disappears once that new Activity is on top.
+#   Same "About CommCare" x4 dev-options-unlock sequence as
+#   flows/mobile_pins/setup_03_enable_developer_options.yaml (see that
+#   file's own header for the full source citation) - not extracted to a
+#   flows/common/ helper since setup_03 already established this exact
+#   pattern is only reused in two places total (there, and here).
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_BASIC_TESTS}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- assertVisible: "Start"
+
+- repeat:
+    times: 4
+    commands:
+      - tapOn: "More options"
+      - tapOn: "About CommCare"
+      - tapOn: "OK"
+- assertVisible:
+    text: "Developer Mode Enabled"
+    optional: true
+
+- tapOn: "More options"
+- tapOn: "Settings"
+- scrollUntilVisible:
+    element:
+      text: "Developer Options"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "Developer Options"
+
+# Developer Options screen's OWN overflow menu (a distinct instance of the
+# same "More options" affordance, scoped to this screen per
+# DeveloperPreferences.onCreateOptionsMenu()).
+- tapOn: "More options"
+- tapOn: "Mobile Privileges"
+- assertVisible:
+    id: "org.commcare.dalvik:id/claim_button"
+
+- tapOn:
+    id: "org.commcare.dalvik:id/claim_button"
+# A fresh BrowserStack session may prompt for camera permission the first
+# time a scan is requested - dismiss it if it appears so the real success
+# check below isn't blocked by an unrelated system dialog.
+- tapOn:
+    text: "(?i).*while using the app.*"
+    optional: true
+- tapOn:
+    text: "(?i)allow"
+    optional: true
+
+# The real success criterion: claim_button (and the rest of the Claim
+# Privileges screen) is gone because the scanner Activity is now on top -
+# confirms the button is correctly wired to actually launch a scan,
+# without depending on completing one.
+- assertNotVisible:
+    id: "org.commcare.dalvik:id/claim_button"

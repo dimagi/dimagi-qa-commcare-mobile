@@ -3,6 +3,25 @@ tags:
   - form_submissions
   - partial
 ---
+# FIXED 2026-08-08: this whole flow was failing every CI build with a
+# BROWSERSTACK_TESTSUITE_PARSE_ERROR ("No Tests Ran", no failed_step/video
+# ever captured, since Maestro never even started the flow) - reproduced
+# locally both live against BrowserStack (run_suite.py, build
+# be51920b8e3aee9e4c5fc505b2373585588969ac) and offline via `maestro
+# check-syntax flows/form_submissions/minimize_duplicate_create_subcase_update_case.yaml`,
+# which pinpointed the exact defect: "Invalid Command Format: tapOn" at the
+# two `- tapOn: "Start"` / `- tapOn: "Minimize Duplicates"` steps that had
+# `optional: true` written as a FLAT sibling key (`- tapOn: "Start"` then
+# `  optional: true` on the next line) instead of Maestro's required nested
+# form (`- tapOn: {text: ..., optional: true}`) - every other tapOn+optional
+# pair in this same file already used the correct nested form, so this was a
+# one-off typo, not a systemic pattern. A flat sibling key IS valid plain
+# YAML (it just makes `{tapOn: "Start", optional: true}`), which is exactly
+# why `python -c "import yaml..."` reported this file as parsing fine while
+# Maestro's own command-schema validation rejected it - plain pyyaml only
+# checks YAML syntax, not Maestro's per-command schema. Fixed by nesting
+# `optional: true` under `tapOn:` like every other instance in this file.
+#
 # Master Mobile Plan (2026) > Form Submissions > "Minimize Duplicate" -
 # Basic Tests app > Menu "Minimize Duplicates": create a case, submit a
 # followup "Create a Sub Case" form, verify the sub case appears under
@@ -124,10 +143,12 @@ tags:
 # --- Create a Sub Case (per the stack redirect this should land back on m6;
 # re-navigate defensively in case it landed on the plain Minimize Duplicates
 # menu instead). ---
-- tapOn: "Start"
-  optional: true
-- tapOn: "Minimize Duplicates"
-  optional: true
+- tapOn:
+    text: "Start"
+    optional: true
+- tapOn:
+    text: "Minimize Duplicates"
+    optional: true
 - tapOn: "Create a Sub Case"
 - extendedWaitUntil:
     visible:

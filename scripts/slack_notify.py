@@ -54,28 +54,37 @@ def _slack_post(method, token, **kwargs):
     return data
 
 
-def upload_file(token, channel_id, file_path, title=None, initial_comment=None):
-    """Reserve+upload+finalize one file via Slack's v2 flow, shared into
-    channel_id so its permalink is actually accessible to the channel (an
-    unshared upload is private to the bot). If initial_comment is given,
-    this posts it as the message text alongside the file in one call -
-    otherwise it's a bare file-share with no text."""
-    file_path = pathlib.Path(file_path)
-    data = file_path.read_bytes()
-    title = title or file_path.name
+def upload_files(token, channel_id, file_paths, initial_comment=None):
+    """Reserve+upload+finalize one or more files via Slack's v2 flow as a
+    SINGLE message, shared into channel_id so their permalinks are actually
+    accessible to the channel (an unshared upload is private to the bot).
+    Each file gets its own files.getUploadURLExternal reservation (Slack
+    requires that per-file), but they're all finalized together in ONE
+    files.completeUploadExternal call passing every {id, title} - that's
+    what makes Slack render them as ONE message with N attachments instead
+    of N separate messages. If initial_comment is given, it's posted as
+    that single message's text - otherwise it's a bare file-share with no
+    text. UPDATE, confirmed live (2026-08-08, real Slack failure, run #43):
+    this used to be a single-file-only helper called once per notification;
+    see build_message()'s own header for why the failed-tests table moved
+    out of initial_comment and into its own uploaded file instead of
+    growing this function into a second separate call (which would have
+    reproduced the exact "two messages" bug this replaces)."""
+    entries = []
+    for file_path in file_paths:
+        file_path = pathlib.Path(file_path)
+        data = file_path.read_bytes()
+        reserve = _slack_post("files.getUploadURLExternal", token,
+                               data={"filename": file_path.name, "length": len(data)})
+        put_resp = requests.post(reserve["upload_url"], files={"file": (file_path.name, data)})
+        put_resp.raise_for_status()
+        entries.append({"id": reserve["file_id"], "title": file_path.name})
 
-    reserve = _slack_post("files.getUploadURLExternal", token,
-                           data={"filename": file_path.name, "length": len(data)})
-    upload_url, file_id = reserve["upload_url"], reserve["file_id"]
-
-    put_resp = requests.post(upload_url, files={"file": (file_path.name, data)})
-    put_resp.raise_for_status()
-
-    complete_kwargs = {"files": json.dumps([{"id": file_id, "title": title}]), "channel_id": channel_id}
+    complete_kwargs = {"files": json.dumps(entries), "channel_id": channel_id}
     if initial_comment:
         complete_kwargs["initial_comment"] = initial_comment
     complete = _slack_post("files.completeUploadExternal", token, data=complete_kwargs)
-    return complete["files"][0]
+    return complete["files"]
 
 
 def _gh_run_url():
@@ -100,6 +109,40 @@ _EVENT_LABELS = {
 }
 
 
+def render_failed_tests_txt(failed_results, out_path):
+    """Writes the Workflow|Test table for every failed result to a plain
+    .txt file. UPDATE, confirmed live (2026-08-08, real Slack failure, run
+    #43 with 100 failures, screenshots + a screen recording from the user):
+    this table used to be embedded directly in the message's own
+    initial_comment as a ``` fenced block - Slack renders that fenced block
+    as a bordered/grey-background snippet-style box INSIDE the message,
+    which looked right for smaller failure counts, but once this repo's own
+    earlier truncation (MAX_FAILED_LISTED) was removed to stop silently
+    hiding failures, a ~100-row table pushed the initial_comment past
+    Slack's length threshold for a single post. Confirmed live: Slack
+    responded by splitting the ONE logical post into TWO separate messages
+    (each showing the same header/stats and, since the file attachment is
+    tied to the post as a whole, the SAME chart image attached again) - and
+    the split point landed mid-table, severing the closing ``` from its
+    opening fence, so BOTH halves fell back to plain unstyled text instead
+    of the intended grey box. Moving the table into its own uploaded .txt
+    file fixes both symptoms at once: Slack renders a small text file as a
+    genuine bordered/grey-background snippet preview (the exact look this
+    replaces), and the message's own initial_comment stays short regardless
+    of how many tests failed, so it can no longer trigger Slack's own
+    length-based auto-split."""
+    workflow_width = max(len(r["workflow"]) for r in failed_results)
+    header = f"{'Workflow'.ljust(workflow_width)} | Test"
+    lines = [header, "-" * len(header)]
+    for r in failed_results:
+        name = r["name"]
+        prefix = f"{r['workflow']}/"
+        if name.startswith(prefix):
+            name = name[len(prefix):]
+        lines.append(f"{r['workflow'].ljust(workflow_width)} | {name}")
+    pathlib.Path(out_path).write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
 def build_message(counts, failed_results, report_artifact_url, run_url):
     workflow = os.environ.get("GITHUB_WORKFLOW", "Maestro BrowserStack QA")
     event = os.environ.get("GITHUB_EVENT_NAME", "manual")
@@ -113,11 +156,15 @@ def build_message(counts, failed_results, report_artifact_url, run_url):
     version_path = REPORTS_DIR / "apk_version.txt"
     apk_version = version_path.read_text(encoding="utf-8").strip() if version_path.exists() else None
     run_duration = os.environ.get("RUN_DURATION")
-    branch_line = f"Branch `{ref}` · triggered by {actor}"
+    # UPDATE, per explicit formatting request (2026-08-08): "Triggered by
+    # <name> · on branch <branchname> · for apk ver <commcare tag> · with
+    # total runtime <runtime>", with every <...> value in bold (Slack
+    # mrkdwn *bold*, not backtick-code as this line used before).
+    branch_line = f"Triggered by *{actor}* · on branch *{ref}*"
     if apk_version:
-        branch_line += f" · CommCare `{apk_version}`"
+        branch_line += f" · for apk ver *{apk_version}*"
     if run_duration:
-        branch_line += f" · took {run_duration}"
+        branch_line += f" · with total runtime *{run_duration}*"
 
     lines = [
         f"{status_icon} :bar_chart: *[{tag}] {workflow} Run #{run_number} Test Summary Charts "
@@ -130,34 +177,17 @@ def build_message(counts, failed_results, report_artifact_url, run_url):
     ]
 
     if failed_results:
-        # Slack's plain mrkdwn (what files.completeUploadExternal's
-        # initial_comment accepts) has no color or table primitive - a real
-        # bordered table / colored header needs Block Kit attachments, which
-        # this upload API doesn't take. Closest achievable equivalent: a
-        # red-circle emoji on the header (":red_square:" turned out not to be
-        # a real Slack shortcode - it rendered as literal text), and a
-        # fenced code block (Slack
-        # renders ``` as a light-bordered monospace box) for the table body.
+        # UPDATE, confirmed live (2026-08-08, real Slack failure, run #43,
+        # 100 failures): this used to embed the whole table inline here as
+        # a ``` fenced block. See render_failed_tests_txt()'s own header for
+        # the full story - a long table pushed this message past Slack's
+        # length threshold, causing a silent auto-split into two posts (one
+        # extra chart image, one broken/unstyled table). The table itself
+        # now lives in its own uploaded .txt file (a real bordered/grey
+        # snippet preview, closer to what a fenced block was going for
+        # anyway) - this line is just a short pointer to it.
         lines.append("")
-        lines.append(":red_circle: *Failed Tests*")
-        # UPDATE: used to hard-truncate at MAX_FAILED_LISTED with a plain
-        # "... +N more" text line - confirmed via user screenshot this isn't
-        # expandable at all, just permanently hidden. Slack's own client
-        # already collapses long messages behind a real "Show more" toggle,
-        # so listing every failure here gets that for free instead of a
-        # dead end. Not a real risk of hitting Slack's message-size limit -
-        # even ~100 failures at this table's row width is well under it.
-        workflow_width = max(len(r["workflow"]) for r in failed_results)
-        header = f"{'Workflow'.ljust(workflow_width)} | Test"
-        table = ["```", header, "-" * len(header)]
-        for r in failed_results:
-            name = r["name"]
-            prefix = f"{r['workflow']}/"
-            if name.startswith(prefix):
-                name = name[len(prefix):]
-            table.append(f"{r['workflow'].ljust(workflow_width)} | {name}")
-        table.append("```")
-        lines.extend(table)
+        lines.append(f":red_circle: *Failed Tests* ({len(failed_results)}) - see attached failed-tests.txt")
 
     links = []
     if report_artifact_url:
@@ -209,7 +239,15 @@ def main():
     with tempfile.TemporaryDirectory() as tmp:
         chart_path = pathlib.Path(tmp) / "slack-chart.png"
         report_generator.render_chart_png(counts, history, chart_path)
-        upload_file(token, channel_id, chart_path, title="slack-chart.png", initial_comment=message)
+        files_to_upload = [chart_path]
+        if failed_results:
+            failed_txt_path = pathlib.Path(tmp) / "failed-tests.txt"
+            render_failed_tests_txt(failed_results, failed_txt_path)
+            files_to_upload.append(failed_txt_path)
+        # Both files finalized in ONE files.completeUploadExternal call (see
+        # upload_files()'s own header) - this is what keeps it to a single
+        # Slack message instead of one per file.
+        upload_files(token, channel_id, files_to_upload, initial_comment=message)
 
     print("Posted Slack notification.")
 

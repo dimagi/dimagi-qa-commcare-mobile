@@ -25,11 +25,15 @@ tags:
 #   app/res/values/strings.xml line 63: session_expire_notification =
 #     "CommCare Login Expired" - the string behind that final "Login Expire"
 #     substring check.
-#   Maestro's `openNotifications` command (not a swipe gesture) is Maestro's
-#     own documented way to reach the system notification tray - it talks to
-#     the device, not just the org.commcare.dalvik app, the same way this
-#     repo's recovery_measures flows already reach the separate system file
-#     picker (SAF) via plain text selectors.
+# UPDATE, confirmed live (2026-08-08, real CI parse-error failure, run
+# 31259796789): the header's own prior claim that `openNotifications` is "a
+# documented Maestro command" was simply WRONG and never actually verified -
+# `maestro check-syntax` rejects it ("Invalid Command: openNotifications"),
+# and maestro-orchestra-models.jar's own command class listing has no
+# notification-related command at all. Maestro has no dedicated "open
+# notification shade" action; every occurrence below is replaced with the
+# documented workaround, a coordinate swipe from the very top edge of the
+# screen downward (the same real-device gesture a user would perform).
 - runFlow:
     file: ../common/install_app_by_code.yaml
     env:
@@ -44,7 +48,9 @@ tags:
 - tapOn:
     id: "org.commcare.dalvik:id/login_button"
 - assertVisible: "Start"
-- openNotifications
+- swipe:
+    start: "50%, 1%"
+    end: "50%, 60%"
 - assertVisible:
     text: "(?i)Logged Into.*"
 - assertVisible:
@@ -55,7 +61,9 @@ tags:
     visible:
       id: "org.commcare.dalvik:id/edit_username"
     timeout: 50000
-- openNotifications
+- swipe:
+    start: "50%, 1%"
+    end: "50%, 60%"
 - assertVisible:
     text: ".*Login Expire.*"
 - back

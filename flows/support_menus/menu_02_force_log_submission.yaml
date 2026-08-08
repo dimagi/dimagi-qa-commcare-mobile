@@ -37,7 +37,18 @@ tags:
 - tapOn: "More options"
 - tapOn: "Advanced"
 - assertVisible: "CommCare > Advanced"
+# UPDATE, confirmed live (2026-08-08, real CI failure, run 31259796789):
+# this whole flow (and every OTHER flow bundled in the same zip) failed
+# with BROWSERSTACK_TESTSUITE_PARSE_ERROR - `openNotifications` is not a
+# real Maestro command (confirmed via `maestro check-syntax`: "Invalid
+# Command: openNotifications", and via maestro-orchestra-models.jar's own
+# class listing, which has no notification-related command at all).
+# Maestro has no dedicated "open notification shade" action; the
+# documented workaround is a coordinate swipe from the very top edge of
+# the screen downward - the same real-device gesture a user would perform.
 - tapOn: "Force Log Submission"
-- openNotifications
+- swipe:
+    start: "50%, 1%"
+    end: "50%, 60%"
 - assertNotVisible: "Device Logs Pending"
 - back

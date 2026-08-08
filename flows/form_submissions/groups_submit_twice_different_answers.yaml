@@ -20,18 +20,64 @@ tags:
 # select1 questions on one scrollable screen at once - "Choose:" (label_
 # vaccins, optional), "First" (/data/select_list/first, bind
 # required="true()"), "Second" (/data/select_list/second, bind
-# required="true()"), "Third" and "Fourth" (both optional). ALL FIVE share
-# the exact same three choice labels ("Yes"/"No"/"Don't know"), so a plain
-# `tapOn: "Yes"` is ambiguous - Maestro would always hit the FIRST "Yes" in
-# the view tree (label_vaccins's own), never reaching First/Second below it.
-# Disambiguated below via Maestro's `index` selector property (0-based,
-# document order): index 0 = label_vaccins's choice, index 1 = First's,
-# index 2 = Second's - matching the five questions' top-to-bottom order in
-# the form's own <select_list> group in modules-0/forms-7.xml. UNVERIFIED
-# against a live render (no device access from this repo) - if CommCare's
-# real view hierarchy doesn't lay these out in the same order the XML
-# declares them, adjust the index values here. Third/Fourth (optional) are
-# left unanswered.
+# required="true()"), "Third" and "Fourth" (both optional). Third/Fourth
+# (optional) are left unanswered.
+#
+# UPDATE, UPDATE (2nd correction) - confirmed live (2026-08-08, real
+# BrowserStack failure on BOTH the main attempt and its --retry-failed
+# re-run, build af73a71fe00d14a20fc6d59a0b3a2da22c1211a0, session
+# .../e4c3ec923b0ad37805250109aede2c9d8c6888604918f6c5): the ORIGINAL
+# `tapOn: {text: "Yes", index: 1}` approach below (this header's own
+# previous, UNVERIFIED guess) was wrong, and not fixable by adjusting the
+# index. The downloaded maestroScreenshot for the exact failure shows the
+# real "Groups" screen has only ONE literal "Yes" (and one "No", one
+# "Don't know") anywhere on it - a single header row above First/Second/
+# Third/Fourth, each of which renders as three bare, UNLABELED radio
+# circles with no text of their own. `tapOn: text: "Yes", index: 1` could
+# never succeed since there's no second "Yes" text to match at all.
+# Root cause verified against commcare-android + the real CCZ's own form
+# body (read-only references, not modified):
+#   modules-0/forms-7.xml <h:body>: /data/select_list/label_vaccins uses
+#     appearance="label" (choices "Yes"/"No"/"Don't know"); /first,
+#     /second, /third, /fourth all use appearance="list-nolabel".
+#   WidgetFactory.buildSelectOne() (app/src/org/commcare/views/widgets/
+#     WidgetFactory.java:152-169): appearance="label" -> LabelWidget;
+#     appearance="list-nolabel" -> new ListWidget(context, fep,
+#     displayLabel=false).
+#   LabelWidget.java (lines 121-142): renders each choice as a plain
+#     TextView ONLY (no RadioButton, no answer capability at all) - this is
+#     exactly the ONE-TIME "Yes/No/Don't know" header row seen on screen,
+#     confirming its own doc comment: "purpose... is to be the top entry in
+#     a field-list... so list widgets can hide their labels".
+#   ListWidget.java (lines 78-196): builds one bare `RadioButton` per
+#     choice with `r.setId(i + buttonIdBase)` where
+#     `buttonIdBase = Math.abs(mPrompt.getIndex().hashCode())` (line 76) -
+#     a runtime hash, not a fixed `org.commcare.dalvik:id/...` resource id,
+#     so unusable as a hardcoded Maestro id selector. Critically, when
+#     `displayLabel` is false (line 159-160, 180-184): "if (!displayLabel)
+#     label.setVisibility(View.GONE)" and the label TextView is only ever
+#     added to the row's view tree "if (displayLabel)" - so First/Second/
+#     Third/Fourth's own answer choices carry NO text node whatsoever, by
+#     design (that's the whole point of "list-nolabel": rely on the single
+#     LabelWidget header above instead of repeating "Yes"/"No"/"Don't know"
+#     on every row).
+# With neither text nor a stable id available on the actual answer targets,
+# a text- or id-based selector is not possible here (same class of gap as
+# GridWidget's image-only cells in
+# flows/form_submissions/appearance_attributes_page_through_and_submit.yaml's
+# own header) - the only remaining, source-consistent option is a
+# percentage `point:` tap, the same last-resort convention already used in
+# this repo by flows/externalapp_tests/external_app_03_view_case_data.yaml
+# and external_app_04_launch_update_form.yaml for un-selectable elements.
+# Coordinates below were measured directly off the real 1080x2400
+# maestroScreenshot pixels for this exact failing session (radio-circle
+# outline pixel clusters, not guessed): the Yes/No/Don't-know columns sit
+# at x~591/755/919 (54.7%/69.9%/85.1% of 1080), and the First/Second row
+# centers sit at y~848/960 (35.3%/40.0% of 2400) - consistent ~112px row
+# spacing matches the Third/Fourth rows below them too. This does depend on
+# the same BrowserStack device profile (1080x2400) continuing to be used
+# for this app; if the device pool changes, these percentages should be
+# re-measured the same way.
 #
 # Every other question after this first screen is optional (verified against
 # every remaining <bind> in modules-0/forms-7.xml - none carry
@@ -76,12 +122,12 @@ tags:
     timeout: 10000
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_next"
+# First = Yes (Yes column x~55%, First row y~35% - see header CAVEAT).
 - tapOn:
-    text: "Yes"
-    index: 1
+    point: "55%, 35%"
+# Second = Yes (Yes column x~55%, Second row y~40%).
 - tapOn:
-    text: "Yes"
-    index: 2
+    point: "55%, 40%"
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_next"
 - repeat:
@@ -115,12 +161,12 @@ tags:
     timeout: 10000
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_next"
+# First = No (No column x~70%, First row y~35% - see header CAVEAT).
 - tapOn:
-    text: "No"
-    index: 1
+    point: "70%, 35%"
+# Second = No (No column x~70%, Second row y~40%).
 - tapOn:
-    text: "No"
-    index: 2
+    point: "70%, 40%"
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_next"
 - repeat:

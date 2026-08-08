@@ -65,13 +65,27 @@ jobs:
           echo "start_epoch=$(date +%s)" >> "$GITHUB_OUTPUT"
           TAG="${{ github.event.inputs.tag }}"
           if [ -z "$TAG" ] || [ "$TAG" = "All" ]; then
-            # Each group mixes in at least one of the historically slow/large
-            # tags (mobile_pins, multimedia, form_submissions,
-            # recovery_measures) so neither runner ends up idle while the
-            # other carries most of the wall-clock time.
+            # 3-way split (was 2) to further cut per-runner wall-clock time.
+            # UPDATE, confirmed live (2026-08-08): the original split above
+            # grouped tags by rough conceptual similarity, not actual flow
+            # FILE COUNT per tag - it ended up wildly unbalanced (group-a
+            # alone carried multimedia(27) + mobile_pins(17) + install(5) +
+            # login(3) + date_widgets(3) + case_filters(1) +
+            # conditional_enum_in_case_list(1) = 57 files vs group-c's 17),
+            # which is exactly why group-a was still running 2+ hours after
+            # group-b had already finished in a real run. Rebalanced here by
+            # greedily bin-packing each tag's actual file count (computed via
+            # `doc.get("tags")` the same way scripts/run_suite.py's own
+            # select_flow_files() resolves them - every flow file carries
+            # exactly one of these 20 module tags, no overlaps) into 3 groups
+            # of the most equal total size possible: 41/41/40 flow files
+            # (not counting flows/common/*.yaml's 19 files, which
+            # select_flow_files() always adds to every group's run
+            # regardless of tags).
             MATRIX='{"include":[
-              {"name":"group-a","tags":"mobile_pins multimedia case_filters conditional_enum_in_case_list date_widgets install login menu_badges other_error_tests session_expiration"},
-              {"name":"group-b","tags":"form_submissions recovery_measures externalapp_tests prompted_updates right_to_left_text support_menus trigger_device_logs update updates_2_49 updates_partial_failed"}
+              {"name":"group-a","tags":"multimedia install updates_2_49 other_error_tests support_menus trigger_device_logs"},
+              {"name":"group-b","tags":"mobile_pins prompted_updates externalapp_tests updates_partial_failed login case_filters conditional_enum_in_case_list update"},
+              {"name":"group-c","tags":"form_submissions recovery_measures right_to_left_text date_widgets session_expiration menu_badges"}
             ]}'
           else
             MATRIX="{\"include\":[{\"name\":\"single\",\"tags\":\"$TAG\"}]}"

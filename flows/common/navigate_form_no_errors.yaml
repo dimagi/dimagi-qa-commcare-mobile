@@ -46,9 +46,22 @@ appId: org.commcare.dalvik
     visible:
       id: "org.commcare.dalvik:id/nav_btn_next"
     timeout: 5000
+# Defensively dismisses a repeat-group "Add a new...?" dialog before each
+# Next tap (choice_dialog_panel_3 = "Do Not Add"/"Skip") - confirmed live
+# (2026-08-08) on flows/form_submissions/appearance_attributes_page_
+# through_and_submit.yaml/question_types_01_03_answer_and_submit.yaml/
+# repeat_groups_01_05_add_and_submit.yaml that this dialog can silently
+# block a generic Next-tap loop (Maestro logs the tap as COMPLETED even
+# though nothing on screen changed) - see repeat_groups_01_05's own header
+# for the full HorizontalPaneledChoiceDialog source citation. This helper's
+# own target forms haven't been confirmed to have one, but the dismiss is a
+# harmless no-op when the dialog never appears.
 - repeat:
     times: 4
     commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/choice_dialog_panel_3"
+          optional: true
       - tapOn:
           id: "org.commcare.dalvik:id/nav_btn_next"
           optional: true

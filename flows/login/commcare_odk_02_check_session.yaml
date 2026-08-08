@@ -19,14 +19,22 @@ tags:
 # null.
 #
 # Verified against commcare-android source (read-only reference, not modified):
-#   Same "Logged Into ..." / "Session Expires:" notification text and
-#   Maestro `openNotifications` mechanism already confirmed in
-#   flows/session_expiration/setup_02_restore_user_session_expires.yaml's
-#   header (SessionExpirationTests.kt) - this is CommCare's own core
+#   Same "Logged Into ..." / "Session Expires:" notification text as
+#   flows/session_expiration/setup_02_restore_user_session_expires.yaml
+#   (SessionExpirationTests.kt) - this is CommCare's own core
 #   session-notification feature (app-agnostic), just with a much longer
 #   (24h, per this tab's own note) expiration window than Session
 #   Expiration Test's 45-second one, so only presence is checked here, not
 #   an actual wait-for-expiry.
+#
+# UPDATE, confirmed live (2026-08-08, real CI parse-error failure, run
+# 31259796789): the header above used to cite `openNotifications` as "a
+# documented Maestro mechanism", copied from setup_02_restore_user_session_expires.yaml's
+# own (equally wrong) claim - neither was ever actually verified against
+# the real Maestro CLI. `maestro check-syntax` rejects it ("Invalid
+# Command: openNotifications"); Maestro has no dedicated "open notification
+# shade" command at all. Replaced with the documented workaround, a
+# coordinate swipe from the very top edge of the screen downward.
 - runFlow:
     file: ../common/install_app_by_code.yaml
     env:
@@ -37,7 +45,9 @@ tags:
       USERNAME: ${CC_TEST_USERNAME}
       PASSWORD: ${CC_TEST_PASSWORD}
 - assertVisible: "Start"
-- openNotifications
+- swipe:
+    start: "50%, 1%"
+    end: "50%, 60%"
 - assertVisible:
     text: "(?i)Logged Into.*"
 - assertVisible:

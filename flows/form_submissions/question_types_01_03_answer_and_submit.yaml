@@ -56,14 +56,13 @@ tags:
 # Groups" row, covered by
 # flows/form_submissions/repeat_groups_01_05_add_and_submit.yaml instead.
 #
-# nav_btn_next/nav_btn_finish ids, the auto-focus-on-navigate behavior backing
-# the bare `inputText` calls below (no preceding tapOn needed -
-# app/src/org/commcare/views/QuestionsView.java:setFocus()), and the
-# "Do Not Add"/"Add Group" repeat-dialog button text
-# (android_translatable_strings.txt: repeat.dialog.leave="Do Not Add",
-# repeat.dialog.exit="Do Not Add. I'm Finished.", repeat.dialog.add="Add
-# Group") are all verified against commcare-android source (read-only
-# reference, never modified by this repo).
+# nav_btn_next/nav_btn_finish ids and the auto-focus-on-navigate behavior
+# backing the bare `inputText` calls below (no preceding tapOn needed -
+# app/src/org/commcare/views/QuestionsView.java:setFocus()) are verified
+# against commcare-android source (read-only reference, never modified by
+# this repo). The repeat-dialog's choice_dialog_panel_3 id (see the UPDATE
+# comment further below) is likewise source-verified, NOT its dynamic,
+# form-authored button text.
 # form.entry.complete.save.success="Form successfully completed"
 # (android_translatable_strings.txt:169) backs the final assertVisible, same
 # regex convention as flows/recovery_measures/point_release_flow.yaml.
@@ -155,9 +154,21 @@ tags:
 # Media/capture questions - sig_cap, q_barcode, qroutput, q_gps, q_image,
 # q_audio, q_video, q_document, q_audio_acquire (9 screens) - all optional,
 # skipped via Next (see header CAVEAT).
+#
+# UPDATE, confirmed live (2026-08-08, real BrowserStack failure + user
+# screenshot): the trailing repeat-group's "Add a new...?" dialog
+# (choice_dialog_panel_3 to decline, see the UPDATE comment further below)
+# does NOT only appear once at a single, predictable point - it can recur
+# mid-loop, inside generic next-tap blocks earlier in the form than where
+# the form's own question order would suggest. Every generic repeat loop
+# below now defensively checks for and dismisses it before each Next tap,
+# not just the one explicit handling point after the Books-fixture screens.
 - repeat:
     times: 9
     commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/choice_dialog_panel_3"
+          optional: true
       - tapOn:
           id: "org.commcare.dalvik:id/nav_btn_next"
 
@@ -183,12 +194,24 @@ tags:
     times: 2
     commands:
       - tapOn:
+          id: "org.commcare.dalvik:id/choice_dialog_panel_3"
+          optional: true
+      - tapOn:
           id: "org.commcare.dalvik:id/nav_btn_next"
 
 # Trailing repeat group ("This is a repeat group...") - left at zero
 # iterations per header CAVEAT (Repeat Groups gets its own dedicated flow).
+#
+# UPDATE, confirmed live (2026-08-08, real BrowserStack failure + user
+# screenshot): the original text-based tap here was wrong - the real
+# on-screen text is form-authored itext content (e.g. "Add a new
+# Repeat_Group_Multimedia?"), not the app's generic repeat.dialog.* strings
+# this header originally (incorrectly) cited. Fixed the same way as
+# flows/form_submissions/repeat_groups_01_05_add_and_submit.yaml: tap by
+# HorizontalPaneledChoiceDialog's fixed, content-independent
+# choice_dialog_panel_3 id ("Skip"/"Do Not Add") instead of matching text.
 - tapOn:
-    text: "(?i)do not add.*"
+    id: "org.commcare.dalvik:id/choice_dialog_panel_3"
     optional: true
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_next"

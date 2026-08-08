@@ -46,6 +46,19 @@ tags:
     env:
       USERNAME: ${CC_TEST_USERNAME}
       PASSWORD: ${CC_TEST_PASSWORD}
+# UPDATE, confirmed live (2026-08-08, real BrowserStack failure on BOTH the
+# main attempt and its --retry-failed re-run, build
+# af73a71fe00d14a20fc6d59a0b3a2da22c1211a0, session
+# .../e4c3ec923b0ad37805250109aede2c9d8c688860d33bfa4f): the very next step,
+# `tapOn: "Start"`, failed - the maestroScreenshot for that exact failure
+# showed the device never left LoginActivity at all, with red "Bad Server
+# Response" text below LOG IN (a transient server-side hiccup on the
+# key-exchange callout, not a selector bug - see flows/common/login.yaml's
+# own header for the full root-cause citation and source evidence). Fixed
+# centrally in flows/common/login.yaml itself (a bounded retry that re-taps
+# LOG IN while "Bad Server Response" is visible) rather than duplicated
+# here, since every flow that calls this shared subflow shares the same
+# exposure.
 - tapOn: "Start"
 - tapOn: "Basic Form Tests"
 - tapOn: "Basic Form"

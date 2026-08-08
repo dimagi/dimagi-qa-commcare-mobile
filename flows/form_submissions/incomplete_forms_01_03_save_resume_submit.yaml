@@ -22,24 +22,41 @@ tags:
 # on-device equivalent and is out of scope for this Maestro-based,
 # device-only framework (see docs/FRAMEWORK.md's own scope statement).
 #
-# PARTIAL / BEST-EFFORT CAVEAT: whether a reopened incomplete form resumes
-# at question 1 (standard Javarosa re-entry behavior - pre-filling
-# already-answered widgets as you tap Next through them, which is the
-# assumption this flow is written against) or instead jumps straight to a
-# hierarchy/list view of already-answered questions is NOT conclusively
-# settled by any source available in this repo. commcare-android's
-# SavedFormTest.java (app/instrumentation-tests, read-only reference)
-# testIncompleteForm_forValidateCondition()/testIncompleteForm_forMediaChanges()
-# both call InstrumentationUtility.openFirstIncompleteForm() and then
-# clickListItem(R.id.list_view, N) to reach a specific question afterward -
-# which COULD indicate a list-style re-entry screen - but that test's app
-# ("TestSavedForm") is a different, dedicated fixture app, not this repo's
-# "[Master] Basic Tests", and R.id.list_view there is not confirmed to be
-# the same screen_suite_menu_list/screen_entity_select_list chrome this
-# framework already relies on elsewhere (it may just be a Field-List group
-# specific to that fixture's form design). If a live BrowserStack run shows
-# the reopened "Question Types" form does NOT land on q_text first, adjust
-# the nav_btn_next taps immediately after each reopen accordingly.
+# FIXED (2026-08-08, live BrowserStack evidence, build
+# af73a71fe00d14a20fc6d59a0b3a2da22c1211a0, test
+# e4c3ec923b0ad37805250109aede2c9d8c6888606f8d9023): the header below used
+# to flag re-entry behavior as unsettled; it is now settled BOTH by source
+# and by a live screenshot. Reopening a saved/incomplete form does NOT drop
+# you back on the question-entry screen (nav_btn_next etc.) - it ALWAYS
+# opens FormHierarchyActivity first. Source proof: FormEntryActivity.java's
+# handleFormLoadCompletion(), the `else if (!isRestartAfterSessionExpiration)`
+# branch (around line 1223): "// we've just loaded a saved form, so start
+# in the hierarchy view" -> `startActivityForResult(new Intent(this,
+# FormHierarchyActivity.class), HIERARCHY_ACTIVITY_FIRST_START)`, with an
+# explicit early `return` so the intro/question screen is never shown
+# first. The failing run's screenshot confirms this exactly: after tapping
+# the "Question Types" row, the device showed a "Form Hierarchy" screen
+# (title string form.hierarchy="Form Hierarchy" per
+# android_translatable_strings.txt:856) listing every question/answer so
+# far (intro text, q_text="MaestroIncompleteText1", q_int="42", ...) with
+# GO UP / GO TO START / GO TO END buttons - not the form-entry UI this
+# flow's subsequent `nav_btn_next` taps expect, which is exactly why the
+# very next required (non-optional) nav_btn_next tap timed out (element
+# never existed on that screen).
+# Fix: after re-opening the record, tap the hierarchy screen's "GO TO
+# START" button (id jumpBeginningButton) to jump the form index back to
+# the beginning and return to normal question-entry mode, matching what
+# this flow already assumed happens automatically. Verified id/behavior:
+# hierarchy_layout.xml's jumpBeginningButton (android:text=
+# "@string/jump_to_beginning", strings.xml line 190:
+# jump_to_beginning="Go To Start", rendered as "GO TO START" via the
+# button's allCaps style - matches the screenshot verbatim) is wired in
+# FormHierarchyActivity.onCreateSessionSafe() to
+# `mFormController.jumpToIndex(FormIndex.createBeginningOfFormIndex());
+# setResult(RESULT_OK); finish();` - i.e. a single tap lands you back in
+# FormEntryActivity at the very first screen (the intro trigger), which is
+# exactly what the pre-existing "optional nav_btn_next" tap right after was
+# already defensively written to skip past.
 #
 # Verified against commcare-android source (read-only reference, not modified):
 #   FormEntryDialogs.createQuitDialog(): back-press on an in-progress form
@@ -126,6 +143,15 @@ tags:
     timeout: 10000
 - assertVisible: "Question Types"
 - tapOn: "Question Types"
+# Reopening a saved form always lands on FormHierarchyActivity first (see
+# header comment) - jump back to the beginning of the form to resume normal
+# question-entry navigation.
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/jumpBeginningButton"
+    timeout: 10000
+- tapOn:
+    id: "org.commcare.dalvik:id/jumpBeginningButton"
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_next"
     optional: true
@@ -150,6 +176,14 @@ tags:
       id: "org.commcare.dalvik:id/screen_entity_select_list"
     timeout: 10000
 - tapOn: "Question Types"
+# Same FormHierarchyActivity re-entry as above - jump to the beginning
+# before resuming the page-through-and-finish loop.
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/jumpBeginningButton"
+    timeout: 10000
+- tapOn:
+    id: "org.commcare.dalvik:id/jumpBeginningButton"
 - repeat:
     while:
       visible:

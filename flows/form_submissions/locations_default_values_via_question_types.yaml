@@ -74,11 +74,48 @@ tags:
     text: "(?i).*unexpected error.*"
 - assertNotVisible:
     text: "(?i).*commcare will now restart.*"
-- back
+# FIXED (2026-08-08, live BrowserStack evidence, build
+# af73a71fe00d14a20fc6d59a0b3a2da22c1211a0, test
+# e4c3ec923b0ad37805250109aede2c9d8c6888602cf54ac0): the old hardcoded
+# `back` / optional-tap-"exit without saving" / `back` sequence assumed the
+# FIRST back press always opens "Exit Form?" (per
+# FormEntryDialogs.createQuitDialog(), triggered unconditionally from
+# FormEntryActivity.onKeyDown()'s KEYCODE_BACK case via
+# triggerUserQuitInput() - there is no "step to previous question first"
+# back behavior in this activity). The failure screenshot shows the exact
+# opposite outcome: at the moment the whole flow timed out waiting for
+# "Start", the device was STILL showing the "Exit Form?" dialog with
+# STAY IN FORM / EXIT WITHOUT SAVING / SAVE INCOMPLETE. Root cause: this
+# q_text screen auto-focuses its EditText and opens the soft keyboard with
+# no user action, per StringWidget.java lines 158-162
+# (`mAnswer.requestFocus(); ... inputManager.showSoftInput(mAnswer, 0);`,
+# called from the widget's own init/onFocusChange path) - unlike
+# incomplete_forms_01_03_save_resume_submit.yaml, this flow never typed
+# into or hid the keyboard on this question, so the FIRST `back` press was
+# consumed dismissing the keyboard (standard Android IME-eats-back
+# behavior) instead of reaching the Activity's onKeyDown - hence the
+# optional "exit without saving" tap correctly found nothing (WARNED) and
+# was skipped, and the SECOND `back` was the one that actually opened
+# "Exit Form?" for the first time, one press too late for this fixed
+# 2-step script to handle.
+# Fix: same bounded while-loop pattern as
+# flows/multimedia/image_resize_01_04_default_setting.yaml (repeat back
+# presses, bounded by `times`, until a known screen condition is met,
+# rather than hardcoding an exact press count) - loop back presses until
+# "Exit Form?" is visible (covers both the keyboard-eats-the-first-press
+# case seen here and the no-keyboard case where it would appear
+# immediately), then tap "EXIT WITHOUT SAVING" for real (no longer
+# optional, since the loop guarantees the dialog is showing by then).
+- repeat:
+    times: 3
+    while:
+      notVisible:
+        text: "Exit Form?"
+    commands:
+      - back
+- assertVisible: "Exit Form?"
 - tapOn:
     text: "(?i).*exit without saving.*"
-    optional: true
-- back
 - extendedWaitUntil:
     visible:
       text: "Start"

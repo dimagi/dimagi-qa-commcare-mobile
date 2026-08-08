@@ -49,13 +49,28 @@ tags:
 #     established generic-navigation convention (see
 #     flows/common/navigate_form_no_errors.yaml).
 #
-# "Add Group"/"Do Not Add" button text verified against commcare-android
-# source (read-only reference, never modified) -
-# android_translatable_strings.txt: repeat.dialog.add="Add Group",
-# repeat.dialog.leave="Do Not Add", repeat.dialog.exit="Do Not Add. I'm
-# Finished." (the "leave" vs "exit" variant depends on internal repeat-count
-# bookkeeping this flow can't predict in advance, hence the regex match
-# below covering both). form.entry.finish.button="FINISH"
+# UPDATE, confirmed live (2026-08-08, real BrowserStack failure + user
+# screenshot): the ORIGINAL text-based taps below ("Add Group" / "(?i)do not
+# add.*") were wrong - the real on-screen button text is NOT the generic
+# repeat.dialog.add/leave/exit localization strings this header originally
+# (incorrectly) cited. FormEntryActivityUIController.createRepeatDialog()
+# builds addAnotherText from `repeatCaptionPrompt.getRepeatText(...)`, which
+# pulls the FORM's OWN itext binding for that specific question (e.g. "Add a
+# new This is a repeat group: Add a few iterations and enter a number each
+# time.?" or "Add a new Repeat_Group_Multimedia?" on a different form) - a
+# per-question, form-authored string, not a fixed app string at all.
+# Matching on literal text here was never going to work reliably.
+#
+# Fix: HorizontalPaneledChoiceDialog.setupThreePanelView() (read-only
+# reference, verified against source) wires this 3-button dialog to FIXED,
+# content-independent ids regardless of the dynamic caption text:
+#   R.id.choice_dialog_panel_1 = "Go Back"
+#   R.id.choice_dialog_panel_2 = "Add Another" (repeat.dialog.add/add-empty)
+#   R.id.choice_dialog_panel_3 = "Skip" (repeat.dialog.leave/exit)
+# Tapping by these ids works regardless of which form or which specific
+# repeat-group label is showing.
+#
+# form.entry.finish.button="FINISH"
 # (android_translatable_strings.txt:173) backs the literal "FINISH" text
 # assertion. nav_btn_next/nav_btn_finish ids and
 # form.entry.complete.save.success="Form successfully completed"
@@ -88,7 +103,8 @@ tags:
     id: "org.commcare.dalvik:id/nav_btn_next"
 
 # --- Repeat iteration 1 ---
-- tapOn: "Add Group"
+- tapOn:
+    id: "org.commcare.dalvik:id/choice_dialog_panel_2"
 - inputText: "Repeat one"
 - hideKeyboard
 - tapOn:
@@ -105,7 +121,8 @@ tags:
     id: "org.commcare.dalvik:id/nav_btn_next"
 
 # --- Repeat iteration 2 ---
-- tapOn: "Add Group"
+- tapOn:
+    id: "org.commcare.dalvik:id/choice_dialog_panel_2"
 - inputText: "Repeat two"
 - hideKeyboard
 - tapOn:
@@ -119,10 +136,11 @@ tags:
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_next"
 
-# Stop at exactly two iterations - matches either the mid-form "Do Not Add"
-# or the end-of-form "Do Not Add. I'm Finished." button label.
+# Stop at exactly two iterations - panel_3 is the "Skip" choice regardless
+# of whether its dynamic label reads "Do Not Add" or "Do Not Add. I'm
+# Finished." (that variance is exactly why this uses the fixed id, not text).
 - tapOn:
-    text: "(?i)do not add.*"
+    id: "org.commcare.dalvik:id/choice_dialog_panel_3"
 
 # Rest of the form (fixed 3x repeat, "toofew"/"repeat_total" info triggers,
 # nested 2x3 outer/inner repeat, num_repeats + its own repeat, intro_label,
@@ -130,12 +148,22 @@ tags:
 # through generically. times: 40 is a generous upper bound; the `while`
 # condition stops the loop as soon as nav_btn_next disappears (i.e. the last
 # screen, with nav_btn_finish instead, is reached).
+# UPDATE, confirmed live (2026-08-08, real BrowserStack failure + user
+# screenshot, on question_types_01_03's identical dialog): the rest of this
+# form has its OWN additional repeat groups (nested outer/inner repeat,
+# num_repeats + its own repeat) beyond the one already handled above - each
+# can show the SAME "Add a new...?" dialog, and it doesn't only appear at a
+# single predictable point. Defensively dismiss it (Do Not Add) before every
+# generic Next tap, not just the one explicit handling point above.
 - repeat:
     times: 40
     while:
       visible:
         id: "org.commcare.dalvik:id/nav_btn_next"
     commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/choice_dialog_panel_3"
+          optional: true
       - tapOn:
           id: "org.commcare.dalvik:id/nav_btn_next"
 

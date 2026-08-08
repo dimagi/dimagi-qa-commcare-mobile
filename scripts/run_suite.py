@@ -80,7 +80,32 @@ def select_flow_files(tags=None, explicit_flows=None):
 
 def build_flows_zip(flow_files, out_dir):
     """Zip the selected flows preserving their flows/<category>/<file>.yaml
-    layout, since flow files reference siblings via relative runFlow paths."""
+    layout, since flow files reference siblings via relative runFlow paths.
+
+    FIXED 2026-08-08: this only ever copied the .yaml flow files themselves -
+    any binary fixture a flow pushes via `addMedia` (e.g.
+    flows/multimedia/assets/sample_image.png, referenced by both
+    flows/form_submissions/upload_test_01_specific_file_extensions.yaml via
+    "../multimedia/assets/sample_image.png" and several flows/multimedia/
+    flows via "./assets/sample_image.png") was NEVER included in the
+    uploaded testSuite zip, regardless of the addMedia path's phrasing.
+    Confirmed live: inspecting the actual zip built for a run of just
+    upload_test_01 (+ flows/common/) showed 20 entries, all .yaml, zero
+    images - and the corresponding BrowserStack build
+    (baca2770ccdfa7a0a01067208180cf3e2c93db19, retried as
+    636152ea40e174e2b88eb0e9a9e89ee6d8827592) failed both times with
+    [BROWSERSTACK_TESTSUITE_PARSE_ERROR] "No Tests Ran" - the exact same
+    failure signature this function's own module docstring already documents
+    for a *genuinely missing* addMedia asset ("BrowserStack rejects the
+    WHOLE build's parse if even one addMedia target is missing from the
+    zip"). The difference here is the asset isn't missing from the repo at
+    all (flows/multimedia/assets/sample_image.png exists on disk) - it was
+    just never copied into the zip by this function, a bug in the zip
+    builder itself rather than the flow file. Fixed by also mirroring every
+    flows/<category>/assets/ directory into the zip (small, few-KB fixture
+    files - inexpensive to always include) so any relative addMedia
+    reference, same-directory or cross-directory, resolves inside the
+    archive the same way it resolves on disk relative to FLOWS_DIR."""
     staging = pathlib.Path(out_dir) / "flows"
     if staging.exists():
         shutil.rmtree(staging)
@@ -89,6 +114,13 @@ def build_flows_zip(flow_files, out_dir):
         dest = staging / rel
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(f, dest)
+
+    for assets_dir in FLOWS_DIR.glob("*/assets"):
+        rel = assets_dir.relative_to(FLOWS_DIR)
+        dest = staging / rel
+        if dest.exists():
+            shutil.rmtree(dest)
+        shutil.copytree(assets_dir, dest)
 
     zip_path = pathlib.Path(out_dir) / "flows.zip"
     import zipfile

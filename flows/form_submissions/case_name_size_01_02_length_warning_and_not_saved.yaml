@@ -86,6 +86,32 @@ tags:
 - assertVisible:
     text: "(?i).*value must be 255 characters or less.*"
 - tapOn: "OK"
+# UPDATE, confirmed live (2026-08-08, real BrowserStack failure on BOTH the
+# main attempt and its --retry-failed re-run, build
+# af73a71fe00d14a20fc6d59a0b3a2da22c1211a0, session
+# .../e4c3ec923b0ad37805250109aede2c9d8c68886060c11c60): the plain
+# `assertVisible: "Start"` right after tapping "OK" failed - the downloaded
+# maestroScreenshot for that exact failure shows the device sitting on the
+# "Case Tests" module list (title bar reads "Case Tests" with a back arrow),
+# NOT the home/"Start" screen. This matches FormEntryActivity.java's real
+# dismissal behavior: savingComplete()'s SAVE_UNRECOVERABLE_ERROR branch
+# (already cited above) calls quarantineRecordOnError() and then finishes
+# the form-entry Activity, which returns control to whichever Activity
+# launched it - here, the "Case Tests" module list (EntitySelectActivity),
+# one level below the home screen - not directly to Start. A single
+# `assertVisible: "Start"` therefore raced a screen that still needed one
+# more back-press. Fixed the same way as the identical "variable submenu
+# depth" problem in flows/multimedia/image_resize_01_04_default_setting.yaml
+# (see that file's own header): a bounded repeat-while loop that presses
+# back until "Start" is actually visible, rather than assuming a fixed
+# number of screens (or none) separate the post-dialog state from home.
+- repeat:
+    times: 5
+    while:
+      notVisible:
+        text: "Start"
+    commands:
+      - back
 - assertVisible: "Start"
 
 # --- Case Name Size 2: the oversized-name submission must NOT show up

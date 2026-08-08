@@ -117,6 +117,21 @@ tags:
 # content changed.
 - tapOn: "More options"
 - tapOn: "Update App"
+# UPDATE, confirmed live (2026-08-08, real BrowserStack failure, build
+# 6088f0f4e51f008e98bcec32581ae4d4c85e7231): the update-check genuinely
+# failed with "Failed to download updates due to an error" / "See Error
+# Details" and a "Recheck" button - a transient network/server hiccup on
+# the update-check callout, not a flow bug (same class of issue as
+# flows/common/login.yaml's own "Bad Server Response" retry, just a
+# different callout). Bounded retry tapping "Recheck" while the error is
+# showing, rather than assuming the very first check always succeeds.
+- repeat:
+    times: 3
+    while:
+      visible:
+        text: "Failed to download updates due to an error"
+    commands:
+      - tapOn: "Recheck"
 - extendedWaitUntil:
     visible: "App is up to date"
     timeout: 30000
@@ -134,6 +149,21 @@ tags:
 # === "Confirm that no update occurs if you try" ==========================
 - tapOn: "More options"
 - tapOn: "Update App"
+# UPDATE, confirmed live (2026-08-08, real BrowserStack failure, build
+# 6088f0f4e51f008e98bcec32581ae4d4c85e7231): the update-check genuinely
+# failed with "Failed to download updates due to an error" / "See Error
+# Details" and a "Recheck" button - a transient network/server hiccup on
+# the update-check callout, not a flow bug (same class of issue as
+# flows/common/login.yaml's own "Bad Server Response" retry, just a
+# different callout). Bounded retry tapping "Recheck" while the error is
+# showing, rather than assuming the very first check always succeeds.
+- repeat:
+    times: 3
+    while:
+      visible:
+        text: "Failed to download updates due to an error"
+    commands:
+      - tapOn: "Recheck"
 - extendedWaitUntil:
     visible: "App is up to date"
     timeout: 30000

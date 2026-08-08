@@ -66,7 +66,23 @@ tags:
       FORM_NAME: "Tall Image"
 # Back out of "Image Resize" -> home, confirming the app is still in a
 # healthy state.
-- back
+# UPDATE, confirmed live (2026-08-08, real BrowserStack failure, build
+# group-a/180): a single hardcoded `back` isn't reliably enough - some runs
+# need a second press to fully exit "Image Resize" back to "Start" (menu
+# depth here isn't perfectly deterministic run-to-run). Per the user's own
+# suggested fix, this is now a bounded while-loop that presses back until
+# "Start" is visible rather than hardcoding a fixed count - the same
+# approach any other flow with variable submenu depth should use instead of
+# guessing a specific number of back-presses. times: 5 is just a generous
+# upper bound to avoid a genuine infinite loop if "Start" never appears;
+# the extendedWaitUntil below remains the actual pass/fail assertion.
+- repeat:
+    times: 5
+    while:
+      notVisible:
+        text: "Start"
+    commands:
+      - back
 - extendedWaitUntil:
     visible:
       text: "Start"

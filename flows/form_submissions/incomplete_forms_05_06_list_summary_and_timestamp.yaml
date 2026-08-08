@@ -13,36 +13,57 @@ tags:
 # so one file covers both (same convention as pin_01/fuzzy_search_01_03/
 # incomplete_forms_01_03 above).
 #
-# PARTIAL / automates-what's-assertable: IncompleteFormRecordView.java shows
-# three pieces of text per row - formrecord_txt_main (form name),
-# formrecord_txt_btm (a "dataTitle" summary string), formrecord_txt_right
-# (a formatted last-modified timestamp, via
-# android.text.format.DateUtils.formatSameDayTime()). This flow asserts
-# both formrecord_txt_btm and formrecord_txt_right are VISIBLE (i.e. "a
-# summary text + timestamp appears below the entry", exactly what the sheet
-# asks to confirm) without asserting their exact live content: the
-# timestamp is a moving target (matches this repo's date_widgets convention
-# of not hardcoding a moving value - see date_04_05_standard_widget.yaml's
-# own comment), and the summary string's real content for THIS specific
-# form could not be confirmed from any source in this repo -
-# IncompleteFormListAdapter.java populates it from a per-record
-# "searchCache" entry whose ultimate source trace (FormMetaIndicatorUtil /
-# a form's own "Pragma-Form-Descriptor" trigger, as seen used for case-name
-# display in modules-3/forms-0.xml's "Create a Case" form) does NOT exist in
-# "Question Types" (modules-0/forms-1.xml has no Pragma-Form-Descriptor
-# trigger at all, confirmed by grep), so its rendered value for this form is
-# unknown/likely blank-ish rather than a fixed guessable string - asserting
-# only that the view IS PRESENT is the honest "automate what's assertable"
-# reading of this row, per this task's own instruction.
+# FIXED (2026-08-08, live BrowserStack evidence, build
+# af73a71fe00d14a20fc6d59a0b3a2da22c1211a0, test
+# e4c3ec923b0ad37805250109aede2c9d8c6888604db43c9b): the header below used
+# to hedge that formrecord_txt_btm's content for "Question Types" was
+# "unknown/likely blank-ish" and asserted it visible anyway. A real run
+# proved that guess right in the worst way for that assertion:
+# assertVisible on formrecord_txt_btm FAILED outright (not just
+# empty-text-but-present - genuinely not visible), and the failure
+# screenshot confirms it: the "Incomplete" list row shows only the
+# "Question Types" name and the "13:52:09" timestamp on the right
+# (formrecord_txt_right) - there is NO second line of text below the form
+# name at all.
+# Root cause, confirmed in source: IncompleteFormRecordView.setParams()
+# (app/src/org/commcare/views/IncompleteFormRecordView.java lines 68-70)
+# only calls `mLowerTextView.setText(dataTitle)` `if (dataTitle != null)` -
+# there is no else branch, so when dataTitle is null the TextView is left
+# exactly as inflated from formrecordview.xml (lines 77-82), which gives it
+# no android:text and wrap_content dimensions - i.e. zero-size/absent, not
+# merely blank. "Question Types" (modules-0/forms-1.xml, confirmed by grep)
+# has no Pragma-Form-Descriptor anywhere, and in fact NO form under the
+# "Basic Form Tests" module (m0) has one (grepped every modules-0/forms-*.xml
+# for Pragma-Form-Descriptor - zero matches), so formrecord_txt_btm can
+# never be populated for anything reachable via this row's "Basic Form
+# Tests" navigation. Asserting it visible was asserting something the real
+# app never does for this form - fixed by dropping that assertion and
+# keeping the (confirmed-live) formrecord_txt_right timestamp check, which
+# is the part of the sheet's row this app can actually satisfy here.
+#
+# KNOWN GAP (not fixed here, flagged as follow-up): the Master Plan's
+# "Incomplete Forms 6" row (row 32) explicitly says to use "Case Tests ->
+# Create a Case", NOT "Basic Form Tests -> Question Types" - and unlike
+# Question Types, modules-3/forms-0.xml's "Create a Case" form DOES have a
+# Pragma-Form-Descriptor (`Form Summary: <output value="/data/casename"/>
+# [English]`), so it WOULD show a real, non-empty formrecord_txt_btm. This
+# flow (following this repo's existing "one narrative covers both sheet
+# rows" convention, since both rows were assumed identical when this file
+# was first written) only exercises Question Types, so it cannot verify a
+# populated summary the way row 6 literally describes. Left as a documented
+# gap rather than an in-place rewrite, since a "Create a Case" pass changes
+# more of this flow's structure than this fix's evidence covers and can't
+# be validated live without triggering a new BrowserStack build (out of
+# scope for this fix).
 #
 # Verified against commcare-android source (read-only reference, not
 # modified) - same citations as incomplete_forms_01_03_save_resume_submit.yaml,
 # plus:
 #   IncompleteFormRecordView.java setParams(): mLowerTextView (id
-#     formrecord_txt_btm) <- dataTitle param; mRightTextView (id
-#     formrecord_txt_right) <- DateUtils.formatSameDayTime(timestamp, ...)
-#     (or "Never" if timestamp == 0, not applicable here since the record
-#     was just saved).
+#     formrecord_txt_btm) <- dataTitle param, only when non-null;
+#     mRightTextView (id formrecord_txt_right) <-
+#     DateUtils.formatSameDayTime(timestamp, ...) (or "Never" if
+#     timestamp == 0, not applicable here since the record was just saved).
 #
 # Prepends install_app_as_web_user.yaml (APP_NAME: ".*Basic Tests$") - a
 # fresh BrowserStack session has no app installed until this runs; see
@@ -85,12 +106,21 @@ tags:
     timeout: 10000
 - assertVisible: "Question Types"
 - assertVisible:
-    id: "org.commcare.dalvik:id/formrecord_txt_btm"
-- assertVisible:
     id: "org.commcare.dalvik:id/formrecord_txt_right"
 
 # --- Resume: verify prior answer persisted, then fully submit. ---
 - tapOn: "Question Types"
+# Reopening a saved form always lands on FormHierarchyActivity first - see
+# incomplete_forms_01_03_save_resume_submit.yaml's header for the full
+# source citation (FormEntryActivity.java's handleFormLoadCompletion()).
+# Jump back to the beginning of the form to resume normal question-entry
+# navigation before the nav_btn_next taps below.
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/jumpBeginningButton"
+    timeout: 10000
+- tapOn:
+    id: "org.commcare.dalvik:id/jumpBeginningButton"
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_next"
     optional: true
