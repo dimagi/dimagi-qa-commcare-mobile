@@ -65,6 +65,17 @@ appId: org.commcare.dalvik
     id: "org.commcare.dalvik:id/start_install"
 - tapOn:
     id: "org.commcare.dalvik:id/btn_start_install"
+# Confirmed live (2026-08-08, date_widgets validation run 31247897876): a
+# build can require a newer CommCare APK than BrowserStack's release build,
+# showing "The application requires CommCare version X. You are currently
+# running Y." with an "I'LL UPDATE LATER" button - the exact same dialog
+# install_app_as_web_user.yaml's own SIXTH CAVEAT already handles. Without
+# this tap the edit_username wait below times out at 90s with this dialog
+# still on screen. Text uses "I.LL" (period, not apostrophe) matching every
+# other occurrence of this tap in this repo.
+- tapOn:
+    text: "I.LL UPDATE LATER"
+    optional: true
 - extendedWaitUntil:
     visible:
       id: "org.commcare.dalvik:id/edit_username"
