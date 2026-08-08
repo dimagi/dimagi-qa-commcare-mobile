@@ -79,7 +79,22 @@ tags:
     env:
       USERNAME: ${CC_TEST_USERNAME}
       PASSWORD: ${CC_TEST_PASSWORD}
+# UPDATE, confirmed live (2026-08-08, real BrowserStack failure, build
+# e6688c6ec3d0c06754832c8be35ace5e0310fb20): "Tap on Upload Tests" failed -
+# the failing screenshot showed "[Master] Basic Tests"'s module list open
+# to its FIRST page (Basic Form Tests, Formplayer Specific Tests, Logic
+# Tests 1, Case Tests, Sub Case One/Two, Minimize Duplicates, Geoservices),
+# with "Upload Tests" (module m24, per this file's own header) nowhere in
+# the visible viewport. A bare tapOn only searches the currently rendered
+# hierarchy - scrollUntilVisible first, same fix this repo already applies
+# elsewhere for long module lists (e.g. install_app_as_web_user.yaml's
+# "FOURTH CAVEAT").
 - tapOn: "Start"
+- scrollUntilVisible:
+    element:
+      text: "Upload Tests"
+    direction: DOWN
+    timeout: 15000
 - tapOn: "Upload Tests"
 - tapOn: "Upload Tests for specific file extensions"
 

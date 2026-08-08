@@ -49,12 +49,28 @@ def select_flow_files(tags=None, explicit_flows=None):
 
     Flows tagged `blocked_missing_asset` (an addMedia reference to a local
     file that doesn't exist yet - filesize_01/02, filesize_warning_02 as of
-    this writing) are excluded from an unfiltered/default run: BrowserStack
+    this writing) are excluded regardless of tag filtering: BrowserStack
     rejects the WHOLE build's parse if even one addMedia target is missing
     from the zip (confirmed live), so leaving one of these in a chunk
     silently zeroes out every other flow sharing that chunk. Pass
     --tag blocked_missing_asset or --flow explicitly to run them anyway once
-    their assets exist."""
+    their assets exist.
+
+    UPDATE, confirmed live (2026-08-08, real CI run 31272376559): the
+    exclusion above used to only apply when NO tags were given at all (the
+    bare "All" case) - once real tags were passed (as this repo's own 3-way
+    CI matrix always does, e.g. --tag multimedia), a blocked_missing_asset
+    flow that ALSO carries that tag got swept in anyway via the `flow_tags &
+    set(tags)` check below, reproducing the exact PARSE_ERROR this
+    exclusion exists to prevent - confirmed live: filesize_01_trigger_warning,
+    filesize_02_no_warning, and filesize_warning_02_select_large_video (all
+    tagged both `multimedia` and `blocked_missing_asset`) each caused their
+    own batch to fail to parse when group-a ran with --tag multimedia. Fixed
+    so the exclusion applies whenever tags are given too, unless
+    blocked_missing_asset itself is one of the requested tags (or the flow
+    was named explicitly via --flow, which always bypasses tag filtering
+    entirely - a direct request to run a specific file should never be
+    silently dropped)."""
     if explicit_flows:
         selected = {pathlib.Path(f).resolve() for f in explicit_flows}
     else:
@@ -65,9 +81,10 @@ def select_flow_files(tags=None, explicit_flows=None):
             with open(path, encoding="utf-8") as fh:
                 doc = next(yaml.safe_load_all(fh))
             flow_tags = set((doc or {}).get("tags") or [])
+            if "blocked_missing_asset" in flow_tags and (not tags or "blocked_missing_asset" not in tags):
+                continue
             if not tags:
-                if "blocked_missing_asset" not in flow_tags:
-                    selected.add(path)
+                selected.add(path)
                 continue
             if flow_tags & set(tags):
                 selected.add(path)

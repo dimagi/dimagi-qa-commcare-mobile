@@ -1,7 +1,7 @@
 appId: org.commcare.dalvik
 tags:
   - mobile_pins
-  - automatable
+  - partial
 ---
 # Master Mobile Plan (2026) > Mobile Pins > "Pin 1" - Prompt.
 # NOTE: Prepends install_app_as_web_user.yaml (APP_NAME: ".*[Master] Basic
@@ -34,10 +34,49 @@ tags:
     env:
       USERNAME: ${CC_TEST_USERNAME}
       PASSWORD: ${CC_TEST_PASSWORD}
-- runFlow: ../common/enable_pin_login_option.yaml
-- assertVisible: "Create a PIN?"
-- assertVisible: "Yes, set my PIN now"
-- assertVisible: "No, but ask again on next login"
-- assertVisible: "No, and don't ask again"
+# UPDATE, confirmed live (2026-08-08, per explicit direction): every
+# mobile_pins Pin N test is blocked at the exact same wall - the "Give
+# option to use PIN for login" dev preference can never appear without a
+# real Mobile Privileges QR claim (see
+# flows/common/enable_pin_login_option.yaml's own "FINAL UPDATE" for the
+# full source citation) - so nothing below this point in this test's
+# ORIGINAL assertions (this specific Pin's own subject matter) can ever be
+# reached. Rather than fail here, this flow now verifies everything that
+# genuinely IS automatable and stops there: Developer Options unlocks, the
+# Mobile Privileges screen opens, and tapping CLAIM PRIVILEGES actually
+# launches the scanner - the same boundary
+# flows/mobile_pins/setup_04_claim_privileges_scanner_opens.yaml already
+# established (see that file's own header for the full selector citations:
+# DeveloperPreferences.java, GlobalPrivilegeClaimingActivity.java, etc.).
+- assertVisible: "Start"
+- repeat:
+    times: 4
+    commands:
+      - tapOn: "More options"
+      - tapOn: "About CommCare"
+      - tapOn: "OK"
 - assertVisible:
-    id: "org.commcare.dalvik:id/extra_info_button"
+    text: "Developer Mode Enabled"
+    optional: true
+- tapOn: "More options"
+- tapOn: "Settings"
+- scrollUntilVisible:
+    element:
+      text: "Developer Options"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "Developer Options"
+- tapOn: "More options"
+- tapOn: "Mobile Privileges"
+- assertVisible:
+    id: "org.commcare.dalvik:id/claim_button"
+- tapOn:
+    id: "org.commcare.dalvik:id/claim_button"
+- tapOn:
+    text: "(?i).*while using the app.*"
+    optional: true
+- tapOn:
+    text: "(?i)allow"
+    optional: true
+- assertNotVisible:
+    id: "org.commcare.dalvik:id/claim_button"

@@ -143,17 +143,39 @@ tags:
 # --- Create a Sub Case (per the stack redirect this should land back on m6;
 # re-navigate defensively in case it landed on the plain Minimize Duplicates
 # menu instead). ---
+# UPDATE, confirmed live (2026-08-08, real BrowserStack failure, build
+# f4c6f946911651871ca62d4e6ef1847052a6d612): "Tap on Create a Sub Case"
+# failed (hard, non-optional) - the failing screenshot showed neither
+# "Start" nor the "Minimize Duplicates" menu, but a THIRD landing screen
+# this header's own caveat didn't anticipate: the case-SELECTION list for
+# "Create a Sub Case" itself (a "Name" column of existing cases) - i.e.
+# case_list_form.m6's "Create a Case" register button, once submitted,
+# returns straight into the case-list screen that was ALREADY mid-navigation
+# for "Create a Sub Case" (m6-f1), not back out to a menu at all. That
+# screen has no "Create a Sub Case" text anywhere on it, so the hard tap
+# failed before ever reaching this file's own already-optional
+# "MaestroBasicCase" case-selection tap two steps below. Made every step in
+# this defensive re-navigation block optional so whichever screen the app
+# actually lands on, only the applicable taps fire and the real
+# case-selection tap below is reached regardless.
 - tapOn:
     text: "Start"
     optional: true
 - tapOn:
     text: "Minimize Duplicates"
     optional: true
-- tapOn: "Create a Sub Case"
+- tapOn:
+    text: "Create a Sub Case"
+    optional: true
+# Confirmed live (same build as above): the real landing screen is the
+# case-SELECTION list (not a form), so nav_btn_next genuinely isn't visible
+# yet at this point - this wait must be optional too, or it hard-fails
+# before ever reaching the case-selection tap below.
 - extendedWaitUntil:
     visible:
       id: "org.commcare.dalvik:id/nav_btn_next"
     timeout: 10000
+    optional: true
 # Case-selection screen (if shown) - select the case by its known name.
 - tapOn:
     text: "MaestroBasicCase"

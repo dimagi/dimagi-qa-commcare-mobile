@@ -111,12 +111,26 @@ appId: org.commcare.dalvik
 # authenticating against the same test accounts around the same point in a
 # run), fixed centrally here (not duplicated per-caller) since every flow
 # that logs in shares this same exposure.
+#
+# UPDATE, confirmed live (2026-08-08, real CI run 31272376559): 3 immediate
+# back-to-back retries weren't enough - this recurred on
+# update_target_developer_options_flow.yaml (twice) and
+# login/commcare_odk_01_login.yaml, persisting through all 3 attempts each
+# time. If the server is genuinely under sustained load (many parallel CI
+# sessions hitting the same key-exchange endpoint around the same time, as
+# the original theory suggested), hammering it with immediate retries gives
+# it no time to recover. Raised to 5 attempts and inserted a real pause
+# between each (waitForAnimationToEnd's timeout used as a settling delay,
+# since Maestro has no standalone "wait N ms" command) rather than retrying
+# instantly.
 - repeat:
-    times: 3
+    times: 5
     while:
       visible:
         text: "Bad Server Response"
     commands:
+      - waitForAnimationToEnd:
+          timeout: 3000
       - tapOn:
           id: "org.commcare.dalvik:id/login_button"
 # A first (or post-reinstall) login triggers a data restore/sync that shows

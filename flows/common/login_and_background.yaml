@@ -20,6 +20,29 @@ appId: org.commcare.dalvik
 # NOT call logout.yaml or `killApp` - callers need CommCare alive and authenticated in the
 # background so a companion app's `launchApp` (or an Android Intent it fires) can bring it
 # back to the foreground later without needing to log in again.
+#
+# UPDATE, confirmed live (2026-08-08, real CI failure across EVERY
+# externalapp_tests flow: "Tap on id: edit_username FAILED" inside
+# login.yaml, ~16s timeout with no login screen ever appearing): this file
+# went straight to `runFlow: login.yaml` with no install step at all -
+# login.yaml assumes CommCare is ALREADY installed and sitting on its login
+# screen, but nothing here (or anywhere in flows/externalapp_tests/) ever
+# installed it. flows/externalapp_tests/README.md's own "Setup 2 (plain
+# CommCare install)... is intentionally not in this directory" note
+# describes this exact install as a precondition every flow here should
+# already be doing "the same way every other workflow in this repo already
+# does" - but no flow file actually called it. scripts/app_registry.py
+# already has the right entry for this (EXTERNAL_APP_FIXTURE -> sansar
+# domain, per flows/externalapp_tests/README.md's own Domain/Application
+# citation), just never wired up. This file is ONLY ever invoked via
+# runFlow by the 6 flows/externalapp_tests/*.yaml files (confirmed via
+# repo-wide grep - the only other files mentioning its name do so in
+# comments, not actual runFlow calls), all targeting this same fixture app,
+# so installing it here (rather than parameterizing per-caller) is correct.
+- runFlow:
+    file: install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_EXTERNAL_APP_FIXTURE}
 - runFlow:
     file: login.yaml
     env:
