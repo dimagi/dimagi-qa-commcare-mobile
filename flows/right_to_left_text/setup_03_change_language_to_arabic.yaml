@@ -23,14 +23,15 @@ tags:
 # Prepends install_app_as_web_user.yaml (APP_NAME: ".*Right to Left Tests!") - a
 # fresh BrowserStack session has no app installed until this runs; see
 # DispatchActivity.java's CommCareSetupActivity routing when currentApp == null.
+# UPDATE, confirmed live (run 31276111657): same redundant-clearState bug as
+# setup_02_change_device_language_to_arabic.yaml - see that file's header
+# for the full root-cause writeup. install_app_by_code.yaml (above) already
+# ends on the login screen; a second clearState here wiped that install and
+# threw the device back to the pre-install setup screen.
 - runFlow:
     file: ../common/install_app_by_code.yaml
     env:
       APP_CODE: ${APP_CODE_RIGHT_TO_LEFT}
-- launchApp:
-    clearState: true
-- assertVisible:
-    id: "org.commcare.dalvik:id/edit_username"
 - runFlow:
     file: ../common/login.yaml
     env:
@@ -47,10 +48,23 @@ tags:
 # bundle (ChangeLocaleUtil.getLocaleNames() -> HomeScreenBaseActivity.java
 # showLocaleChangeMenu()/buildLocaleChoices()), not a fixed CommCare string -
 # each locale's display name is whatever that app's translation supplies for
-# its own locale code (e.g. "ar"). "Arabic" is not independently verified
-# against the specific RTL build ("Setup 1"'s deployed app); if that build
-# labels the option differently, update this selector to match.
-- tapOn: "Arabic"
+# its own locale code (e.g. "ar").
+# UPDATE, confirmed live (run 31276111657 follow-up): "Tap on 'Arabic'"
+# failed - the failure screenshot showed the real dialog lists each
+# language in its OWN native script, not translated into English: "ENGLISH"
+# and "العربية" (Arabic's own name for itself), not "Arabic".
+# UPDATE (2nd correction), confirmed live (LOCAL-VERIFY-round3): tapping the
+# literal Arabic string ALSO failed to match ("Element not found") even
+# though the exact same text is clearly rendered on screen - a byte-level
+# Unicode mismatch somewhere in this string's round-trip through the tool
+# chain is more likely than the text genuinely being absent twice in a row.
+# Sidestepped entirely with a coordinate tap instead of relying on matching
+# Arabic text at all - the dialog only ever has two fixed choices
+# (ENGLISH/Arabic), so the second choice's on-screen position is stable.
+# Measured off the real 1080x2400 screenshot (choice center ~540px/1080
+# horiz, ~1326px/2400 vert - just below the ENGLISH/divider row).
+- tapOn:
+    point: "50%, 55%"
 - assertNotVisible: "Choose your Language"
 - assertVisible:
     id: "org.commcare.dalvik:id/home_gridview_buttons"

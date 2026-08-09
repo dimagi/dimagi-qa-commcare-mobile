@@ -64,7 +64,12 @@ tags:
       USERNAME: ${CC_TEST_USERNAME}
       PASSWORD: ${CC_TEST_PASSWORD}
 - tapOn: "Start"
-- tapOn: "Multimedia"
+# UPDATE, confirmed live (run 31276111657): title/row text ambiguity - see
+# flows/multimedia/mm4_question_types.yaml's own UPDATE comment for the
+# full root-cause writeup. Fixed the same way: scope to the row_txt id.
+- tapOn:
+    id: "org.commcare.dalvik:id/row_txt"
+    text: "Multimedia"
 - tapOn: "Gif/Remove Image"
 - repeat:
     times: 6

@@ -39,6 +39,18 @@ APP_REGISTRY = {
     # max_commcare_version filtering (see NO_VERSION_FILTER_KEYS below) -
     # this is Basic Tests' single most recent build, whatever it requires.
     "BASIC_TESTS_LATEST": ("qateam", "cdfa6c85eb594b23b0c08729cd2beff1"),
+    # Master Mobile Plan (2026) > Recovery: Reinstall and Update App > Setup
+    # 1's own linked HQ Releases URL (user-supplied, 2026-08-09):
+    # https://www.commcarehq.org/a/qateam/apps/view/c49c34a1d74297ecb6ecef7a7c5d3f88/releases/
+    # Resolves the "no app installed yet" gap every recovery_measures flow
+    # had - they all assumed some app named "Test One"/"Test Two"/"Test
+    # Three" was already installed by an earlier, undocumented step, but
+    # per the sheet's own Setup 1 summary ("This will become the new Test
+    # One... repeat for version two and three") those are just this ONE
+    # app's sequential release labels, not separate apps - a single install
+    # code for its current build is enough to reach the login screen every
+    # recovery_measures flow actually needs.
+    "RECOVERY_MEASURES": ("qateam", "c49c34a1d74297ecb6ecef7a7c5d3f88"),
 }
 
 # Keys that must always resolve to the app's single most recent build,

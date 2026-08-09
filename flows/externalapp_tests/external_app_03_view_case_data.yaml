@@ -3,8 +3,10 @@ tags:
   - externalapp_tests
   - partial
 env:
-  # UNVERIFIED PLACEHOLDER - see flows/externalapp_tests/README.md.
-  EXTAPP_APP_ID: "com.dimagi.mobileapitestingapp"
+  # CONFIRMED (2026-08-09) against the real companion APK - see
+  # external_app_01_launch_and_verify_buttons.yaml's env block for the full
+  # aapt citation.
+  EXTAPP_APP_ID: "com.dimagi.test.external"
   EXTAPP_BTN_VIEW_CASE_DATA: "View Case Data"
   # Same "sansar" domain login Setup 3 uses - see setup_03_login_and_background.yaml.
   EXTAPP_QA_USERNAME: "qa_user"

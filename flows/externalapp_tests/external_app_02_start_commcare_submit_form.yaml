@@ -3,8 +3,10 @@ tags:
   - externalapp_tests
   - partial
 env:
-  # UNVERIFIED PLACEHOLDER - see flows/externalapp_tests/README.md.
-  EXTAPP_APP_ID: "com.dimagi.mobileapitestingapp"
+  # CONFIRMED (2026-08-09) against the real companion APK - see
+  # external_app_01_launch_and_verify_buttons.yaml's env block for the full
+  # aapt citation.
+  EXTAPP_APP_ID: "com.dimagi.test.external"
   # Button text copied verbatim from the sheet's "External App 2" row, step 1.
   EXTAPP_BTN_START_COMMCARE: "Start CommCare"
   # Value typed into the Basic Form's answer field (step 3, "Enter a value") - the sheet
@@ -79,8 +81,29 @@ env:
 # setFocus() override both requestFocus()s that EditText AND opens the soft keyboard. So on a
 # single-question "Basic Form" screen, the answer field already has focus with no tap needed -
 # `inputText` below types directly into it.
+# UPDATE, confirmed live (LOCAL-VERIFY-fixes-aug09): the real "Basic Form"
+# question here turned out to be a SELECT-ONE/lookup-table question
+# ("Select the answer from lookup table", radio choices) rather than the
+# plain text field this step assumed - `inputText` had no focused EditText
+# to type into (StringWidget's EditText has no android:id per this file's
+# own citation above, so there's no reliable way to detect "is this a text
+# field" and branch on it). The old unconditional `hideKeyboard` right
+# after almost certainly issued a fallback BACK key press since no keyboard
+# was ever open, which is what actually opened the unexpected "Exit Form?"
+# dialog the failure screenshot showed (a dialog on top makes the
+# underlying nav_btn_finish inaccessible to Maestro's query even though
+# it's still pixel-visible behind it - explaining why the later
+# assertVisible on it failed despite the screenshot showing it). Fixed by
+# dropping the unconditional hideKeyboard (nav_btn_next/nav_btn_finish live
+# in the top nav bar per screen_form_entry.xml, above the question content,
+# so an open keyboard covering the bottom doesn't block them - hiding it
+# was never actually necessary for navigation) and adding a defensive
+# "Exit Form?" dismiss as a safety net in case this ever recurs from some
+# other cause.
 - inputText: "${EXTAPP_FORM_ANSWER_VALUE}"
-- hideKeyboard
+- tapOn:
+    text: "STAY IN FORM"
+    optional: true
 - repeat:
     while:
       visible:
@@ -106,5 +129,18 @@ env:
     text: "(?i).*unexpected error.*"
 - assertNotVisible:
     text: "(?i).*commcare will now restart.*"
-- assertNotVisible:
-    id: "org.commcare.dalvik:id/nav_btn_finish"
+# UPDATE, confirmed live (video review, LOCAL-VERIFY-fixes build): the tap
+# on nav_btn_finish genuinely worked - the question here has no required
+# answer, so submitting blank is valid, and the companion app later shows
+# a real "Form successfully completed" toast. But this plain
+# `assertNotVisible` fired its one instant check too soon: the activity
+# transition back out of form-entry after a real submit takes a moment,
+# and nav_btn_finish can still be structurally present for that brief
+# window even though the tap already registered and the submit is already
+# in flight - failing the test right as the device was about to finish
+# tearing the form-entry screen down on its own. Fixed with a bounded wait
+# for its absence instead of a single instant check.
+- extendedWaitUntil:
+    notVisible:
+      id: "org.commcare.dalvik:id/nav_btn_finish"
+    timeout: 10000

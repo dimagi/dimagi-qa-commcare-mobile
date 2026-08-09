@@ -62,13 +62,45 @@ tags:
       USERNAME: ${CC_TEST_USERNAME}
       PASSWORD: ${CC_TEST_PASSWORD}
 - tapOn: "Start"
-- tapOn: "Multimedia"
+# UPDATE, confirmed live (run 31276111657): "Tap on 'Media Demo'" failed -
+# the failure screenshot showed the device STILL on the root module list
+# (Multimedia/Image Resize/Icons/Formplayer Tests/External File in Forms/
+# Media Capture), meaning the preceding `tapOn: "Multimedia"` never
+# actually navigated anywhere. Root cause: this app's own display name IS
+# "Multimedia" (module m0's name too), and CommCare's root menu screen
+# titles its toolbar with the app's display name - so "Multimedia" appears
+# TWICE on the root screen (the (non-interactive) toolbar title, and the
+# m0 list row underneath it). A bare tapOn-by-text can match the title
+# instead of the row, silently doing nothing. Fixed by scoping the tap to
+# the list row's own TextView id (row_txt, confirmed via MenuAdapter.java -
+# see flows/right_to_left_text/question_types_02_open_first_form.yaml's own
+# citation) combined with the text, which only the row (not the title)
+# carries.
+- tapOn:
+    id: "org.commcare.dalvik:id/row_txt"
+    text: "Multimedia"
 - tapOn: "Media Demo"
+# UPDATE, confirmed live (LOCAL-VERIFY-mm-isolate): "Assert nav_btn_finish
+# visible" failed with the device already back on the HOME screen ("1 form
+# sent to server!" showing on the Sync tile) - the form had ALREADY
+# auto-submitted during the loop below, same auto-submit-bypass class of
+# bug already root-caused and fixed elsewhere this session (see
+# flows/form_submissions/incomplete_forms_01_03_save_resume_submit.yaml's
+# header for the full nav_btn_next/nav_btn_finish source citation):
+# nav_btn_next is never guaranteed to disappear one-for-one with
+# nav_btn_finish appearing, so looping on `while: visible: nav_btn_next`
+# and then hard-requiring nav_btn_finish afterward races a form that can
+# finish itself mid-loop. Fixed with the same proven pattern used
+# everywhere else: loop on nav_btn_finish's own appearance (folding the old
+# separate "final question" block into the loop itself, since each
+# iteration already does the same per-question checks/taps), trailing
+# finish-tap optional, and accept either Start or this module's own name as
+# the real success signal.
 - repeat:
-    times: 8
+    times: 10
     while:
-      visible:
-        id: "org.commcare.dalvik:id/nav_btn_next"
+      notVisible:
+        id: "org.commcare.dalvik:id/nav_btn_finish"
     commands:
       - tapOn:
           id: "org.commcare.dalvik:id/audio_button"
@@ -88,25 +120,9 @@ tags:
           optional: true
       - tapOn:
           id: "org.commcare.dalvik:id/nav_btn_next"
-# Final question (no nav_btn_next left) - same best-effort checks, then finish.
-- tapOn:
-    id: "org.commcare.dalvik:id/audio_button"
-    optional: true
-- assertVisible:
-    id: "org.commcare.dalvik:id/image"
-    optional: true
-- assertVisible:
-    id: "org.commcare.dalvik:id/resizing_image"
-    optional: true
-- tapOn:
-    text: "Yes"
-    optional: true
-- tapOn:
-    text: "Option 1"
-    optional: true
-- extendedWaitUntil:
-    visible:
-      id: "org.commcare.dalvik:id/nav_btn_finish"
-    timeout: 10000
+          optional: true
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_finish"
+    optional: true
+- assertVisible:
+    text: "(?i)^(Start|Multimedia)$"

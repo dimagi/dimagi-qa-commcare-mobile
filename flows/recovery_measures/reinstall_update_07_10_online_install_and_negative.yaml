@@ -92,6 +92,26 @@ tags:
 # message again) simply won't fire, since the device would already be
 # current - treat that as a signal to re-check this assumption against a
 # real HQ domain rather than a flow bug.
+# UPDATE, confirmed live (run 31276111657): this flow's very first step
+# used to be a bare `runFlow: ../common/login.yaml` with no app ever
+# installed first - it assumed some "Test One"/"Test Two"/"Test Three" app
+# was already on the device from an earlier, undocumented step. That's
+# never true when this flow runs on its own (this repo's "each flow
+# runnable in isolation" convention, docs/FRAMEWORK.md), so it failed
+# outright stuck on the pre-install "Welcome to CommCare!" screen -
+# `login.yaml` could never find edit_username there.
+# RESOLVED (2026-08-09): per Master Mobile Plan (2026) > Recovery: Reinstall
+# and Update App > Setup 1's own linked HQ Releases URL (user-supplied):
+# https://www.commcarehq.org/a/qateam/apps/view/c49c34a1d74297ecb6ecef7a7c5d3f88/releases/
+# "Test One"/"Test Two"/"Test Three" are this ONE app's own sequential
+# release labels (per that row's own summary: "This will become the new
+# Test One... repeat for version two and three"), not separate apps - see
+# scripts/app_registry.py's RECOVERY_MEASURES entry. Installing its current
+# build here is enough to reach the login screen this flow actually needs.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_RECOVERY_MEASURES}
 - runFlow:
     file: ../common/login.yaml
     env:
@@ -126,9 +146,13 @@ tags:
     id: "org.commcare.dalvik:id/install_app_button"
 - tapOn:
     id: "org.commcare.dalvik:id/enter_app_location"
+# UPDATE, confirmed live (run 31276111657 follow-up): see
+# offline_09_uninstall_reinstall_test_two.yaml's own UPDATE comment - this
+# used to type a never-defined env var; reusing the real, resolved
+# APP_CODE_RECOVERY_MEASURES instead.
 - tapOn:
     id: "org.commcare.dalvik:id/edit_profile_location"
-- inputText: "${RECOVERY_APP_INSTALL_URL}"
+- inputText: "${APP_CODE_RECOVERY_MEASURES}"
 - hideKeyboard
 - tapOn:
     id: "org.commcare.dalvik:id/start_install"
@@ -138,9 +162,24 @@ tags:
     timeout: 15000
 - tapOn:
     id: "org.commcare.dalvik:id/btn_start_install"
-- extendedWaitUntil:
-    visible: "Setting Up App"
-    timeout: 60000
+# UPDATE, confirmed live (LOCAL-VERIFY-round3): removed - see
+# offline_09_uninstall_reinstall_test_two.yaml's own UPDATE comment for the
+# full root-cause writeup (transient state, missed even with a 60s wait;
+# the next login.yaml call already waits for the real durable end state).
+# UPDATE (2nd correction), confirmed live (LOCAL-VERIFY-round4): still
+# failed - device was stuck back on App Manager's own app list, not a login
+# screen. Same defensive handling added as
+# offline_09_uninstall_reinstall_test_two.yaml's own 2nd-correction UPDATE
+# comment - see that file for the full writeup.
+- tapOn:
+    text: "I.LL UPDATE LATER"
+    optional: true
+- tapOn:
+    id: "org.commcare.dalvik:id/btn_start_install"
+    optional: true
+- tapOn:
+    text: "(?i).*recovery.*reinstall.*update.*app.*"
+    optional: true
 # "Reinstall and update 8" - log back in; the reinstall-needed chooser should
 # fire again now that the device is back on a stale build relative to HQ's
 # released Test Three (see CAVEAT above on whether that stale build is

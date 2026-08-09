@@ -3,14 +3,16 @@ tags:
   - externalapp_tests
   - partial
 env:
-  # UNVERIFIED PLACEHOLDER - see flows/externalapp_tests/README.md. The companion "Mobile API
-  # Testing App" is built by an internal Jenkins job
-  # (https://jenkins.dimagi.com/job/Mobile%20API%20Testing%20App/) not reachable from this
-  # environment, so its real Android package name could not be confirmed against a manifest.
-  # Replace with the real value (`aapt dump badging <apk> | grep package:\ name`) once
-  # available - every other flow in this suite reads the same env var, so this is the only
-  # place that needs to change.
-  EXTAPP_APP_ID: "com.dimagi.mobileapitestingapp"
+  # CONFIRMED (2026-08-09) against the real companion APK the user supplied
+  # (resources/Mobile API Testing App-release.apk, from the internal Jenkins
+  # job https://jenkins.dimagi.com/job/Mobile%20API%20Testing%20App/, not
+  # reachable from this environment - the APK itself was provided directly).
+  # `aapt dump badging` on that APK: package='com.dimagi.test.external',
+  # launchable-activity='com.dimagi.test.external.ExternalAppActivity' -
+  # replacing the old `com.dimagi.mobileapitestingapp` reverse-DNS guess.
+  # Every other flow in this suite reads the same env var, so this is the
+  # only place that needed to change.
+  EXTAPP_APP_ID: "com.dimagi.test.external"
   # Button text copied verbatim from Master Mobile Plan (2026) > ExternalApp Tests >
   # "External App 1" row's step 2. Exposed as env vars (not hardcoded) because the sheet's
   # wording is the only source available - it has not been checked against the live

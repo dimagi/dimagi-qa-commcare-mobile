@@ -53,7 +53,30 @@ tags:
       PASSWORD: ${CC_TEST_PASSWORD}
 - tapOn: "Start"
 - tapOn: "Basic Form Tests"
+# UPDATE, confirmed live (run 31276111657): "Multimedia Only" is form m0f10
+# (confirmed via en/app_strings.txt in the real Basic Tests CCZ) - the 11th
+# form in this module's list, below the fold on a single screen (the
+# failure screenshot showed only 8 forms visible, Basic Form through
+# Groups, with the scrollbar barely into the list). A bare tapOn only
+# searches the current viewport - scrollUntilVisible first.
+- scrollUntilVisible:
+    element:
+      text: "Multimedia Only"
+    direction: DOWN
+    timeout: 10000
 - tapOn: "Multimedia Only"
+# UPDATE, confirmed live (LOCAL-VERIFY-mm-isolate): "Tap on 'Gather
+# Signature'" failed - the failure screenshot showed the form's own INTRO
+# screen ("This form contains questions that allow you to record or save
+# multimedia."), not the question content directly. This form uses the
+# X/">" swipe-style top bar (a per-form display setting, distinct from the
+# nav_btn_next/nav_btn_finish icon buttons other Basic Form Tests forms
+# use) - one tap past the intro is needed before "Gather Signature" is
+# reachable. nav_btn_next is still the real underlying id regardless of
+# which style renders it (confirmed via screen_form_entry.xml - the same
+# view, just styled differently per form).
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
 - tapOn: "Gather Signature"
 - swipe:
     start: "20%, 80%"

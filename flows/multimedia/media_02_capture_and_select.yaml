@@ -69,8 +69,25 @@ tags:
     env:
       USERNAME: ${CC_TEST_USERNAME}
       PASSWORD: ${CC_TEST_PASSWORD}
+# UPDATE, confirmed live (run 31276111657): "Assert that nav_btn_finish is
+# visible" failed way downstream, but the real root cause traces back here.
+# The real Multimedia CCZ's suite.xml (resources/qateam - Multimedia -
+# v381.ccz, read-only reference) confirms "Media Capture" is its OWN
+# top-level module (m5), a SIBLING of "Multimedia" (m0), not one of m0's
+# forms - reachable directly from Start, same correction already applied
+# to "Image Resize" (m1) in
+# flows/multimedia/image_resize_25_photo_taken.yaml's own header. The
+# erroneous extra "Multimedia" tap here would have hit the SAME title/row
+# ambiguity flows/multimedia/mm4_question_types.yaml's UPDATE comment
+# describes even if it were needed - removed entirely since it isn't.
 - tapOn: "Start"
-- tapOn: "Multimedia"
+- tapOn: "Media Capture"
+# UPDATE (2nd correction), confirmed live (LOCAL-VERIFY-mm-isolate): this
+# module (m5) and its single form (m5f0) are BOTH literally named "Media
+# Capture" (confirmed via en/app_strings.txt: modules.m5=forms.m5f0="Media
+# Capture") - the tap above only reaches the module's own form-list screen
+# (a single row, itself labeled "Media Capture"), not the form. A second
+# identical tap opens the actual form.
 - tapOn: "Media Capture"
 # Question 1 (best-effort): prefer the "choose existing" path.
 - runFlow:

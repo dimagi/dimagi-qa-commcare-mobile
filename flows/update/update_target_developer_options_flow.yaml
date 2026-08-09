@@ -125,16 +125,29 @@ tags:
 # flows/common/login.yaml's own "Bad Server Response" retry, just a
 # different callout). Bounded retry tapping "Recheck" while the error is
 # showing, rather than assuming the very first check always succeeds.
+# UPDATE (2nd correction), confirmed live (run 31276111657): the SAME error
+# screen was still showing after all 3 retries plus the 30s wait. The
+# original loop tapped "Recheck" and immediately re-checked the `while`
+# condition with no pause, which can re-sample the UI before that recheck's
+# own network round-trip has had any time to resolve - effectively
+# interrupting/restarting the check rather than letting one attempt
+# complete. Added an explicit pause between tap and re-check (same
+# waitForAnimationToEnd-as-a-pause convention already used in
+# flows/common/login.yaml's "Bad Server Response" retry) and more
+# attempts/longer final wait to give a real network round-trip room to
+# finish.
 - repeat:
-    times: 3
+    times: 5
     while:
       visible:
         text: "Failed to download updates due to an error"
     commands:
       - tapOn: "Recheck"
+      - waitForAnimationToEnd:
+          timeout: 4000
 - extendedWaitUntil:
     visible: "App is up to date"
-    timeout: 30000
+    timeout: 45000
 - back
 - assertVisible: "Start"
 
@@ -149,24 +162,20 @@ tags:
 # === "Confirm that no update occurs if you try" ==========================
 - tapOn: "More options"
 - tapOn: "Update App"
-# UPDATE, confirmed live (2026-08-08, real BrowserStack failure, build
-# 6088f0f4e51f008e98bcec32581ae4d4c85e7231): the update-check genuinely
-# failed with "Failed to download updates due to an error" / "See Error
-# Details" and a "Recheck" button - a transient network/server hiccup on
-# the update-check callout, not a flow bug (same class of issue as
-# flows/common/login.yaml's own "Bad Server Response" retry, just a
-# different callout). Bounded retry tapping "Recheck" while the error is
-# showing, rather than assuming the very first check always succeeds.
+# Same retry-with-pause fix as the "Update + Check for changes" block above -
+# see that block's UPDATE comment for the full root-cause writeup.
 - repeat:
-    times: 3
+    times: 5
     while:
       visible:
         text: "Failed to download updates due to an error"
     commands:
       - tapOn: "Recheck"
+      - waitForAnimationToEnd:
+          timeout: 4000
 - extendedWaitUntil:
     visible: "App is up to date"
-    timeout: 30000
+    timeout: 45000
 - assertVisible: "App is up to date"
 - back
 - assertVisible: "Start"

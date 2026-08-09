@@ -123,16 +123,43 @@ tags:
 # list's FIRST page full of OTHER cases (dated names like "14th august
 # 2025", "9th october 2025", etc. - this is a shared HQ domain that
 # accumulates cases across every test run over time), with "Test One"
-# nowhere in the visible viewport. A bare tapOn only searches the currently
-# rendered hierarchy - scrollUntilVisible first, same fix this repo already
-# applies elsewhere for growing/long lists (e.g.
-# flows/common/install_app_as_web_user.yaml's "FOURTH CAVEAT").
-- scrollUntilVisible:
-    element:
-      text: "Test One"
-    direction: DOWN
-    timeout: 15000
-- tapOn: "Test One"
+# nowhere in the visible viewport.
+# UPDATE (2nd correction), confirmed live (run 31276111657): scrollUntilVisible
+# itself then failed ("Scrolling DOWN until Test Two is visible: No visible
+# element found") - the failure screenshot showed PAGE AFTER PAGE of "Test
+# One" rows (several dozen visible, scrollbar barely moved from the top)
+# with no "Test Two" reached inside the timeout. This case list is sorted
+# alphabetically by case name (confirmed by the screenshot: every visible
+# row is "Test One"/"Test one", no "Test Two" interleaved) - since "One" <
+# "Two" alphabetically, EVERY "Test One" ever created across every past run
+# of this flow sorts before the FIRST "Test Two", so the list to scroll past
+# only grows longer with every CI run and any fixed scroll timeout
+# eventually stops being enough (same failure mode already seen in
+# flows/case_filters/fuzzy_search_01_03.yaml's own fuzzy-match scroll).
+# Fixed by using the case list's own search box instead of scrolling -
+# org.commcare.dalvik:id/search_action_bar is core CommCare chrome (not
+# app-specific), confirmed present on entity-select list screens via
+# fuzzy_search_01_03.yaml's own citation (CaseListSearchTest.kt) - typing a
+# name into it filters the list live, so the target case is found
+# immediately regardless of how large the backing list has grown. This does
+# NOT fully resolve the SECOND PARTIAL CAVEAT above (search still can't
+# distinguish which same-named duplicate is THIS run's own case) - it only
+# fixes the "never even finds a match before timing out" failure mode.
+# UPDATE (3rd correction), confirmed live (LOCAL-VERIFY-fixes-aug09): even
+# with search working, "Assert that Child is visible" failed right after -
+# the failure screenshot showed the search results screen STILL open,
+# keyboard still up, meaning `tapOn: "Test One"` never actually navigated.
+# Root cause: Maestro's bare-text tapOn matches by regex SUBSTRING, and the
+# results banner directly above the list literally reads `results for your
+# search: "Test One"` - that non-interactive banner contains "Test One" as
+# a substring too, and evidently won it over the real list row. Anchored
+# with ^...$ so it can only match a row whose ENTIRE text is exactly "Test
+# One", plus hideKeyboard first so the full results list has room to render
+# (same convention as flows/case_filters/fuzzy_search_01_03.yaml's own
+# fuzzy-match fix).
+- hideKeyboard
+- tapOn:
+    text: "^Test One$"
 - assertVisible: "Child"
 - assertVisible: "Even"
 - assertVisible: "Today"
@@ -152,14 +179,19 @@ tags:
 - tapOn: "Start"
 - tapOn: "Case List"
 - tapOn: "Followup"
-# scrollUntilVisible - same growing-shared-case-list reasoning as
-# "Test One" above (no-op if already on screen).
-- scrollUntilVisible:
-    element:
-      text: "Test Two"
-    direction: DOWN
-    timeout: 15000
-- tapOn: "Test Two"
+# Search-box lookup instead of scrolling - same fix and reasoning as
+# "Test One" above (this list is alphabetically sorted, so "Test Two"'s
+# scroll position only gets deeper as more "Test One"s accumulate over
+# time).
+# Anchored tap + hideKeyboard - see Conditional ID Mapping 2's UPDATE
+# comment above for why (the results banner's own text contains "Test Two"
+# too, which a bare substring tapOn can match instead of the real row).
+- tapOn:
+    id: "org.commcare.dalvik:id/search_action_bar"
+- inputText: "Test Two"
+- hideKeyboard
+- tapOn:
+    text: "^Test Two$"
 - assertVisible: "Adult"
 - assertVisible: "Odd"
 - assertVisible: "Not Today"
@@ -176,18 +208,25 @@ tags:
 - tapOn: "Start"
 - tapOn: "Case List"
 - tapOn: "Followup"
-- scrollUntilVisible:
-    element:
-      text: "Test One"
-    direction: DOWN
-    timeout: 15000
-- tapOn: "Test One"
+# Anchored tap + hideKeyboard - see Conditional ID Mapping 2's UPDATE
+# comment above for why.
+- tapOn:
+    id: "org.commcare.dalvik:id/search_action_bar"
+- inputText: "Test One"
+- hideKeyboard
+- tapOn:
+    text: "^Test One$"
 - assertVisible: "Seen by doctor"
 - back
-- scrollUntilVisible:
-    element:
-      text: "Test Two"
-    direction: DOWN
-    timeout: 15000
-- tapOn: "Test Two"
+# `back` returns to this same Followup list, which may still be showing the
+# "Test One" search filter from just above (state-preservation on
+# back-navigation isn't confirmed either way) - erase defensively before
+# typing the next query rather than assuming either behavior.
+- tapOn:
+    id: "org.commcare.dalvik:id/search_action_bar"
+- eraseText
+- inputText: "Test Two"
+- hideKeyboard
+- tapOn:
+    text: "^Test Two$"
 - assertVisible: "Needs followup"

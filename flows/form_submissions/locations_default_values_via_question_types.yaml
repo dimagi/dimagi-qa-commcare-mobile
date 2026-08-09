@@ -116,7 +116,23 @@ tags:
 - assertVisible: "Exit Form?"
 - tapOn:
     text: "(?i).*exit without saving.*"
-- extendedWaitUntil:
-    visible:
-      text: "Start"
-    timeout: 5000
+# UPDATE, confirmed live (run 31276111657): the plain `extendedWaitUntil
+# visible: "Start"` right after EXIT WITHOUT SAVING failed - the failure
+# screenshot showed the device sitting on "Basic Form Tests" (the module
+# list one level below home), not the Start screen. Same "variable submenu
+# depth" cause already fixed in
+# flows/form_submissions/case_name_size_01_02_length_warning_and_not_saved.yaml's
+# header: exiting form-entry returns control to whichever Activity actually
+# launched it (here, the module list), not directly to home, and a single
+# wait for "Start" doesn't account for that extra screen. Fixed the same
+# way: a bounded repeat-while back-press loop until "Start" is genuinely
+# visible, instead of assuming a fixed number of screens separate the
+# post-exit state from home.
+- repeat:
+    times: 5
+    while:
+      notVisible:
+        text: "Start"
+    commands:
+      - back
+- assertVisible: "Start"

@@ -45,7 +45,20 @@ tags:
       PASSWORD: ${CC_TEST_PASSWORD}
 - tapOn: "Start"
 - tapOn: "Basic Form Tests"
+# UPDATE, confirmed live (run 31276111657): "Multimedia Only" is below the
+# fold in this module's form list - see capture_01_gather_signature.yaml's
+# own UPDATE comment for the full citation/root-cause writeup.
+- scrollUntilVisible:
+    element:
+      text: "Multimedia Only"
+    direction: DOWN
+    timeout: 10000
 - tapOn: "Multimedia Only"
+# One tap past this form's own intro screen before "Gather Signature" is
+# reachable - see capture_01_gather_signature.yaml's own UPDATE comment for
+# the full root-cause writeup.
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
 - tapOn: "Gather Signature"
 - swipe:
     start: "20%, 80%"

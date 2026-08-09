@@ -50,6 +50,26 @@ tags:
 - assertVisible:
     id: "org.commcare.dalvik:id/nav_btn_next"
 - hideKeyboard
-- back
-- assertVisible: "Exit Form?"
-- tapOn: "EXIT WITHOUT SAVING"
+# UPDATE, confirmed live (run 31276111657): a single `back` press wasn't
+# enough - the failure screenshot showed the form still open on its first
+# question screen, "Exit Form?" never shown.
+# UPDATE (2nd correction), confirmed live (LOCAL-VERIFY-recovery-rtl):
+# bounding the back-press count with a repeat loop STILL didn't help - the
+# form stayed open through all 3 presses. This module's form renders with a
+# different top bar than the plain nav_btn_next/nav_btn_finish icon buttons
+# other Basic-Tests-style forms use (an X/">" swipe-style bar - the same
+# alternate style flows/externalapp_tests/external_app_02_start_commcare_submit_form.yaml
+# hit) - hardware `back` doesn't reliably reach FormEntryActivity's
+# onKeyDown()/quit-dialog handler in this display mode. No resource id was
+# found for the "X" icon itself in screen_form_entry.xml (it isn't part of
+# that layout at all - this is a different top bar), so this taps it by its
+# measured on-screen position instead - the same last-resort convention
+# already used elsewhere in this repo for controls with no stable
+# selector (e.g. flows/form_submissions/groups_submit_twice_different_answers.yaml's
+# radio-button taps). Coordinates measured off the real 1080x2400 failure
+# screenshot (X icon center ~68px/1080 horiz, ~330px/2400 vert).
+- tapOn:
+    point: "6%, 14%"
+- tapOn:
+    text: "EXIT WITHOUT SAVING"
+    optional: true

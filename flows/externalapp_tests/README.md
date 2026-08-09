@@ -16,33 +16,45 @@ Jenkins job:
 
     https://jenkins.dimagi.com/job/Mobile%20API%20Testing%20App/
 
-That Jenkins instance is not reachable from this environment, so this repo
-has **never seen the real APK**. Concretely, that means:
+That Jenkins instance is not reachable from this environment - but the real
+APK itself has now been supplied directly (2026-08-09) and is committed at
+`resources/Mobile API Testing App-release.apk` (1.1MB, well under GitHub's
+100MB limit, so no `fetch_large_ccz.py`-style on-demand-download is needed -
+see `resources/README.md`'s committed-vs-fetched table for the equivalent
+CCZ convention this follows). Concretely, that means:
 
-- **appId is an UNVERIFIED PLACEHOLDER.** Every flow below declares it as an
-  `EXTAPP_APP_ID` env var defaulting to `com.dimagi.mobileapitestingapp`
-  (a guess at Dimagi's usual reverse-DNS convention, not read out of any
-  manifest). Whoever next has the real APK should grab its real package name
-  (`aapt dump badging <apk>.apk | grep package:\ name`, or
-  `adb shell pm list packages | grep -i mobileapi` after installing it) and
-  either override `EXTAPP_APP_ID` at run time or edit the default in each
-  flow's `env:` block - no other change should be needed.
-- **On-screen button text is copied verbatim from the sheet's own wording**
-  ("Start CommCare", "Acquire CommCare Key", "View Case Data", "View Fixture
-  Data"), also exposed as env vars (`EXTAPP_BTN_*`) with the sheet's wording
-  as the default, in case the live app's copy differs slightly from the
-  sheet's shorthand.
+- **appId is CONFIRMED**, via `aapt dump badging` on the real APK:
+  `package='com.dimagi.test.external'`, launchable activity
+  `com.dimagi.test.external.ExternalAppActivity` - replacing the old
+  `com.dimagi.mobileapitestingapp` reverse-DNS guess (which is why every
+  externalapp_tests flow was previously failing outright with "Package ...
+  is not installed": CI never had a real other-app to install in the first
+  place, and the wrong appId would have failed the same way even once it
+  did). Every flow's `EXTAPP_APP_ID` env var default has been updated to
+  match; `scripts/run_suite.py`'s CI invocation now also passes
+  `--other-app "resources/Mobile API Testing App-release.apk"` whenever the
+  `externalapp_tests` tag is part of the run (see
+  `.github/workflows/maestro-browserstack.yml`).
+- **On-screen button text is still UNVERIFIED**, copied verbatim from the
+  sheet's own wording ("Start CommCare", "Acquire CommCare Key", "View Case
+  Data", "View Fixture Data"), exposed as `EXTAPP_BTN_*` env vars. Static
+  inspection of the real APK (`aapt dump --values resources` +
+  MUTF-8-string-scanning `classes.dex`) found no literal matches for any of
+  these strings anywhere in the compiled resources or dex - the app's
+  `ExternalAppActivity` has ~9 button click-listener lambdas (more entry
+  points than the 4 the sheet documents: `CaseContentActivity`,
+  `CaseMediaActivity`, `FixtureContentActivity`, `IntentCalloutTest`,
+  `IntentReceiverTest`, Simprints identify/registration...), so the sheet's 4
+  labels likely exist but couldn't be confirmed without actually rendering
+  the app - that needs a live BrowserStack run's failure screenshot (if any)
+  to settle, not further static analysis.
 - **No resource ids from the companion app are used anywhere** (unlike the
   `org.commcare.dalvik:id/...` ids used for the CommCare side of these
   flows, which are verified against the read-only `commcare-android`
   reference repo) - every companion-app assertion below matches by visible
-  text only, since there's no manifest/layout XML to read ids out of.
-
-None of this blocks writing the flows - Maestro's `assertVisible`/`tapOn` by
-text and `launchApp: appId: ...` work the same whether the appId/text are
-real or placeholders - it just means this suite needs a real-APK smoke pass
-before it can be trusted, which someone with access to the Jenkins job needs
-to do.
+  text only, since the layout XMLs in this APK use resource-shrunk/obfuscated
+  file names with no way to map them back to a specific screen without
+  actually running the app.
 
 ## Setup 1 ("Download ExternalApp") - no flow file, by design
 

@@ -129,6 +129,12 @@ jobs:
           for T in ${{ matrix.tags }}; do ARGS+=(--tag "$T"); done
           if [ -n "${{ github.event.inputs.release_tag }}" ]; then ARGS+=(--release-tag "${{ github.event.inputs.release_tag }}"); fi
           if [ -n "${{ github.event.inputs.hq_setup }}" ]; then ARGS+=(--hq-setup "${{ github.event.inputs.hq_setup }}"); fi
+          # externalapp_tests needs its companion app pre-installed alongside the main app -
+          # see flows/externalapp_tests/README.md. Only pass it for jobs actually running that
+          # tag, so the other matrix groups don't pay for an upload they don't need.
+          if [[ " ${{ matrix.tags }} " == *" externalapp_tests "* ]]; then
+            ARGS+=(--other-app "resources/Mobile API Testing App-release.apk")
+          fi
           python scripts/run_suite.py "${ARGS[@]}"
 
       # No report-history cache restore/save here on purpose: each matrix

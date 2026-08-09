@@ -19,6 +19,26 @@ tags:
 # Run hq_setup/recovery_measures/reinstall_update_app_flow.json's HQ action
 # (mark Test Two released) BETWEEN the two halves of this flow, i.e. split
 # this into two Maestro runs in practice, or extend run_suite.py to pause here.
+# UPDATE, confirmed live (run 31276111657): this flow's very first step
+# used to be a bare `runFlow: ../common/login.yaml` with no app ever
+# installed first - it assumed some "Test One"/"Test Two"/"Test Three" app
+# was already on the device from an earlier, undocumented step. That's
+# never true when this flow runs on its own (this repo's "each flow
+# runnable in isolation" convention, docs/FRAMEWORK.md), so it failed
+# outright stuck on the pre-install "Welcome to CommCare!" screen -
+# `login.yaml` could never find edit_username there.
+# RESOLVED (2026-08-09): per Master Mobile Plan (2026) > Recovery: Reinstall
+# and Update App > Setup 1's own linked HQ Releases URL (user-supplied):
+# https://www.commcarehq.org/a/qateam/apps/view/c49c34a1d74297ecb6ecef7a7c5d3f88/releases/
+# "Test One"/"Test Two"/"Test Three" are this ONE app's own sequential
+# release labels (per that row's own summary: "This will become the new
+# Test One... repeat for version two and three"), not separate apps - see
+# scripts/app_registry.py's RECOVERY_MEASURES entry. Installing its current
+# build here is enough to reach the login screen this flow actually needs.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_RECOVERY_MEASURES}
 - runFlow:
     file: ../common/login.yaml
     env:

@@ -12,6 +12,11 @@ apks/
 *.aab
 flows.zip
 
+# Exception: the ExternalApp Tests companion app - small (1.1MB), needed by
+# CI (--other-app), and there's no HQ-hosted equivalent to fetch on demand
+# the way resources/README.md's CCZs are - see flows/externalapp_tests/README.md.
+!resources/Mobile API Testing App-release.apk
+
 # BrowserStack / run artifacts
 artifacts/
 *.log

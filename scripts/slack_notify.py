@@ -239,11 +239,21 @@ def main():
     with tempfile.TemporaryDirectory() as tmp:
         chart_path = pathlib.Path(tmp) / "slack-chart.png"
         report_generator.render_chart_png(counts, history, chart_path)
-        files_to_upload = [chart_path]
+        # UPDATE, per explicit request: Slack always renders a message's
+        # own text FIRST, then every attached file below it in upload
+        # order - there's no way to interleave text between attachments.
+        # failed-tests.txt used to be uploaded SECOND (after the chart), so
+        # its card rendered at the very bottom, well past the chart image,
+        # far from the "see attached failed-tests.txt" pointer right next
+        # to the Failed Tests count. Uploading it FIRST puts its card
+        # immediately after the message text instead - as close to that
+        # pointer as Slack's fixed text-then-attachments layout allows.
+        files_to_upload = []
         if failed_results:
             failed_txt_path = pathlib.Path(tmp) / "failed-tests.txt"
             render_failed_tests_txt(failed_results, failed_txt_path)
             files_to_upload.append(failed_txt_path)
+        files_to_upload.append(chart_path)
         # Both files finalized in ONE files.completeUploadExternal call (see
         # upload_files()'s own header) - this is what keeps it to a single
         # Slack message instead of one per file.

@@ -70,14 +70,23 @@ tags:
 # Prepends install_app_as_web_user.yaml (APP_NAME: ".*Right to Left Tests!") - a
 # fresh BrowserStack session has no app installed until this runs; see
 # DispatchActivity.java's CommCareSetupActivity routing when currentApp == null.
+# UPDATE, confirmed live (run 31276111657): the `launchApp: {clearState:
+# true}` + assertVisible: edit_username pair that used to sit here failed
+# with the device stuck on the pre-install "Welcome to CommCare! Please
+# choose an installation method" screen. Root cause:
+# install_app_by_code.yaml (above) ALREADY starts with its own
+# `launchApp: {clearState: true}`, then installs the app, then ends with
+# its own `extendedWaitUntil visible: edit_username, timeout: 90000` - so by
+# the time it returns, the device is already sitting on the login screen. A
+# SECOND clearState right after that wipes the just-completed install
+# entirely and throws the device back to the very first setup screen, which
+# is exactly what the failure screenshot showed. Removed the redundant
+# clearState/assertVisible pair - install_app_by_code.yaml's own ending
+# already guarantees this.
 - runFlow:
     file: ../common/install_app_by_code.yaml
     env:
       APP_CODE: ${APP_CODE_RIGHT_TO_LEFT}
-- launchApp:
-    clearState: true
-- assertVisible:
-    id: "org.commcare.dalvik:id/edit_username"
 - runFlow:
     file: ../common/login.yaml
     env:

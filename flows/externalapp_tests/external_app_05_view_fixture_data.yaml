@@ -3,8 +3,10 @@ tags:
   - externalapp_tests
   - partial
 env:
-  # UNVERIFIED PLACEHOLDER - see flows/externalapp_tests/README.md.
-  EXTAPP_APP_ID: "com.dimagi.mobileapitestingapp"
+  # CONFIRMED (2026-08-09) against the real companion APK - see
+  # external_app_01_launch_and_verify_buttons.yaml's env block for the full
+  # aapt citation.
+  EXTAPP_APP_ID: "com.dimagi.test.external"
   EXTAPP_BTN_VIEW_FIXTURE_DATA: "View Fixture Data"
   # The sheet's own parenthetical example of fixture data types shown ("Data such as
   # Locations, Groups etc") - copied verbatim as a candidate section label, but this is the

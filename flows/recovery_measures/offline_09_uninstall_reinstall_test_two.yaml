@@ -32,6 +32,26 @@ tags:
 # enter_app_location -> edit_profile_location -> start_install ->
 # btn_start_install install-confirm chain) - not re-derived here, see that
 # file for the full citation list.
+# UPDATE, confirmed live (run 31276111657): this flow's very first step
+# used to be a bare `runFlow: ../common/login.yaml` with no app ever
+# installed first - it assumed some "Test One"/"Test Two"/"Test Three" app
+# was already on the device from an earlier, undocumented step. That's
+# never true when this flow runs on its own (this repo's "each flow
+# runnable in isolation" convention, docs/FRAMEWORK.md), so it failed
+# outright stuck on the pre-install "Welcome to CommCare!" screen -
+# `login.yaml` could never find edit_username there.
+# RESOLVED (2026-08-09): per Master Mobile Plan (2026) > Recovery: Reinstall
+# and Update App > Setup 1's own linked HQ Releases URL (user-supplied):
+# https://www.commcarehq.org/a/qateam/apps/view/c49c34a1d74297ecb6ecef7a7c5d3f88/releases/
+# "Test One"/"Test Two"/"Test Three" are this ONE app's own sequential
+# release labels (per that row's own summary: "This will become the new
+# Test One... repeat for version two and three"), not separate apps - see
+# scripts/app_registry.py's RECOVERY_MEASURES entry. Installing its current
+# build here is enough to reach the login screen this flow actually needs.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_RECOVERY_MEASURES}
 - runFlow:
     file: ../common/login.yaml
     env:
@@ -62,9 +82,16 @@ tags:
     id: "org.commcare.dalvik:id/install_app_button"
 - tapOn:
     id: "org.commcare.dalvik:id/enter_app_location"
+# UPDATE, confirmed live (run 31276111657 follow-up): this used to type
+# "${RECOVERY_APP_INSTALL_URL}" - an env var never defined anywhere in this
+# repo, so it typed that literal placeholder text and failed with "The app
+# code you have entered is incorrect." edit_profile_location is the exact
+# same "Enter Code" field install_app_by_code.yaml already types
+# APP_CODE_RECOVERY_MEASURES into (see that file's own citation) - reusing
+# the real, resolved env var instead of the undefined placeholder.
 - tapOn:
     id: "org.commcare.dalvik:id/edit_profile_location"
-- inputText: "${RECOVERY_APP_INSTALL_URL}"
+- inputText: "${APP_CODE_RECOVERY_MEASURES}"
 - hideKeyboard
 - tapOn:
     id: "org.commcare.dalvik:id/start_install"
@@ -74,9 +101,40 @@ tags:
     timeout: 15000
 - tapOn:
     id: "org.commcare.dalvik:id/btn_start_install"
-- extendedWaitUntil:
-    visible: "Setting Up App"
-    timeout: 60000
+# UPDATE, confirmed live (LOCAL-VERIFY-round3): this wait for "Setting Up
+# App" (a real string - strings.xml's updates_resources_initialization)
+# failed even with a 60s timeout - it's a transient resource-init state
+# that can flash and clear faster than a poll catches it, on a small test
+# app installing quickly (same class of "success happened too fast to
+# catch a mid-transition state" issue already hit elsewhere this session,
+# e.g. flows/externalapp_tests/external_app_02_start_commcare_submit_form.yaml).
+# Removed rather than lengthened further - the very next step
+# (../common/login.yaml) already waits for the durable end state
+# (edit_username) that only exists once install has genuinely finished, so
+# this intermediate check added risk without adding a real guarantee.
+# UPDATE (2nd correction), confirmed live (LOCAL-VERIFY-round4): even after
+# removing the transient-state wait, login.yaml still couldn't find
+# edit_username - the failure screenshot showed the device sitting back on
+# App Manager's own app list ("Select an app to view its management
+# options, or install a new app." with the app itself listed below as a
+# tappable link), not a login screen. Two gaps versus
+# install_app_by_code.yaml's own more battle-tested sequence: (1) that file
+# defensively handles a CommCare-version-mismatch dialog
+# ("I'LL UPDATE LATER") that can appear here too and otherwise blocks
+# progress, and (2) reinstalling FROM App Manager (as opposed to a
+# first-time install) can leave the app merely re-listed rather than
+# auto-launched - tapping its own name is what actually opens/selects it.
+# Both added defensively (optional, since which of these actually applies
+# isn't confirmed) before falling through to login.yaml.
+- tapOn:
+    text: "I.LL UPDATE LATER"
+    optional: true
+- tapOn:
+    id: "org.commcare.dalvik:id/btn_start_install"
+    optional: true
+- tapOn:
+    text: "(?i).*recovery.*reinstall.*update.*app.*"
+    optional: true
 # --- HQ pre-step runs here in a real execution:
 # hq_setup/recovery_measures/offline_9_mark_test_three.json (mark Test Three
 # released again) - split into two Maestro runs in practice, or extend

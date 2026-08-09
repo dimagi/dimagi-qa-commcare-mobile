@@ -130,8 +130,27 @@ tags:
 # failing screenshot too, which is the REAL pass condition this test cares
 # about (the quarantined form correctly absent) - kept as its own
 # assertNotVisible check below, unchanged.
+# UPDATE, confirmed live (run 31276111657): `assertVisible: "Filter By:"`
+# failed outright even though the failure screenshot shows "Filter By: All
+# Completed Forms" clearly rendered. Bumping to extendedWaitUntil with a
+# 10s timeout (2nd correction) STILL failed identically in a follow-up
+# local verification run, ruling out a plain timing race. Root cause,
+# confirmed in source: FormRecordListActivity.java line 163 - this text is
+# the SELECTED item of a real android.widget.Spinner
+# (id/entity_select_filter_dropdown, ArrayAdapter<String> over
+# R.layout.form_filter_display) - Spinners are a known category of Android
+# widget where the visually-rendered child TextView isn't always exposed as
+# its own leaf node in the accessibility tree Maestro reads (the Spinner
+# can consume/collapse it), so a text-based match can keep missing
+# something that's genuinely on screen. Fixed by matching the Spinner's own
+# confirmed resource id instead of its rendered text - id-based visibility
+# doesn't depend on how the child TextView happens to surface in the
+# accessibility dump.
 - tapOn: "Saved"
-- assertVisible: "Filter By:"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/entity_select_filter_dropdown"
+    timeout: 10000
 - assertNotVisible:
     text: "(?i).*CaseNameTooLong.*"
 - back

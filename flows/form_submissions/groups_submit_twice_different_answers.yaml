@@ -175,10 +175,30 @@ tags:
 # "Developer Mode Enabled"). Per explicit guidance: a form submission can
 # land on EITHER the "Start" home screen OR the calling module screen
 # ("Basic Form Tests", this form was opened from) depending on context -
-# accept either as the real, durable confirmation that submission returned
-# control to the caller rather than leaving the form stuck open.
+# accept either as a durable confirmation that submission returned control
+# to the caller rather than leaving the form stuck open.
 - assertVisible:
     text: "(?i)^(Start|Basic Form Tests)$"
+# UPDATE, confirmed live (run 31276111657): Submission 2's own opening
+# `tapOn: "Start"` failed outright ("Element not found") - the failure
+# screenshot showed the device still on "Basic Form Tests", one screen shy
+# of home, which the alternation above deliberately allows as a valid
+# landing spot for submission 1 but which submission 2 then assumed away
+# unconditionally. A single back press wasn't being issued to close that
+# gap. Fixed by normalizing back to "Start" here (bounded back-press loop,
+# same pattern as
+# flows/form_submissions/case_name_size_01_02_length_warning_and_not_saved.yaml)
+# before submission 2 begins, so its own "Start" -> "Basic Form Tests" ->
+# "Groups" tap sequence always starts from a known state regardless of
+# which of the two valid screens submission 1 actually landed on.
+- repeat:
+    times: 5
+    while:
+      notVisible:
+        text: "Start"
+    commands:
+      - back
+- assertVisible: "Start"
 
 # --- Submission 2: First = No, Second = No (different answers) ---
 - tapOn: "Start"
