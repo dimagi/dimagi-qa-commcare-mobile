@@ -87,11 +87,24 @@ tags:
 # repo, so it typed that literal placeholder text and failed with "The app
 # code you have entered is incorrect." edit_profile_location is the exact
 # same "Enter Code" field install_app_by_code.yaml already types
-# APP_CODE_RECOVERY_MEASURES into (see that file's own citation) - reusing
-# the real, resolved env var instead of the undefined placeholder.
-- tapOn:
-    id: "org.commcare.dalvik:id/edit_profile_location"
-- inputText: "${APP_CODE_RECOVERY_MEASURES}"
+# APP_CODE_RECOVERY_MEASURES into (see that file's own citation).
+# UPDATE (2nd/3rd correction): a bare `${APP_CODE_RECOVERY_MEASURES}`
+# reference here, and later a re-declared local var of the same or a
+# different name via this file's own top-level env: frontmatter, BOTH
+# still typed a literal, unresolved placeholder (confirmed via the build's
+# command log both times) - a flow's own top-level env: frontmatter
+# apparently doesn't interpolate ${...} against the outer session scope the
+# way a runFlow's env: mapping does. Routed through an inline runFlow
+# instead - the exact same env: mapping mechanism that already resolves
+# correctly for install_app_by_code.yaml's own APP_CODE, just wrapping
+# these two steps directly instead of a separate file.
+- runFlow:
+    env:
+      RECOVERY_MEASURES_CODE: ${APP_CODE_RECOVERY_MEASURES}
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/edit_profile_location"
+      - inputText: "${RECOVERY_MEASURES_CODE}"
 - hideKeyboard
 - tapOn:
     id: "org.commcare.dalvik:id/start_install"
@@ -117,24 +130,21 @@ tags:
 # edit_username - the failure screenshot showed the device sitting back on
 # App Manager's own app list ("Select an app to view its management
 # options, or install a new app." with the app itself listed below as a
-# tappable link), not a login screen. Two gaps versus
-# install_app_by_code.yaml's own more battle-tested sequence: (1) that file
-# defensively handles a CommCare-version-mismatch dialog
-# ("I'LL UPDATE LATER") that can appear here too and otherwise blocks
-# progress, and (2) reinstalling FROM App Manager (as opposed to a
-# first-time install) can leave the app merely re-listed rather than
-# auto-launched - tapping its own name is what actually opens/selects it.
-# Both added defensively (optional, since which of these actually applies
-# isn't confirmed) before falling through to login.yaml.
+# tappable link), not a login screen. Defensively handled the
+# CommCare-version-mismatch dialog ("I'LL UPDATE LATER") that
+# install_app_by_code.yaml also has to handle here.
+# UPDATE (3rd correction), per direct user observation (2026-08-10): tapping
+# the app's own name/link on this App Manager screen does NOT open/select
+# it into a login screen (confirmed by this still failing identically after
+# the previous fix) - the real way through is pressing back, which lands
+# directly on the login screen. Replaced the tap with back.
 - tapOn:
     text: "I.LL UPDATE LATER"
     optional: true
 - tapOn:
     id: "org.commcare.dalvik:id/btn_start_install"
     optional: true
-- tapOn:
-    text: "(?i).*recovery.*reinstall.*update.*app.*"
-    optional: true
+- back
 # --- HQ pre-step runs here in a real execution:
 # hq_setup/recovery_measures/offline_9_mark_test_three.json (mark Test Three
 # released again) - split into two Maestro runs in practice, or extend

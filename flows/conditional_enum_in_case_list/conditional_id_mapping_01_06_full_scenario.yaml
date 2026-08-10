@@ -157,6 +157,19 @@ tags:
 # One", plus hideKeyboard first so the full results list has room to render
 # (same convention as flows/case_filters/fuzzy_search_01_03.yaml's own
 # fuzzy-match fix).
+# UPDATE (4th correction), confirmed live (run 31327848567): this section's
+# own search_action_bar tap + inputText "Test One" steps - the actual fix
+# described above - had gone missing (dropped by an earlier edit pass),
+# leaving only hideKeyboard + the anchored tap. Without ever typing into
+# the search box, "Tap on Followup" landed on the full, unfiltered,
+# alphabetically-sorted list, so the very next tap always failed
+# immediately (confirmed via the build's own command log: "Tap on
+# Followup" -> "Tap on ^Test One$" with nothing in between). Restored the
+# missing steps, matching Conditional ID Mapping 4/6 below which still had
+# theirs.
+- tapOn:
+    id: "org.commcare.dalvik:id/search_action_bar"
+- inputText: "Test One"
 - hideKeyboard
 - tapOn:
     text: "^Test One$"

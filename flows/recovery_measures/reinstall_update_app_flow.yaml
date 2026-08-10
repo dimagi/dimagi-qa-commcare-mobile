@@ -45,8 +45,20 @@ tags:
       USERNAME: ${CC_TEST_USERNAME}
       PASSWORD: ${CC_TEST_PASSWORD}
 # Reinstall/Update 1 - pre-update sanity: no forced update on Test One.
+# UPDATE, confirmed live (run 31327848567): this bare `assertNotVisible`
+# ALWAYS fails - the failure screenshot showed a completely normal home
+# screen (Start/Sync with Server/Log out), but the app's own display name
+# is literally "Recovery: Reinstall and Update App", always shown in the
+# toolbar - the bare substring "reinstall" matches that title on every
+# screen in this app, forced-dialog or not, so this assertion could never
+# have passed regardless of actual state. Tightened to require the kind of
+# forced-action phrasing a real dialog would use ("needs to be
+# reinstalled"/"must be reinstalled") that the app's own title doesn't
+# happen to contain - still a best-effort guess per this file's own
+# UNVERIFIED TEXT WARNING above, since the real message was never
+# confirmed, but no longer guaranteed to fail unconditionally.
 - assertNotVisible:
-    text: "(?i).*reinstall.*"
+    text: "(?i).*(needs? to be|must be) reinstalled.*"
 - assertNotVisible:
     text: "(?i).*update.*required.*"
 # --- HQ pre-step runs here in a real execution: mark Test Two released ---

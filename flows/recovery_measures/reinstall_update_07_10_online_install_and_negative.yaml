@@ -146,13 +146,21 @@ tags:
     id: "org.commcare.dalvik:id/install_app_button"
 - tapOn:
     id: "org.commcare.dalvik:id/enter_app_location"
-# UPDATE, confirmed live (run 31276111657 follow-up): see
-# offline_09_uninstall_reinstall_test_two.yaml's own UPDATE comment - this
-# used to type a never-defined env var; reusing the real, resolved
-# APP_CODE_RECOVERY_MEASURES instead.
-- tapOn:
-    id: "org.commcare.dalvik:id/edit_profile_location"
-- inputText: "${APP_CODE_RECOVERY_MEASURES}"
+# UPDATE, confirmed live (run 31276111657 follow-up + round-5/6 re-runs):
+# see offline_09_uninstall_reinstall_test_two.yaml's own UPDATE comments
+# for the full root-cause writeup - this used to type a never-defined env
+# var, then a bare/re-declared reference to the real one, neither of which
+# actually resolved (a flow's own top-level env: frontmatter doesn't
+# interpolate ${...} against the outer session scope). Routed through an
+# inline runFlow instead - the same env: mapping mechanism already proven
+# to work for install_app_by_code.yaml's own APP_CODE.
+- runFlow:
+    env:
+      RECOVERY_MEASURES_CODE: ${APP_CODE_RECOVERY_MEASURES}
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/edit_profile_location"
+      - inputText: "${RECOVERY_MEASURES_CODE}"
 - hideKeyboard
 - tapOn:
     id: "org.commcare.dalvik:id/start_install"
@@ -168,18 +176,19 @@ tags:
 # the next login.yaml call already waits for the real durable end state).
 # UPDATE (2nd correction), confirmed live (LOCAL-VERIFY-round4): still
 # failed - device was stuck back on App Manager's own app list, not a login
-# screen. Same defensive handling added as
-# offline_09_uninstall_reinstall_test_two.yaml's own 2nd-correction UPDATE
-# comment - see that file for the full writeup.
+# screen. Defensively handled the CommCare-version-mismatch dialog
+# ("I'LL UPDATE LATER") here too.
+# UPDATE (3rd correction), per direct user observation (2026-08-10): see
+# offline_09_uninstall_reinstall_test_two.yaml's own 3rd-correction UPDATE
+# comment - tapping the app's own name/link doesn't open it into a login
+# screen; pressing back does.
 - tapOn:
     text: "I.LL UPDATE LATER"
     optional: true
 - tapOn:
     id: "org.commcare.dalvik:id/btn_start_install"
     optional: true
-- tapOn:
-    text: "(?i).*recovery.*reinstall.*update.*app.*"
-    optional: true
+- back
 # "Reinstall and update 8" - log back in; the reinstall-needed chooser should
 # fire again now that the device is back on a stale build relative to HQ's
 # released Test Three (see CAVEAT above on whether that stale build is
