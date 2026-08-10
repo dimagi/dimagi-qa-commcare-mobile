@@ -1,0 +1,66 @@
+appId: org.commcare.dalvik
+tags:
+  - recovery_measures
+  - recovery_phase1
+  - automatable
+---
+# Master Mobile Plan (2026) > Recovery Measures > Recovery: Update App
+# (Setup 1, Update 1-3 - the normal, non-forced Test One -> Test Two update
+# via the home screen's Update App menu).
+#
+# SPLIT OUT (2026-08-10) from what used to be a single update_app_flow.yaml
+# spanning Setup 1 through Update 6 - confirmed live (run
+# 5a4ec96afbc87c985933d00b4c7d649f32af7c4f) that CommCareHQ's normal
+# update-check always offers the HIGHEST-version RELEASED build, not "the
+# next one up." With Test Three left released from an earlier QA cycle, this
+# step's own update-check jumped straight from Test One to Test Three,
+# skipping Test Two - the failure screenshot showed "Update to version 163
+# & log out" (Test Three) instead of Test Two's version. There is no way to
+# make an in-progress BrowserStack Maestro session pause, call HQ to release
+# a DIFFERENT build, and resume - so this half now runs as its OWN build,
+# with Test Three explicitly un-released beforehand (run
+# hq_setup/recovery_measures/phase1_unrelease_test_three.json via
+# run_suite.py's --hq-setup flag first, or select flows by the
+# `recovery_phase1` tag so a CI/local run only exercises this half):
+#   python scripts/run_suite.py --hq-setup hq_setup/recovery_measures/phase1_unrelease_test_three.json --tag recovery_phase1
+# The forced Test Two -> Test Three transition (this file's old "Update 4-6")
+# now lives in update_app_02_forced_two_to_three.yaml, tagged
+# `recovery_phase2` - run that SEPARATELY, after Test Three is released
+# again (which its own reference to that build's install-code env var makes
+# happen automatically via scripts/hq_client.py's resolve_app_codes()).
+# CAUTION: do not spell that env var's literal name out in THIS file (even
+# in a comment) - resolve_app_codes() textually scans every selected flow
+# file for "APP_CODE_<KEY>" substrings to decide what to resolve/release,
+# so doing that here would silently re-release Test Three mid-phase-1 and
+# reintroduce the exact bug this split fixes (confirmed live, 2026-08-10,
+# build 0283bbe253c324fe9837272928b5a079ed91840a - an earlier draft of this
+# very comment did exactly that).
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_RU_TEST_ONE}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+# Update 1 - pre-update sanity: no forced update/recovery screen on Test One.
+- assertVisible: "Start"
+- assertNotVisible:
+    text: "(?i).*recovery (procedures|measures).*initiated.*"
+- assertNotVisible:
+    text: "(?i).*update.*required.*"
+# Update 2/3 - trigger the in-place app update via the shared
+# ../common/update_app_via_menu.yaml subflow. With Test Three un-released
+# for this run, the only newer released build is Test Two, so this update
+# genuinely lands there. Its own final tap ("Update to version X & log out")
+# already logs out, so no separate ../common/logout.yaml call is needed.
+- runFlow: ../common/update_app_via_menu.yaml
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- assertVisible: "Start"
+- assertNotVisible:
+    text: "(?i).*recovery (procedures|measures).*initiated.*"

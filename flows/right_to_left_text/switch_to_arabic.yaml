@@ -1,0 +1,37 @@
+appId: org.commcare.dalvik
+tags:
+  - right_to_left_text
+---
+# Shared subflow for the Right to Left Text tab (not its own Test Case ID) -
+# installs the RTL test app, logs in, and switches CommCare's own in-app
+# language to Arabic via the same menu path already verified working in
+# setup_03_change_language_to_arabic.yaml (More options -> Change Language ->
+# tap the second choice at a fixed screen coordinate, since matching the
+# literal Arabic option text has already failed twice live in that flow - see
+# its header for the full root-cause writeup).
+#
+# Per setup_02_change_device_language_to_arabic.yaml's own header, CommCare's
+# RTL layout mirroring is driven by this IN-APP language switch, not the
+# Android system/device language (that's a separate, still-unwired
+# BrowserStack build-trigger param - see that flow's WIRING GAP note) - so
+# this alone is sufficient precondition for the alignment/mirroring checks
+# built on top of it in this folder's other flows.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_RIGHT_TO_LEFT}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- assertVisible:
+    id: "org.commcare.dalvik:id/home_gridview_buttons"
+- tapOn: "More options"
+- tapOn: "Change Language"
+- assertVisible: "Choose your Language"
+- tapOn:
+    point: "50%, 55%"
+- assertNotVisible: "Choose your Language"
+- assertVisible:
+    id: "org.commcare.dalvik:id/home_gridview_buttons"

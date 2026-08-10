@@ -454,7 +454,15 @@ def main():
         print(f"Running HQ pre-step: {args.hq_setup}")
         with open(args.hq_setup) as f:
             spec = json.load(f)
-        client = hq_client_module.HQClient().login()
+        # HQClient.login()'s own bare default (HQ_API_USERNAME/PASSWORD) does
+        # not work against this domain (confirmed live, 2026-08-10 -
+        # "HQ login did not redirect away from the login page") - use the
+        # same HQ_WEB_USER_EMAIL/PASSWORD account resolve_app_codes() already
+        # relies on below, which is confirmed to work without a 2FA prompt.
+        client = hq_client_module.HQClient().login(
+            username=os.environ.get("HQ_WEB_USER_EMAIL"),
+            password=os.environ.get("HQ_WEB_USER_PASSWORD"),
+        )
         hq_client_module.run_pre_step(spec, client=client)
 
     apk_path = args.apk

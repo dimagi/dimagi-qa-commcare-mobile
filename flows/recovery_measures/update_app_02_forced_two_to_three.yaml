@@ -1,0 +1,57 @@
+appId: org.commcare.dalvik
+tags:
+  - recovery_measures
+  - recovery_phase2
+  - automatable
+---
+# Master Mobile Plan (2026) > Recovery Measures > Recovery: Update App
+# (Update 4-6 - the FORCED, Django-recovery-measure-driven Test Two -> Test
+# Three update).
+#
+# SPLIT OUT (2026-08-10) from update_app_flow.yaml - see
+# update_app_01_normal_update_to_two.yaml's header for why. Self-contained
+# per this repo's "each flow runnable in isolation" convention: installs
+# Test Two directly (its own app code) rather than assuming
+# update_app_01 just ran in the same session. Run this tagged
+# `recovery_phase2` - with Test Three released (which happens automatically
+# via ${APP_CODE_RU_TEST_THREE} below and scripts/hq_client.py's
+# resolve_app_codes()), logging in while on Test Two should trigger the
+# recovery measure automatically:
+#   python scripts/run_suite.py --tag recovery_phase2
+#
+# ExecuteRecoveryMeasuresPresenter.executeMeasure()'s MEASURE_TYPE_APP_UPDATE
+# branch calls executeAutoUpdate() directly (no chooser dialog, no button -
+# see update_app_01's sibling header/the original update_app_flow.yaml
+# history for the strings.xml citations), then auto-logs out on completion.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_RU_TEST_TWO}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+# Update 4/5 - the app_update recovery measure activates automatically on
+# login/sync since Test Three is now released and Two is stale relative to
+# it, applying Test Three with no button tap, then auto-logging out.
+- assertVisible:
+    text: "(?i).*recovery (procedures|measures).*initiated.*"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/edit_username"
+    timeout: 60000
+# Update 6 - negative check: no further forced update after the update.
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- assertVisible: "Start"
+- assertNotVisible:
+    text: "(?i).*recovery (procedures|measures).*initiated.*"
+- assertNotVisible:
+    text: "(?i).*update.*required.*"
+# NOTE this references RU_TEST_THREE only in a comment (not a real install
+# step) so scripts/run_suite.py's needed_keys text-scan resolves+releases it
+# for this run: ${APP_CODE_RU_TEST_THREE}

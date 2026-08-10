@@ -1,0 +1,24 @@
+appId: org.commcare.dalvik
+tags:
+  - right_to_left_text
+  - partial
+---
+# Master Mobile Plan (2026) > Right to Left Text > "Home Screen 5" - Settings:
+# from Options, select Settings, ensure all settings are right aligned.
+#
+# GAP: alignment of each preference row's own text is intra-widget - not
+# testable via Maestro (see login_02's header). This confirms navigation
+# only. Real id: org.commcare.dalvik:id/action_preferences
+# (StandardHomeActivity.java, home.menu.settings="Settings" - NOT
+# `action_settings`, a different screen's id entirely per source audit).
+# Settings itself is hosted by CommCarePreferenceActivity ->
+# MainConfigurablePreferences fragment (app/res/xml/main_preferences.xml) -
+# the preference list is the AndroidX preference library's own internal
+# RecyclerView, which has no id declared anywhere in this repo, so presence
+# is confirmed via a known preference title instead.
+- runFlow: switch_to_arabic.yaml
+- tapOn: "More options"
+- tapOn:
+    id: "org.commcare.dalvik:id/action_preferences"
+- assertVisible: "Auto Update Frequency"
+- back

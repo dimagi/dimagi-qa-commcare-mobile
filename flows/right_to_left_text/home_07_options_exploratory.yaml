@@ -1,0 +1,30 @@
+appId: org.commcare.dalvik
+tags:
+  - right_to_left_text
+  - partial
+---
+# Master Mobile Plan (2026) > Right to Left Text > "Home Screen 7" - Options
+# exploratory: cycle through the remaining options, verify all text is
+# centered or right aligned.
+#
+# GAP: the sheet's own wording is a subjective visual sweep ("all text is
+# either centered or right aligned") with no discrete pass/fail criteria
+# beyond human judgment - not reducible to a Maestro assertion beyond
+# presence. This confirms every item from menu_app_home.xml is reachable in
+# one pass; it does not judge alignment.
+- runFlow: switch_to_arabic.yaml
+- tapOn: "More options"
+- assertVisible:
+    id: "org.commcare.dalvik:id/action_update"
+- assertVisible:
+    id: "org.commcare.dalvik:id/action_saved_forms"
+- assertVisible:
+    id: "org.commcare.dalvik:id/action_change_language"
+- assertVisible:
+    id: "org.commcare.dalvik:id/action_about"
+- assertVisible:
+    id: "org.commcare.dalvik:id/action_advanced"
+    optional: true
+- assertVisible:
+    id: "org.commcare.dalvik:id/action_preferences"
+- back

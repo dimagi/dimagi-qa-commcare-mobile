@@ -1,0 +1,35 @@
+appId: org.commcare.dalvik
+tags:
+  - recovery_measures
+  - automatable
+---
+# Master Mobile Plan (2026) > Recovery Measures > Recovery: Reinstall and
+# Update App > "Reinstall/Update 1" - pre-update sanity: no forced reinstall
+# on a fresh Test One install.
+#
+# SPLIT OUT (2026-08-10) from what used to be reinstall_update_app_flow.yaml
+# (Reinstall/Update 1, 5, 6 combined in one file) - see
+# reinstall_update_05_06_chooser_and_ccz.yaml's header for why rows 5/6
+# needed to become their own, phase-2-tagged file. This row doesn't depend
+# on Test Three's release status either way (it only asserts the ABSENCE of
+# a trigger on a fresh Test One install), so it carries no recovery_phaseN
+# tag and can run in either phase's build.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_RU_TEST_ONE}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+# Bare `assertNotVisible: "reinstall"` would always fail, since the app's own
+# toolbar title is literally "Recovery: Reinstall and Update App" - tightened
+# to the kind of forced-action phrasing a real dialog would use instead
+# (still a best-effort guess per this file's UNVERIFIED TEXT WARNING: the
+# Recovery Measures message text is admin-configurable on the HQ recovery
+# page, not a fixed app string, so it isn't in android_translatable_strings.txt).
+- assertNotVisible:
+    text: "(?i).*(needs? to be|must be) reinstalled.*"
+- assertNotVisible:
+    text: "(?i).*update.*required.*"

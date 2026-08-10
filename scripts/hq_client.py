@@ -464,11 +464,20 @@ def _parse_hq_display_time(time_str):
 
 def resolve_app_codes(registry, base_url=None, username=None, password=None, max_commcare_version=None):
     """
-    Resolve {"APP_CODE_<KEY>": code} for every (domain, app_id) in `registry`
-    (see scripts/app_registry.py's APP_REGISTRY) - meant to be called once per
+    Resolve {"APP_CODE_<KEY>": code} for every entry in `registry` (see
+    scripts/app_registry.py's APP_REGISTRY) - meant to be called once per
     run_suite.py invocation, right before uploading to BrowserStack, so every
     flow gets a code for whatever the CURRENT top build is instead of a
     literal that goes stale the next time someone cuts a version.
+
+    Each registry value is either a 2-tuple (domain, app_id) - resolves to
+    the app's current top build, same as always - or a 3-tuple (domain,
+    app_id, saved_app_id) - pins resolution to that EXACT build instead,
+    bypassing "current top build"/max_commcare_version selection entirely.
+    Added (2026-08-10) for Recovery Measures' "Test One/Two/Three" builds,
+    which are specific, already-cut versions a flow must address by name,
+    not whatever happens to be newest today (see app_registry.py's own
+    RU_TEST_ONE/TWO/THREE comment for the full citation).
 
     Logs in once per distinct domain (a HQClient's session/CSRF token isn't
     reusable across domains needing separate permission checks) rather than
@@ -481,19 +490,28 @@ def resolve_app_codes(registry, base_url=None, username=None, password=None, max
     `max_commcare_version` should be the actual CommCare APK version under
     test (see get_app_install_code's own docstring for why - a build newer
     than what's installed can never finish an online/Enter-Code install).
+    Ignored for pinned (3-tuple) entries, since a specific build was already
+    hand-picked and isn't subject to that selection logic.
     """
     username = username or os.environ.get("HQ_WEB_USER_EMAIL")
     password = password or os.environ.get("HQ_WEB_USER_PASSWORD")
     clients = {}
     codes = {}
-    for key, (domain, app_id) in registry.items():
+    for key, entry in registry.items():
+        domain, app_id = entry[0], entry[1]
+        pinned_saved_app_id = entry[2] if len(entry) > 2 else None
         if domain not in clients:
             clients[domain] = HQClient(base_url=base_url, domain=domain).login(
                 username=username, password=password,
             )
-        codes[f"APP_CODE_{key}"] = clients[domain].get_app_install_code(
-            app_id, max_commcare_version=max_commcare_version,
-        )
+        if pinned_saved_app_id:
+            codes[f"APP_CODE_{key}"] = clients[domain].get_app_install_code(
+                app_id, saved_app_id=pinned_saved_app_id,
+            )
+        else:
+            codes[f"APP_CODE_{key}"] = clients[domain].get_app_install_code(
+                app_id, max_commcare_version=max_commcare_version,
+            )
     return codes
 
 

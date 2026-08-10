@@ -1,0 +1,30 @@
+appId: org.commcare.dalvik
+tags:
+  - right_to_left_text
+  - partial
+---
+# Master Mobile Plan (2026) > Right to Left Text > "Question Types 5" -
+# Audio functional: second question has an audio file playable via a link at
+# the question's LEFT; question accepts text/special characters, entered
+# right-aligned.
+#
+# GAP: AudioWidget's play/record/choose buttons (app/src/org/commcare/views/
+# widgets/AudioWidget.java) are built programmatically with NO setId() call
+# (confirmed via source grep - zero R.id hits in that file), and the text
+# entry field (StringWidget.java's bare <EditText>, no android:id at all) is
+# also anchor-less - Maestro cannot select either by id, and their real
+# button label strings (play_audio/capture_audio/choose_sound) weren't found
+# in android_translatable_strings.txt, so a text selector isn't reliably
+# citable either. This can only advance past the question generically; the
+# widget's own position/alignment claims are not verified.
+- runFlow: switch_to_arabic.yaml
+- tapOn: "Start"
+- tapOn:
+    id: "org.commcare.dalvik:id/row_txt"
+    index: 0
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+- assertVisible:
+    id: "org.commcare.dalvik:id/nav_prog_bar"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"

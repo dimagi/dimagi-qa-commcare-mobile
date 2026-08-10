@@ -1,0 +1,28 @@
+appId: org.commcare.dalvik
+tags:
+  - right_to_left_text
+  - partial
+---
+# Master Mobile Plan (2026) > Right to Left Text > "Case list 2" - Column
+# inversion: verify columns are in order Reason, Age, Name.
+#
+# HARD GAP, confirmed via source: app/src/org/commcare/views/EntityView.java
+# generates each column cell's view id at RUNTIME
+# (`view.setId(AndroidUtil.generateViewId())`) or as a raw id-less TextView -
+# there is no fixed resource id to select a specific column by. Column ORDER
+# itself is driven entirely by this HQ app's own Detail/case-list
+# configuration (data pulled from the app build, not present anywhere in the
+# commcare-android client source), and the actual case values (names/ages/
+# reasons) rendered are this app's own seeded case data, unknown from source
+# or from any file in this repo. Neither a stable selector nor the real
+# column text values are obtainable without live HQ/app inspection - this is
+# not automatable with the information available, and no fabricated
+# selector is used here. This only confirms the list itself still renders
+# (a real, if much weaker, check) rather than asserting column order.
+- runFlow: switch_to_arabic.yaml
+- tapOn: "Start"
+- tapOn:
+    id: "org.commcare.dalvik:id/row_txt"
+    index: 1
+- assertVisible:
+    id: "org.commcare.dalvik:id/screen_entity_select_list"

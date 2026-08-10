@@ -1,0 +1,33 @@
+appId: org.commcare.dalvik
+tags:
+  - right_to_left_text
+  - automatable
+---
+# Master Mobile Plan (2026) > Right to Left Text > "Case list 4" -
+# Registration from Case List: button under the list has right-aligned
+# Arabic text and a LEFT-pointing arrow.
+#
+# REAL check: app/src/org/commcare/views/EntityActionViewUtils.java's
+# action_card.xml gives real, stable ids - org.commcare.dalvik:id/text
+# (label) and org.commcare.dalvik:id/launch_action (the chevron -
+# `icon_chevron_right_attnpos`, which itself carries
+# `android:rotationY="@integer/locale_mirror_flip"`, i.e. the app's own
+# source already flips this specific icon for RTL - a genuine, confirmed
+# mirroring point, not a guess). Asserting launch_action renders LEFT of the
+# label text is a real element-to-element position claim consistent with
+# "arrow points left" being on the left side of the row under RTL mirroring.
+# GAP: the label's own text alignment inside its box remains
+# non-automatable per this tab's general limitation; "Registration" itself
+# is app-config text (EntityActionViewUtils - displayData.getName()), not a
+# hardcoded string, so this doesn't assert its literal content.
+- runFlow: switch_to_arabic.yaml
+- tapOn: "Start"
+- tapOn:
+    id: "org.commcare.dalvik:id/row_txt"
+    index: 1
+- assertVisible:
+    id: "org.commcare.dalvik:id/action_card"
+- assertVisible:
+    id: "org.commcare.dalvik:id/launch_action"
+    leftOf:
+      id: "org.commcare.dalvik:id/text"

@@ -1,8 +1,16 @@
 appId: org.commcare.dalvik
 tags:
   - recovery_measures
+  - recovery_phase1
   - automatable
 ---
+# PHASE 1 (2026-08-10): must run with Test Three un-released (see
+# hq_setup/recovery_measures/phase1_unrelease_test_three.json) - confirmed
+# live that CommCareHQ's normal update-check offers the HIGHEST-version
+# released build, so with Three also released this step's own update-check
+# would jump straight to Three instead of Two, failing the
+# EXPECTED_VERSION="2" check below. See
+# update_app_01_normal_update_to_two.yaml's header for the full writeup.
 # Master Mobile Plan (2026) > Recovery Measures > Recovery: Reinstall and
 # Update App > "Reinstall and update 3" - "Return to mobile, update CommCare
 # to Test Two". Written as its own standalone flow file rather than an
@@ -13,16 +21,19 @@ tags:
 # hq_setup/recovery_measures/reinstall_update_2_mark_test_two.json /
 # reinstall_update_4_mark_test_three.json.
 #
-# ORDER OF OPERATIONS for a real run of this section:
-#   1. reinstall_update_app_flow.yaml's "Reinstall/Update 1" portion (login,
-#      assert no forced update on Test One)
-#   2. hq_setup/recovery_measures/reinstall_update_2_mark_test_two.json
-#      (mark Test Two released, cut Test Three in-test)
-#   3. THIS FLOW ("Reinstall and update 3" - update to Test Two)
-#   4. hq_setup/recovery_measures/reinstall_update_4_mark_test_three.json
-#      (mark Test Three released)
-#   5. reinstall_update_app_flow.yaml's "Reinstall/Update 5, 6" portion
-#      (assert reinstall message, tap "Reinstall Using CCZ")
+# UPDATE (2026-08-10): the ORDER OF OPERATIONS below described a 5-step,
+# multi-Maestro-run choreography assuming separate HQ mark-released actions
+# had to be staged BETWEEN each on-device step. That's no longer needed -
+# Test One/Two/Three are all released together, upfront, by run_suite.py's
+# normal pre-run code-resolution pass (see scripts/app_registry.py's
+# RU_TEST_ONE/TWO/THREE entries) - the recovery-measure/
+# update triggers are gated on the CURRENTLY-INSTALLED build's own version
+# against an already-configured min/max window, not on when some OTHER
+# build was released, so there's no ordering dependency between "which
+# build is released" and "which on-device flow runs" left to preserve.
+# This flow remains a separate file (rather than folded into
+# reinstall_update_app_flow.yaml) simply because the sheet itself splits
+# "Reinstall and update 3" out as its own row with its own narrative.
 #
 # Reuses flows/common/update_app_via_menu.yaml verbatim (same subflow
 # reinstall_update_app_flow.yaml itself uses to move Test One -> Test Two) -
@@ -34,52 +45,44 @@ tags:
 # marked released in the HQ pre-step above, "Update App" from the overflow
 # menu is expected to offer the CCZ update to Test Two here in the ordinary
 # (non-recovery-measure) way.
-# UPDATE, confirmed live (run 31276111657): this flow's very first step
-# used to be a bare `runFlow: ../common/login.yaml` with no app ever
-# installed first - it assumed some "Test One"/"Test Two"/"Test Three" app
-# was already on the device from an earlier, undocumented step. That's
-# never true when this flow runs on its own (this repo's "each flow
-# runnable in isolation" convention, docs/FRAMEWORK.md), so it failed
-# outright stuck on the pre-install "Welcome to CommCare!" screen -
-# `login.yaml` could never find edit_username there.
-# RESOLVED (2026-08-09): per Master Mobile Plan (2026) > Recovery: Reinstall
-# and Update App > Setup 1's own linked HQ Releases URL (user-supplied):
-# https://www.commcarehq.org/a/qateam/apps/view/c49c34a1d74297ecb6ecef7a7c5d3f88/releases/
-# "Test One"/"Test Two"/"Test Three" are this ONE app's own sequential
-# release labels (per that row's own summary: "This will become the new
-# Test One... repeat for version two and three"), not separate apps - see
-# scripts/app_registry.py's RECOVERY_MEASURES entry. Installing its current
-# build here is enough to reach the login screen this flow actually needs.
+# UPDATE (2026-08-10): "Test One"/"Test Two"/"Test Three" are three
+# SPECIFIC, already-cut builds (confirmed live via a user-supplied
+# recording + this app's own Releases page) - see
+# scripts/app_registry.py's RU_TEST_ONE/TWO/THREE entries for
+# the real saved_app_ids and the full citation. Test Two/Three are released
+# upfront alongside Test One by run_suite.py's normal pre-run
+# code-resolution pass, so update_app_via_menu.yaml below has a real
+# release to offer without a separate HQ action staged mid-flow.
 - runFlow:
     file: ../common/install_app_by_code.yaml
     env:
-      APP_CODE: ${APP_CODE_RECOVERY_MEASURES}
+      APP_CODE: ${APP_CODE_RU_TEST_ONE}
 - runFlow:
     file: ../common/login.yaml
     env:
       USERNAME: ${CC_TEST_USERNAME}
       PASSWORD: ${CC_TEST_PASSWORD}
 # "Reinstall and update 3" - update CommCare app to Test Two via the normal
-# "Update App" menu path (not the recovery-measures forced flow).
+# "Update App" menu path (not the recovery-measures forced flow). Its own
+# final tap ("Update to version X & log out") already logs out.
 - runFlow: ../common/update_app_via_menu.yaml
-- runFlow: ../common/logout.yaml
-# Confirm the update actually landed before handing back to the HQ pre-step
-# that marks Test Three released (reinstall_update_4_mark_test_three.json).
+# Confirm the update actually landed.
 - runFlow:
     file: ../common/login.yaml
     env:
       USERNAME: ${CC_TEST_USERNAME}
       PASSWORD: ${CC_TEST_PASSWORD}
-# ASSUMPTION (not verifiable from commcare-android source, which has no
-# knowledge of this QA cycle's specific build numbering): "Test Two" maps to
-# profile version "2" per the sheet's own "Version N" naming pattern (Test
-# One=1, Test Two=2, Test Three=3), consistent with how
-# check_app_version_via_about.yaml's docstring describes its EXPECTED_VERSION
-# param. Confirm against your actual QA build's real profile version before
-# relying on this assertion, and adjust if this cycle's builds are numbered
-# differently.
+# CONFIRMED live (2026-08-10, build 0283bbe253c324fe9837272928b5a079ed91840a
+# - this exact assertion's own failure screenshot, taken while Test Three was
+# released alongside Two by mistake): the "App v${N}" profile version shown
+# here is NOT the sheet's small "Version 1/2/3" narrative number - it's the
+# real HQ build's own version/sequence number (that screenshot showed
+# "App v163" while sitting on Test Three, matching Three's real HQ build
+# version 163 - see scripts/app_registry.py's RU_TEST_THREE entry). Test
+# Two's real build version is 160 (RU_TEST_TWO's saved_app_id's own version,
+# same source) - using that instead of the sheet's paraphrased "2".
 - runFlow:
     file: ../common/check_app_version_via_about.yaml
     env:
-      EXPECTED_VERSION: "2"
+      EXPECTED_VERSION: "160"
 - runFlow: ../common/logout.yaml

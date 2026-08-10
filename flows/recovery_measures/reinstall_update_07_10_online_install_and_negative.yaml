@@ -1,8 +1,19 @@
 appId: org.commcare.dalvik
 tags:
   - recovery_measures
+  - recovery_phase2
   - automatable
 ---
+# PHASE 2 (2026-08-10): must run with Test Three released (the default -
+# resolve_app_codes releases it automatically since ${APP_CODE_RU_TEST_THREE}
+# never appears literally in this file's steps but IS referenced in a
+# comment purely so run_suite.py's needed_keys text-scan picks it up: see
+# update_app_02_forced_two_to_three.yaml's header for the mechanism). This
+# row's own reinstall/uninstall dance resets to Test Two by explicit app
+# code (not a normal update-check), so it isn't affected by the "highest
+# released build wins" overshoot bug - it just needs Three to genuinely be
+# released so step 8's reinstall-chooser has something newer to react to.
+# ${APP_CODE_RU_TEST_THREE}
 # Master Mobile Plan (2026) > Recovery Measures > Recovery: Reinstall and
 # Update App > "Reinstall and update 7, 8, 9, 10" - continues directly from
 # reinstall_update_app_flow.yaml's "Reinstall/Update 6" (which tapped
@@ -92,26 +103,22 @@ tags:
 # message again) simply won't fire, since the device would already be
 # current - treat that as a signal to re-check this assumption against a
 # real HQ domain rather than a flow bug.
-# UPDATE, confirmed live (run 31276111657): this flow's very first step
-# used to be a bare `runFlow: ../common/login.yaml` with no app ever
-# installed first - it assumed some "Test One"/"Test Two"/"Test Three" app
-# was already on the device from an earlier, undocumented step. That's
-# never true when this flow runs on its own (this repo's "each flow
-# runnable in isolation" convention, docs/FRAMEWORK.md), so it failed
-# outright stuck on the pre-install "Welcome to CommCare!" screen -
-# `login.yaml` could never find edit_username there.
-# RESOLVED (2026-08-09): per Master Mobile Plan (2026) > Recovery: Reinstall
-# and Update App > Setup 1's own linked HQ Releases URL (user-supplied):
-# https://www.commcarehq.org/a/qateam/apps/view/c49c34a1d74297ecb6ecef7a7c5d3f88/releases/
-# "Test One"/"Test Two"/"Test Three" are this ONE app's own sequential
-# release labels (per that row's own summary: "This will become the new
-# Test One... repeat for version two and three"), not separate apps - see
-# scripts/app_registry.py's RECOVERY_MEASURES entry. Installing its current
-# build here is enough to reach the login screen this flow actually needs.
+# UPDATE (2026-08-10): this row's own name is "Reset WITH TEST TWO" - the
+# starting install below installs Test Two directly (matching the
+# "continues from reinstall_update_app_flow.yaml, which already left the
+# device on Test Two" assumption above, but self-contained per this repo's
+# own "each flow runnable in isolation" convention) rather than Test One.
+# The App Manager uninstall/reinstall further down also uses the pinned
+# Test Two code, genuinely resetting back to it - see
+# scripts/app_registry.py's RU_TEST_ONE/TWO/THREE entries for
+# the real saved_app_ids and citation. Test Three is released upfront
+# alongside Test One/Two, so once Test Two is reinstalled it's immediately
+# stale relative to it, which is exactly what triggers "Reinstall and
+# update 8"'s reinstall-chooser dialog on the next login below.
 - runFlow:
     file: ../common/install_app_by_code.yaml
     env:
-      APP_CODE: ${APP_CODE_RECOVERY_MEASURES}
+      APP_CODE: ${APP_CODE_RU_TEST_TWO}
 - runFlow:
     file: ../common/login.yaml
     env:
@@ -153,10 +160,11 @@ tags:
 # actually resolved (a flow's own top-level env: frontmatter doesn't
 # interpolate ${...} against the outer session scope). Routed through an
 # inline runFlow instead - the same env: mapping mechanism already proven
-# to work for install_app_by_code.yaml's own APP_CODE.
+# to work for install_app_by_code.yaml's own APP_CODE. Uses the pinned Test
+# Two code, matching this row's own "reset WITH TEST TWO" name.
 - runFlow:
     env:
-      RECOVERY_MEASURES_CODE: ${APP_CODE_RECOVERY_MEASURES}
+      RECOVERY_MEASURES_CODE: ${APP_CODE_RU_TEST_TWO}
     commands:
       - tapOn:
           id: "org.commcare.dalvik:id/edit_profile_location"
@@ -218,13 +226,15 @@ tags:
       USERNAME: ${CC_TEST_USERNAME}
       PASSWORD: ${CC_TEST_PASSWORD}
 # "Reinstall and update 9" (cont.) - verify version is now Test Three.
-# ASSUMPTION (see reinstall_update_03_update_to_test_two.yaml's matching
-# comment): "Test Three" = profile version "3" per the sheet's "Version N"
-# naming; not verifiable from source alone, confirm against your real build.
+# CONFIRMED live (see reinstall_update_03_update_to_test_two.yaml's matching
+# comment): the "App v${N}" profile version is the real HQ build's own
+# version number, not the sheet's small "Version 1/2/3" narrative number -
+# Test Three's real build version is 163 (RU_TEST_THREE's saved_app_id's own
+# version, see scripts/app_registry.py).
 - runFlow:
     file: ../common/check_app_version_via_about.yaml
     env:
-      EXPECTED_VERSION: "3"
+      EXPECTED_VERSION: "163"
 - runFlow: ../common/submit_only_form.yaml
 - assertVisible:
     text: "(?i).*form.*success.*completed.*"

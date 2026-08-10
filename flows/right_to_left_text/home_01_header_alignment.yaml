@@ -1,0 +1,28 @@
+appId: org.commcare.dalvik
+tags:
+  - right_to_left_text
+  - partial
+---
+# Master Mobile Plan (2026) > Right to Left Text > "Home Screen 1" - Options
+# Header: app name on the right, options button on the LEFT (note: this row
+# expects the overflow button MIRRORED, unlike "Login 1" which expects it to
+# stay on the right - see that flow's header; app/res/layout/appbar_layout.xml
+# is the exact same include on both screens, so source alone cannot explain
+# a real difference between these two rows - if verified live and both
+# actually behave identically, treat Login 1 or this row as the one needing
+# correction, not a flow bug).
+#
+# Same GENUINE SELECTOR GAP as login_01_header_alignment.yaml: neither the
+# app-name title nor the overflow button has a resource id or a string this
+# repo can cite - see that flow's header for the full explanation. Same
+# best-effort proxy: tap the expected corner (top-LEFT here, mirrored from
+# Login's top-right) and confirm an options list is reachable there.
+- runFlow: switch_to_arabic.yaml
+- assertVisible:
+    id: "org.commcare.dalvik:id/toolbar"
+- tapOn:
+    point: "6%, 4%"
+- assertVisible:
+    text: "(?i).*(update app|saved forms|change language|about commcare|settings|advanced).*"
+    optional: true
+- back

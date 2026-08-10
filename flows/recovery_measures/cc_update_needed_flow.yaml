@@ -64,18 +64,22 @@ tags:
 # runnable in isolation" convention, docs/FRAMEWORK.md), so it failed
 # outright stuck on the pre-install "Welcome to CommCare!" screen -
 # `login.yaml` could never find edit_username there.
-# RESOLVED (2026-08-09): per Master Mobile Plan (2026) > Recovery: Reinstall
-# and Update App > Setup 1's own linked HQ Releases URL (user-supplied):
-# https://www.commcarehq.org/a/qateam/apps/view/c49c34a1d74297ecb6ecef7a7c5d3f88/releases/
-# "Test One"/"Test Two"/"Test Three" are this ONE app's own sequential
-# release labels (per that row's own summary: "This will become the new
-# Test One... repeat for version two and three"), not separate apps - see
-# scripts/app_registry.py's RECOVERY_MEASURES entry. Installing its current
-# build here is enough to reach the login screen this flow actually needs.
+# RESOLVED (2026-08-10): this is its OWN dedicated app, "Recovery: CC
+# Update Needed" (id 8fc02611dd694001a147749a6ea558c0, per the sheet's own
+# C54 hyperlink) - a single-build app (C54: "ensure the ONLY version is
+# marked as released"), not the shared "Test One/Two/Three" Reinstall/
+# Update app other recovery_measures flows use. See scripts/app_registry.py's
+# CC_UPDATE_NEEDED entry.
+# REMAINING GAP (genuinely not automatable in this framework): per the
+# sheet's own C53/C56, this test's real precondition is starting from
+# CommCare CLIENT v2.45 and switching to a newer client mid-test - see
+# cc_reinstall_needed_flow.yaml's own equivalent note for the full
+# citation (same class of gap, same MobileRecoveryMeasure cc_version_min/max
+# mechanism, just the CC_UPDATE measure type instead of CC_REINSTALL).
 - runFlow:
     file: ../common/install_app_by_code.yaml
     env:
-      APP_CODE: ${APP_CODE_RECOVERY_MEASURES}
+      APP_CODE: ${APP_CODE_CC_UPDATE_NEEDED}
 - runFlow:
     file: ../common/login.yaml
     env:

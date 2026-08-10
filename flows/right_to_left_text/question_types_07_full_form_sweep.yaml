@@ -1,0 +1,32 @@
+appId: org.commcare.dalvik
+tags:
+  - right_to_left_text
+  - partial
+---
+# Master Mobile Plan (2026) > Right to Left Text > "Question Types 7" -
+# Question Types and Appearance attributes: proceed through the rest of the
+# form; pass if Arabic text is right/centered, inputs accept correctly, and
+# multiple-choice/checkbox/text-entry fields are right aligned.
+#
+# GAP: this row is the sheet's own general sweep across whatever remaining
+# question types the form contains - both the pass criteria (alignment) and
+# the specific widgets involved are the same fundamentally non-automatable
+# and id-less controls documented in question_types_04/05/06's headers
+# (SelectOneWidget/SelectMultiWidget assign RadioButton/CheckBox ids at
+# RUNTIME from a hash of the question's form index - `Math.abs(prompt.
+# getIndex().hashCode())` - genuinely non-deterministic across runs, not a
+# gap that more research would close). This can only continue tapping
+# Next generically; it cannot select specific answers by id or verify
+# alignment, and will legitimately stall if a required question blocks
+# progression without an answer Maestro can supply blindly.
+- runFlow: switch_to_arabic.yaml
+- tapOn: "Start"
+- tapOn:
+    id: "org.commcare.dalvik:id/row_txt"
+    index: 0
+- repeat:
+    times: 5
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/nav_btn_next"
+          optional: true

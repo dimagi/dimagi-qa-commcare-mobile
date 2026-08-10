@@ -1,0 +1,26 @@
+appId: org.commcare.dalvik
+tags:
+  - right_to_left_text
+  - partial
+---
+# Master Mobile Plan (2026) > Right to Left Text > "Question Types 6" -
+# Video functional: third question has a video link at the question's LEFT;
+# integers entered right-aligned.
+#
+# GAP: same as question_types_05 - VideoWidget (app/src/org/commcare/views/
+# widgets/VideoWidget.java, extends the same MediaWidget base as AudioWidget)
+# builds its play button programmatically with no id, and IntegerWidget
+# extends StringWidget's bare, id-less EditText. Advances generically only.
+- runFlow: switch_to_arabic.yaml
+- tapOn: "Start"
+- tapOn:
+    id: "org.commcare.dalvik:id/row_txt"
+    index: 0
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+- assertVisible:
+    id: "org.commcare.dalvik:id/nav_prog_bar"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"

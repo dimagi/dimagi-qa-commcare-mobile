@@ -39,18 +39,50 @@ APP_REGISTRY = {
     # max_commcare_version filtering (see NO_VERSION_FILTER_KEYS below) -
     # this is Basic Tests' single most recent build, whatever it requires.
     "BASIC_TESTS_LATEST": ("qateam", "cdfa6c85eb594b23b0c08729cd2beff1"),
-    # Master Mobile Plan (2026) > Recovery: Reinstall and Update App > Setup
-    # 1's own linked HQ Releases URL (user-supplied, 2026-08-09):
-    # https://www.commcarehq.org/a/qateam/apps/view/c49c34a1d74297ecb6ecef7a7c5d3f88/releases/
-    # Resolves the "no app installed yet" gap every recovery_measures flow
-    # had - they all assumed some app named "Test One"/"Test Two"/"Test
-    # Three" was already installed by an earlier, undocumented step, but
-    # per the sheet's own Setup 1 summary ("This will become the new Test
-    # One... repeat for version two and three") those are just this ONE
-    # app's sequential release labels, not separate apps - a single install
-    # code for its current build is enough to reach the login screen every
-    # recovery_measures flow actually needs.
-    "RECOVERY_MEASURES": ("qateam", "c49c34a1d74297ecb6ecef7a7c5d3f88"),
+    # UPDATE (2026-08-10), superseded by the six pinned TEST_ONE/TWO/THREE
+    # entries below: this single unpinned entry always resolved to whatever
+    # the app's CURRENT top build happened to be, which is wrong for these
+    # tests - "Test One"/"Test Two"/"Test Three" are three SPECIFIC,
+    # already-existing builds a flow must switch between mid-narrative (the
+    # whole point of a "reinstall/update" test), not "whatever's newest
+    # today". Confirmed live via a user-supplied screen recording + the
+    # Recovery Measures sheet's own C2 provisioning note ("Revert to test
+    # one... repeat process for version two and three") - Dimagi has
+    # ALREADY cut these three builds once per CommCare-version cycle; nothing
+    # here creates new ones.
+    #
+    # Master Mobile Plan (2026) > Recovery Measures sheet, two DISTINCT apps
+    # (confirmed live via each app's own Releases page title, 2026-08-10):
+    #   c49c34a1d74297ecb6ecef7a7c5d3f88 = "Recovery: Reinstall and Update
+    #     App" (A6's own linked URL) - used by update_app_flow.yaml,
+    #     reinstall_update_app_flow.yaml,
+    #     reinstall_update_03_update_to_test_two.yaml.
+    #   8009e8a2814a465b818d56284011b1e9 = "Recovery: Offline Reinstall and
+    #     Update App" (a SEPARATE app, despite the similar name and the
+    #     sheet's own A6 link pointing at the other one - confirmed via this
+    #     app's Releases page title, and via the on-device toolbar title
+    #     matching c49c34a1d74297ecb6ecef7a7c5d3f88 in the user's recording)
+    #     - used by offline_reinstall_update_app_flow.yaml,
+    #     offline_05/06/08/09_*.yaml.
+    # A registry entry's optional 3rd tuple element pins get_app_install_code
+    # to that EXACT build (bypassing "current top build" resolution) - see
+    # resolve_app_codes()'s own updated docstring in hq_client.py.
+    "RU_TEST_ONE": ("qateam", "c49c34a1d74297ecb6ecef7a7c5d3f88", "fc035b7fa49f49e88ab3fbfe5c5c3e4c"),
+    "RU_TEST_TWO": ("qateam", "c49c34a1d74297ecb6ecef7a7c5d3f88", "e2bbb57c020f4c4b9f30d7ac6442a9b0"),
+    "RU_TEST_THREE": ("qateam", "c49c34a1d74297ecb6ecef7a7c5d3f88", "c0c55463a7fa43f7a6409c54849159a6"),
+    "OFFLINE_TEST_ONE": ("qateam", "8009e8a2814a465b818d56284011b1e9", "584e35da607e4df7a03733463da286bb"),
+    "OFFLINE_TEST_TWO": ("qateam", "8009e8a2814a465b818d56284011b1e9", "a730fb7f1aee4e38996d01b1e16ac94c"),
+    "OFFLINE_TEST_THREE": ("qateam", "8009e8a2814a465b818d56284011b1e9", "e2e7a3dcbaf94035b2ce8dbd5f1dd3b3"),
+    # Master Mobile Plan (2026) > Recovery Measures sheet's own hyperlinks
+    # (2026-08-10) - four more, single-build apps (the sheet's own C47/C54
+    # rows both say "ensure the ONLY version is marked as released", unlike
+    # the three-version Reinstall/Update apps above), so an unpinned entry
+    # (always resolves to the app's current top build) is enough - no
+    # specific saved_app_id to pin.
+    "CC_REINSTALL_NEEDED": ("qateam", "fc3b94e8ae9a445680df496ee783439d"),
+    "CC_UPDATE_NEEDED": ("qateam", "8fc02611dd694001a147749a6ea558c0"),
+    "POINT_RELEASE": ("qateam", "df1c05ddfb640f32c9d453f780442ce4"),
+    "HEARTBEAT": ("qateam", "35b9a60884c8f8e69e507c56cbe8f370"),
 }
 
 # Keys that must always resolve to the app's single most recent build,

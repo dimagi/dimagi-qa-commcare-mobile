@@ -1,6 +1,7 @@
 appId: org.commcare.dalvik
 tags:
   - recovery_measures
+  - recovery_phase2
   - automatable
 ---
 # Master Mobile Plan (2026) > Recovery Measures > Retry Recovery
@@ -68,26 +69,24 @@ tags:
 # tune the timing (e.g. toggle airplane mode immediately after login rather
 # than after the detail text appears) if this proves too fast to catch in
 # practice.
-# UPDATE, confirmed live (run 31276111657): this flow's very first step
-# used to be a bare `runFlow: ../common/login.yaml` with no app ever
-# installed first - it assumed some "Test One"/"Test Two"/"Test Three" app
-# was already on the device from an earlier, undocumented step. That's
-# never true when this flow runs on its own (this repo's "each flow
-# runnable in isolation" convention, docs/FRAMEWORK.md), so it failed
-# outright stuck on the pre-install "Welcome to CommCare!" screen -
-# `login.yaml` could never find edit_username there.
-# RESOLVED (2026-08-09): per Master Mobile Plan (2026) > Recovery: Reinstall
-# and Update App > Setup 1's own linked HQ Releases URL (user-supplied):
-# https://www.commcarehq.org/a/qateam/apps/view/c49c34a1d74297ecb6ecef7a7c5d3f88/releases/
-# "Test One"/"Test Two"/"Test Three" are this ONE app's own sequential
-# release labels (per that row's own summary: "This will become the new
-# Test One... repeat for version two and three"), not separate apps - see
-# scripts/app_registry.py's RECOVERY_MEASURES entry. Installing its current
-# build here is enough to reach the login screen this flow actually needs.
+# UPDATE (2026-08-10): "a measure already pending via out-of-scope HQ
+# setup" is now genuinely achievable, not out of scope - this uses the
+# SAME app/mechanism as update_app_02_forced_two_to_three.yaml (id
+# c49c34a1d74297ecb6ecef7a7c5d3f88, "Recovery: Reinstall and Update App").
+# UPDATE (2nd correction, 2026-08-10): this used to reach the pending-measure
+# state via a normal Test One -> Test Two update through the menu first
+# (update_app_via_menu.yaml) - removed, since that step needs Test Three
+# UN-released to land on Two specifically (confirmed live, see
+# update_app_01_normal_update_to_two.yaml's header), while THIS file's own
+# Retry-button test needs Three RELEASED for the forced measure to actually
+# be in flight to interrupt. Those are contradictory release states inside
+# one continuous session - installs Test Two directly instead (self-contained,
+# same fix applied to update_app_02_forced_two_to_three.yaml), tagged
+# `recovery_phase2` so it only ever runs with Three released.
 - runFlow:
     file: ../common/install_app_by_code.yaml
     env:
-      APP_CODE: ${APP_CODE_RECOVERY_MEASURES}
+      APP_CODE: ${APP_CODE_RU_TEST_TWO}
 - runFlow:
     file: ../common/login.yaml
     env:

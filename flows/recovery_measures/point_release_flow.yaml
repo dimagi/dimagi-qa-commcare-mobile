@@ -43,18 +43,23 @@ tags:
 # runnable in isolation" convention, docs/FRAMEWORK.md), so it failed
 # outright stuck on the pre-install "Welcome to CommCare!" screen -
 # `login.yaml` could never find edit_username there.
-# RESOLVED (2026-08-09): per Master Mobile Plan (2026) > Recovery: Reinstall
-# and Update App > Setup 1's own linked HQ Releases URL (user-supplied):
-# https://www.commcarehq.org/a/qateam/apps/view/c49c34a1d74297ecb6ecef7a7c5d3f88/releases/
-# "Test One"/"Test Two"/"Test Three" are this ONE app's own sequential
-# release labels (per that row's own summary: "This will become the new
-# Test One... repeat for version two and three"), not separate apps - see
-# scripts/app_registry.py's RECOVERY_MEASURES entry. Installing its current
-# build here is enough to reach the login screen this flow actually needs.
+# RESOLVED (2026-08-10): this is its OWN dedicated app, "Recover: Point
+# Release App" (id df1c05ddfb640f32c9d453f780442ce4, per the sheet's own
+# A60 hyperlink) - NOT the shared "Test One/Two/Three" Reinstall/Update app
+# other recovery_measures flows use. See scripts/app_registry.py's
+# POINT_RELEASE entry.
+# REMAINING GAP (genuinely not automatable in this framework): per the
+# sheet's own C62/C63, "CC Reinstall Needed 6"/"7" (this row's own
+# siblings, NOT covered by this flow - see coverage_matrix.csv) need
+# starting from CommCare CLIENT 2.49.4/2.49.5 specifically, versions this
+# repo has no APK for (only a 2.45 build was supplied) - same class of
+# mid-session client-APK-switch gap as cc_reinstall_needed_flow.yaml's own
+# note. This flow (C64, "CC Reinstall Needed 8") is the one genuinely
+# reachable row: it only needs the version already in test, no old client.
 - runFlow:
     file: ../common/install_app_by_code.yaml
     env:
-      APP_CODE: ${APP_CODE_RECOVERY_MEASURES}
+      APP_CODE: ${APP_CODE_POINT_RELEASE}
 - runFlow:
     file: ../common/login.yaml
     env:

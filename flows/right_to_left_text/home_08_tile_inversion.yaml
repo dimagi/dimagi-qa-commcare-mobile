@@ -1,0 +1,35 @@
+appId: org.commcare.dalvik
+tags:
+  - right_to_left_text
+  - automatable
+---
+# Master Mobile Plan (2026) > Right to Left Text > "Home Screen 8" - Home
+# screen tiles: verify tiles are inverted (Sync on the left, Start and Log
+# Out on the right).
+#
+# This is a REAL, meaningful position check (unlike most other rows in this
+# tab) because it compares two DISTINCT rendered elements (Maestro's
+# leftOf/rightOf ARE valid here), not text alignment within one widget.
+# home_gridview_buttons is a 2-column StaggeredGridLayoutManager
+# (StandardHomeActivityUIController.setupGridView()) - column fill order
+# under RTL is handled by the RecyclerView/LayoutManager at runtime based on
+# actual tile heights (staggered, not fixed), so this deliberately asserts
+# against the LIVE rendered position via leftOf/rightOf rather than
+# hardcoding a column index math from source (which would be guesswork -
+# staggered placement depends on real content height, not just item order).
+# Tile ids repeat per row (app/res/layout/square_card.xml reused by every
+# tile), so card_text is selected by its own text, not by id/index alone -
+# home.start="Start", home.sync="Sync with Server" (or home.sync.demo for a
+# demo user), home.logout="Log out of CommCare" (android_translatable_
+# strings.txt) - the sheet's own Note (row 5) explicitly allows some labels
+# to remain English under Arabic, so plain English text selectors are
+# expected to keep working here.
+- runFlow: switch_to_arabic.yaml
+- assertVisible:
+    text: "Start"
+    rightOf:
+      text: "(?i)sync.*"
+- assertVisible:
+    text: "(?i)log out.*"
+    rightOf:
+      text: "(?i)sync.*"

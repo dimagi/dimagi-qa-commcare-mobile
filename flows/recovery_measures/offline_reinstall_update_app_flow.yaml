@@ -4,12 +4,15 @@ tags:
   - partial
 ---
 # Master Mobile Plan (2026) > Recovery Measures > Recovery: Offline
-# Reinstall and Update App (Setup 1, Recovery (offline) 1, 3, 7, 10, 11 -
-# the Automatable rows). Recovery (offline) 2, 4, 5, 6, 8, 9 are explicitly
-# out of scope here per task instructions - they need adb file pushes to
-# custom paths, adb file relocation, "no CCZ found" + manual file-picker
-# recovery, or a device uninstall/reinstall + a second HQ mark-released
-# call, none of which this flow attempts.
+# Reinstall and Update App (Setup 1, Recovery (offline) 10, 11 - the
+# Automatable rows this file actually covers). Recovery (offline) 1 and 3
+# were REMOVED from this file's scope (2026-08-10) - see the UPDATE note
+# below: the forced trigger fires immediately on login, so there is no
+# "no forced screen yet" state to observe and no normal update-to-Two step
+# to exercise for this app. Recovery (offline) 2, 4, 5, 6, 7, 8, 9 live in
+# their own separate flow files (offline_05/06/08/09) or remain out of scope
+# per those files' own headers (adb file pushes to custom paths, adb file
+# relocation, "no CCZ found" + manual file-picker recovery).
 #
 # UNVERIFIED TEXT WARNING: as with reinstall_update_app_flow.yaml (this
 # file's template), treat the sheet's literal wording as
@@ -47,57 +50,39 @@ tags:
 # "Select CCZ" -> file-picker step will need a human to intervene or this
 # flow's tapOn to be pointed at a known real filename.
 #
-# Setup 1 is the HQ-side "download/deploy" step (Partial - needs HQ API);
-# only the login portion is automated here.
-# Recovery (offline) 2 is Partial ("HQ API: mark build released"). Run
-# hq_setup/recovery_measures/offline_reinstall_update_app_flow.json's HQ
-# action (mark the next test build released, queuing a
-# MEASURE_TYPE_APP_OFFLINE_REINSTALL_AND_UPDATE measure) at the point marked
-# below - split this into two Maestro runs in practice, or extend
-# run_suite.py to pause here. (Not writing the actual hq_setup JSON per task
-# scope - just flagging it.)
-# UPDATE, confirmed live (run 31276111657): this flow's very first step
-# used to be a bare `runFlow: ../common/login.yaml` with no app ever
-# installed first - it assumed some "Test One"/"Test Two"/"Test Three" app
-# was already on the device from an earlier, undocumented step. That's
-# never true when this flow runs on its own (this repo's "each flow
-# runnable in isolation" convention, docs/FRAMEWORK.md), so it failed
-# outright stuck on the pre-install "Welcome to CommCare!" screen -
-# `login.yaml` could never find edit_username there.
-# RESOLVED (2026-08-09): per Master Mobile Plan (2026) > Recovery: Reinstall
-# and Update App > Setup 1's own linked HQ Releases URL (user-supplied):
-# https://www.commcarehq.org/a/qateam/apps/view/c49c34a1d74297ecb6ecef7a7c5d3f88/releases/
-# "Test One"/"Test Two"/"Test Three" are this ONE app's own sequential
-# release labels (per that row's own summary: "This will become the new
-# Test One... repeat for version two and three"), not separate apps - see
-# scripts/app_registry.py's RECOVERY_MEASURES entry. Installing its current
-# build here is enough to reach the login screen this flow actually needs.
+# UPDATE (2026-08-10): this app (id 8009e8a2814a465b818d56284011b1e9,
+# "Recovery: Offline Reinstall and Update App" - a SEPARATE app from the
+# non-offline "Reinstall and Update App" other recovery_measures flows use,
+# confirmed via each app's own Releases page title) has its own real
+# Test One/Two/Three builds - see scripts/app_registry.py's
+# OFFLINE_TEST_ONE/TWO/THREE entries.
+# UPDATE (2nd correction, 2026-08-10): the "Recovery (offline) 1 - no forced
+# recovery screen yet" assumption below and the normal update-to-Test-Two
+# step that used to follow it were both WRONG - confirmed live in ISOLATION
+# (run 6151522a9e31384f43802347b2456fef83391a5b, a single-flow build) that
+# logging into this app on a FRESH TEST ONE install triggers the forced
+# "Select CCZ" recovery screen IMMEDIATELY, with no home screen ever
+# reachable at all (so there is no "Start" to assert, and the "Update App"
+# menu the removed step depended on is unreachable regardless).
+# UPDATE (3rd correction, 2026-08-10): the measure IS still gated on release
+# status, same mechanism as the non-offline family (device version <
+# currently-released top version => stale => trigger) - see
+# offline_09_uninstall_reinstall_test_two.yaml's own 3rd-correction note for
+# the live evidence that disproved "unconditional." Test One simply almost
+# always looks stale under normal test setup, since it's the lowest of the
+# three real builds and something newer is normally released - not because
+# release status is irrelevant.
 - runFlow:
     file: ../common/install_app_by_code.yaml
     env:
-      APP_CODE: ${APP_CODE_RECOVERY_MEASURES}
+      APP_CODE: ${APP_CODE_OFFLINE_TEST_ONE}
 - runFlow:
     file: ../common/login.yaml
     env:
       USERNAME: ${CC_TEST_USERNAME}
       PASSWORD: ${CC_TEST_PASSWORD}
-# Recovery (offline) 1 - pre-update sanity: no forced recovery screen yet.
-- assertVisible: "Start"
-- assertNotVisible:
-    text: "(?i).*recovery (procedures|measures).*initiated.*"
-- assertNotVisible:
-    text: "(?i).*select ccz.*"
-# --- HQ pre-step runs here in a real execution: mark next build released
-# and queue an app_offline_reinstall_and_update recovery measure
-# (Recovery (offline) 2, Partial) ---
-- runFlow: ../common/logout.yaml
-- runFlow:
-    file: ../common/login.yaml
-    env:
-      USERNAME: ${CC_TEST_USERNAME}
-      PASSWORD: ${CC_TEST_PASSWORD}
-# Recovery (offline) 3 - the queued measure triggers automatically; only the
-# CCZ-only path is shown (see header comment), no chooser dialog.
+# Recovery (offline) 10 - the forced measure triggers immediately on login;
+# only the CCZ-only path is shown (see header comment), no chooser dialog.
 - assertVisible:
     text: "(?i).*recovery (procedures|measures).*initiated.*"
 - assertVisible:

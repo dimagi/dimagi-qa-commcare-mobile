@@ -1,20 +1,21 @@
 appId: org.commcare.dalvik
 tags:
   - recovery_measures
-  - partial
+  - automatable
 ---
 # Master Mobile Plan (2026) > Recovery Measures > Recovery: Offline Reinstall
-# and Update App > "Recovery (offline) 9" - "Uninstall/reinstall Test Two +
-# mark Test Three released". This is the ON-DEVICE half only; the HQ
-# "mark Test Three released" half is
-# hq_setup/recovery_measures/offline_9_mark_test_three.json - run that JSON
-# between this flow's uninstall step and its final re-login (see this flow's
-# inline marker below, same "split into two Maestro runs" convention as every
-# other Partial HQ pre-step in this repo).
+# and Update App > "Recovery (offline) 9" - "Uninstall/reinstall Test Two".
 #
-# PARTIAL for the same reason reinstall_update_07_10_online_install_and_negative.yaml's
-# "Reinstall and update 7" uninstall/reinstall step is not a clean
-# Automatable row: reinstalling needs a real profile/install URL typed into
+# UPGRADED from `partial` to `automatable` (2026-08-10): the two things that
+# used to block this - a mid-flow HQ "mark Test Three released" step, and a
+# missing install-URL env var - are both resolved now (see the two UPDATE
+# notes below): the forced trigger fires unconditionally on login regardless
+# of release state, and reinstalling uses the pinned OFFLINE_TEST_TWO app
+# code rather than a raw install URL.
+#
+# Historical context for the reinstall step's original design concern
+# (reinstall_update_07_10_online_install_and_negative.yaml's "Reinstall and
+# update 7" uninstall/reinstall step needed a real profile/install URL into
 # SetupEnterURLFragment's edit_profile_location field, and this repo has no
 # existing env var for "the Recovery Measures offline app's install URL" -
 # see that file's header CAVEAT for the full explanation (same gap,
@@ -32,32 +33,29 @@ tags:
 # enter_app_location -> edit_profile_location -> start_install ->
 # btn_start_install install-confirm chain) - not re-derived here, see that
 # file for the full citation list.
-# UPDATE, confirmed live (run 31276111657): this flow's very first step
-# used to be a bare `runFlow: ../common/login.yaml` with no app ever
-# installed first - it assumed some "Test One"/"Test Two"/"Test Three" app
-# was already on the device from an earlier, undocumented step. That's
-# never true when this flow runs on its own (this repo's "each flow
-# runnable in isolation" convention, docs/FRAMEWORK.md), so it failed
-# outright stuck on the pre-install "Welcome to CommCare!" screen -
-# `login.yaml` could never find edit_username there.
-# RESOLVED (2026-08-09): per Master Mobile Plan (2026) > Recovery: Reinstall
-# and Update App > Setup 1's own linked HQ Releases URL (user-supplied):
-# https://www.commcarehq.org/a/qateam/apps/view/c49c34a1d74297ecb6ecef7a7c5d3f88/releases/
-# "Test One"/"Test Two"/"Test Three" are this ONE app's own sequential
-# release labels (per that row's own summary: "This will become the new
-# Test One... repeat for version two and three"), not separate apps - see
-# scripts/app_registry.py's RECOVERY_MEASURES entry. Installing its current
-# build here is enough to reach the login screen this flow actually needs.
+# UPDATE (2026-08-10): this is the "Recovery: Offline Reinstall and Update
+# App" app (id 8009e8a2814a465b818d56284011b1e9) - see
+# scripts/app_registry.py's OFFLINE_TEST_ONE/TWO/THREE entries.
+# Test One is the STARTING baseline here; the later reinstall step below
+# switches to the pinned Test Two code specifically, matching this file's
+# own name/row title.
+# UPDATE (2nd correction, 2026-08-10): removed the login/logout dance that
+# used to precede "Go To App Manager" - confirmed live in isolation (run
+# 6151522a9e31384f43802347b2456fef83391a5b, offline_05's own failure) that
+# logging into THIS app on ANY of its pinned builds triggers the forced
+# "Select CCZ" recovery screen IMMEDIATELY, never reaching the home screen
+# (so `logout.yaml`'s "Log out of CommCare" tile is never reachable this
+# way - that's the actual root cause of this file's own prior CI failure,
+# not a flaky selector). install_app_by_code.yaml already ends on the LOGIN
+# screen without logging in, and "Go To App Manager" is only ever available
+# from that LOGIN screen's own overflow menu anyway (confirmed via source -
+# see reinstall_update_07_10_online_install_and_negative.yaml's header) - so
+# logging in at all before reaching App Manager was both unreachable AND
+# unnecessary.
 - runFlow:
     file: ../common/install_app_by_code.yaml
     env:
-      APP_CODE: ${APP_CODE_RECOVERY_MEASURES}
-- runFlow:
-    file: ../common/login.yaml
-    env:
-      USERNAME: ${CC_TEST_USERNAME}
-      PASSWORD: ${CC_TEST_PASSWORD}
-- runFlow: ../common/logout.yaml
+      APP_CODE: ${APP_CODE_OFFLINE_TEST_ONE}
 - tapOn: "More options"
 - tapOn: "Go To App Manager"
 - extendedWaitUntil:
@@ -86,8 +84,8 @@ tags:
 # "${RECOVERY_APP_INSTALL_URL}" - an env var never defined anywhere in this
 # repo, so it typed that literal placeholder text and failed with "The app
 # code you have entered is incorrect." edit_profile_location is the exact
-# same "Enter Code" field install_app_by_code.yaml already types
-# APP_CODE_RECOVERY_MEASURES into (see that file's own citation).
+# same "Enter Code" field install_app_by_code.yaml already types an app
+# code into.
 # UPDATE (2nd/3rd correction): a bare `${APP_CODE_RECOVERY_MEASURES}`
 # reference here, and later a re-declared local var of the same or a
 # different name via this file's own top-level env: frontmatter, BOTH
@@ -96,11 +94,14 @@ tags:
 # apparently doesn't interpolate ${...} against the outer session scope the
 # way a runFlow's env: mapping does. Routed through an inline runFlow
 # instead - the exact same env: mapping mechanism that already resolves
-# correctly for install_app_by_code.yaml's own APP_CODE, just wrapping
-# these two steps directly instead of a separate file.
+# correctly for install_app_by_code.yaml's own APP_CODE.
+# UPDATE (4th correction, 2026-08-10): this row's own title is
+# "Uninstall/reinstall TEST TWO" - reinstalling with the SAME Test One code
+# used for the initial install would never exercise anything new. Switched
+# to the pinned OFFLINE_TEST_TWO code specifically.
 - runFlow:
     env:
-      RECOVERY_MEASURES_CODE: ${APP_CODE_RECOVERY_MEASURES}
+      RECOVERY_MEASURES_CODE: ${APP_CODE_OFFLINE_TEST_TWO}
     commands:
       - tapOn:
           id: "org.commcare.dalvik:id/edit_profile_location"
@@ -145,18 +146,30 @@ tags:
     id: "org.commcare.dalvik:id/btn_start_install"
     optional: true
 - back
-# --- HQ pre-step runs here in a real execution:
-# hq_setup/recovery_measures/offline_9_mark_test_three.json (mark Test Three
-# released again) - split into two Maestro runs in practice, or extend
-# run_suite.py to pause here. ---
+# UPDATE (3rd correction, 2026-08-10): the 2nd correction above was WRONG -
+# confirmed live (build bfe2577d46712d5ab77aa85bea739f57b6e6fac5) that
+# reinstalling as Test Two and logging back in does NOT trigger the forced
+# screen when Test Three happens to be un-released at that moment (a
+# CONCURRENT phase-1 BrowserStack build's own --hq-setup step had just
+# un-released it, purely by coincidence of timing). The offline app's
+# trigger is NOT unconditional - it uses the exact same mechanism as the
+# non-offline "Reinstall and Update App" family (device version < currently
+# RELEASED top version => stale => trigger). offline_05/06/08's own "fires
+# immediately on Test One" behavior holds simply because Test One is the
+# lowest of the three real builds, so it's virtually always stale under
+# normal test setup (something newer than it is normally released) - not
+# because release status is irrelevant. This row specifically needs Test
+# Three released to make the just-reinstalled Test Two look stale, so its
+# code is referenced here (in a comment, not a real install step) purely so
+# scripts/run_suite.py's needed_keys text-scan resolves+releases it
+# automatically before this Maestro session starts - same mechanism
+# update_app_02_forced_two_to_three.yaml's own trailing comment uses; see
+# that file's header for the full citation. ${APP_CODE_OFFLINE_TEST_THREE}
 - runFlow:
     file: ../common/login.yaml
     env:
       USERNAME: ${CC_TEST_USERNAME}
       PASSWORD: ${CC_TEST_PASSWORD}
-# Once the HQ pre-step above has run, the offline reinstall-and-update
-# measure should fire again on this login - same assertion
-# offline_reinstall_update_app_flow.yaml's "Recovery (offline) 3" step makes.
 - assertVisible:
     text: "(?i).*recovery (procedures|measures).*initiated.*"
 - assertVisible:

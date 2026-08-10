@@ -1,0 +1,25 @@
+appId: org.commcare.dalvik
+tags:
+  - right_to_left_text
+  - partial
+---
+# Master Mobile Plan (2026) > Right to Left Text > "Login 2" - Body: app-list
+# dropdown triangle bottom-left, dropdown/username/password right alignment.
+#
+# GAP: right-alignment of text WITHIN a single field (gravity/textAlignment)
+# is intra-widget rendering, not a position relationship between two
+# elements - Maestro's selectors (leftOf/rightOf/above/below) only compare
+# DISTINCT elements' bounds, so there is no Maestro primitive that can verify
+# "this text starts from the right edge of its own box." This applies to
+# every alignment sub-claim in this row; only presence is verified below.
+# app_selection_spinner is `visibility="gone"` by default (single-app
+# install per app/src/org/commcare/activities/LoginActivityUIController.java)
+# so its own dropdown-triangle claim is moot for this test app.
+- runFlow: switch_to_arabic.yaml
+- runFlow: ../common/logout.yaml
+- assertVisible:
+    id: "org.commcare.dalvik:id/edit_username"
+- assertVisible:
+    id: "org.commcare.dalvik:id/password_wrapper"
+- assertVisible:
+    id: "org.commcare.dalvik:id/edit_password"

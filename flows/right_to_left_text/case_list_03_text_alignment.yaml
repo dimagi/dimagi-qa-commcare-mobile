@@ -1,0 +1,20 @@
+appId: org.commcare.dalvik
+tags:
+  - right_to_left_text
+  - partial
+---
+# Master Mobile Plan (2026) > Right to Left Text > "Case list 3" - Text
+# alignment in columns: verify Arabic name/age are right aligned.
+#
+# Same HARD GAP as case_list_02_column_order.yaml (runtime-generated cell
+# ids, app-config-driven case data - see that file's header). Additionally,
+# this row is intra-widget text alignment even if the cells did have stable
+# ids (see login_02's general explanation) - a doubly non-automatable claim.
+# Confirms the list still renders only.
+- runFlow: switch_to_arabic.yaml
+- tapOn: "Start"
+- tapOn:
+    id: "org.commcare.dalvik:id/row_txt"
+    index: 1
+- assertVisible:
+    id: "org.commcare.dalvik:id/screen_entity_select_list"

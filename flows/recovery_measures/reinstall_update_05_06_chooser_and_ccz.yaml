@@ -1,0 +1,53 @@
+appId: org.commcare.dalvik
+tags:
+  - recovery_measures
+  - recovery_phase2
+  - partial
+---
+# Master Mobile Plan (2026) > Recovery Measures > Recovery: Reinstall and
+# Update App > "Reinstall/Update 5, 6" - reinstall-needed chooser appears
+# once on Test Two with Test Three released; reinstall via CCZ, expect
+# auto-logout.
+#
+# SPLIT OUT (2026-08-10) from what used to be reinstall_update_app_flow.yaml
+# (Reinstall/Update 1, 5, 6 combined in one file, with a bare comment "HQ
+# pre-step runs here in a real execution" marking where a mid-flow HQ action
+# was needed). That combined file could never really pass end-to-end in one
+# BrowserStack session: reaching Test Two required a NORMAL update-check
+# (needs Test Three UN-released, or CommCareHQ's "highest released build"
+# behavior jumps straight past Two to Three - confirmed live, see
+# update_app_01_normal_update_to_two.yaml's header), while the reinstall
+# chooser on this row needs Test Three RELEASED to make Two look stale - two
+# contradictory release states inside one continuous session. Sidesteps this
+# the same way update_app_02_forced_two_to_three.yaml does: install Test Two
+# directly (self-contained) rather than reaching it via a normal update, so
+# this file only ever needs the phase-2 (Three released) state.
+# UNVERIFIED TEXT WARNING (unchanged from the old combined file): the
+# reinstall-needed message and "Reinstall Using CCZ"/"Online Install" button
+# labels aren't in android_translatable_strings.txt - Recovery Measures
+# message text is admin-configurable on the HQ recovery page, not a fixed
+# app string. Best-effort case-insensitive regex only.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_RU_TEST_TWO}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+# Reinstall/Update 5 - reinstall-needed message should appear (Two is stale
+# relative to the now-released Three).
+- assertVisible:
+    text: "(?i).*reinstall.*"
+- assertVisible:
+    text: "(?i).*Reinstall.*CCZ.*"
+- assertVisible:
+    text: "(?i).*Online.*"
+# Reinstall/Update 6 - reinstall via CCZ, expect auto-logout afterward.
+- tapOn:
+    text: "(?i).*Reinstall.*CCZ.*"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/edit_username"
+    timeout: 30000
