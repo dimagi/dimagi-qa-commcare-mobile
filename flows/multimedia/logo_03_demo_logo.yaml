@@ -32,8 +32,14 @@ tags:
 # logo-chain citation and its CAVEAT about the logo ImageView having no
 # distinct resource id (id/toolbar is asserted as a best-effort proxy here
 # too).
-- launchApp:
-    clearState: true
+# UPDATE, confirmed live 2026-08-11: this used to go straight to `launchApp:
+# clearState: true` with no install step - same bug found in
+# logo_01_login_logo.yaml (see that file's header). Added the missing
+# install step.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_MULTIMEDIA}
 - tapOn: "More options"
 - tapOn: "Enter Practice Mode"
 - assertVisible: "Starting Practice Mode"

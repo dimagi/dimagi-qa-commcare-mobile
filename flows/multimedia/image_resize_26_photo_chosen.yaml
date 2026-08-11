@@ -6,16 +6,19 @@ tags:
 # Master Mobile Plan (2026) > Multimedia > "Image Resize 26" - Photo chosen
 # (from gallery) per question + submit.
 #
-# NAVIGATION PARTIALLY CORRECTED, ONE ASSUMPTION STILL OPEN: the real
-# "Multimedia" QA app (qateam - Multimedia CCZ, resources/) confirms "Image
-# Resize" is its own top-level module reached directly from Start (removed
-# an erroneous extra "Multimedia" tap that used to precede it - see
-# image_resize_01_04_default_setting.yaml's header for the full citation).
-# BUT it also shows "Image Resize" contains FIVE SEPARATE single-purpose
-# forms (Large/Small/Wide/Tall/Smart Image), not one form with four image
-# questions in sequence as the repeat loop below still assumes - unlike
-# 01-24 (view-only), this flow hasn't been restructured to select each form
-# individually yet. Treat as unverified until that's done.
+# NAVIGATION CORRECTED (2026-08-11, was previously wrong - see history):
+# the real "Multimedia" QA app (qateam - Multimedia CCZ, resources/)
+# confirms "Image Resize" is its own top-level module reached directly from
+# Start (same as image_resize_01_04_default_setting.yaml), and it contains
+# FIVE SEPARATE single-purpose forms (Large/Small/Wide/Tall/Smart Image),
+# each with its own one photo question - NOT one combined form with four
+# questions in sequence as this flow used to assume (confirmed live,
+# 2026-08-10: failed at the very first "Choose Image" tap since the device
+# was sitting on the "Image Resize" form-list menu, not inside a form with
+# a Choose Image widget yet). Restructured to open each of the four forms
+# individually (Smart Image not exercised, matching image_resize_01_04's
+# own convention), mirroring that file's Large/Small/Wide/Tall selection
+# pattern.
 #
 # addMedia pushes a small local placeholder PNG (assets/sample_image.png)
 # into the device's gallery so "Choose Image" - a real Android
@@ -27,12 +30,13 @@ tags:
 # whichever picker UI the OS shows is delegated to
 # ../common/pick_first_gallery_image.yaml (see that file for the
 # addMedia-picker selector citation); reusing the exact same picked image
-# for all four questions satisfies the sheet's "select the same image for
-# all four questions".
+# for all four forms satisfies the sheet's "select the same image for all
+# four questions".
 #
-# nav_btn_next / nav_btn_finish ids verified against
-# res/layout/screen_form_entry.xml and FormAttachmentUploadTest.java's use
-# of R.id.nav_btn_next/nav_btn_finish to advance/submit a form.
+# nav_btn_finish id verified against res/layout/screen_form_entry.xml and
+# FormAttachmentUploadTest.java's use of R.id.nav_btn_finish to submit a
+# form - each of these forms has exactly one question, so nav_btn_finish
+# (not nav_btn_next) is the only nav button ever needed here.
 - addMedia:
     - "./assets/sample_image.png"
 # Prepends install_app_as_web_user.yaml (APP_NAME: Multimedia) - a fresh
@@ -50,15 +54,13 @@ tags:
       PASSWORD: ${CC_TEST_PASSWORD}
 - tapOn: "Start"
 - tapOn: "Image Resize"
-# Questions 1-3: choose the image, then advance.
-- repeat:
-    times: 3
-    commands:
-      - tapOn: "Choose Image"
-      - runFlow: ../common/pick_first_gallery_image.yaml
-      - tapOn:
-          id: "org.commcare.dalvik:id/nav_btn_next"
-# Question 4 (last): choose the image, then finish instead of advancing.
+# Image Resize 26 - Large/Small/Wide/Tall Image, one photo question each.
+# UPDATE: Maestro's `repeat` has no items/for-each mode (`maestro
+# check-syntax` rejects `items:` outright - "Unknown Property: items"), so
+# this is four explicit blocks rather than a loop, matching
+# image_resize_01_04_default_setting.yaml's own convention of naming each
+# form individually.
+- tapOn: "Large Image"
 - tapOn: "Choose Image"
 - runFlow: ../common/pick_first_gallery_image.yaml
 - extendedWaitUntil:
@@ -67,3 +69,74 @@ tags:
     timeout: 10000
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_finish"
+- repeat:
+    times: 5
+    while:
+      notVisible:
+        text: "Image Resize"
+    commands:
+      - back
+- extendedWaitUntil:
+    visible:
+      text: "Image Resize"
+    timeout: 5000
+- tapOn: "Small Image"
+- tapOn: "Choose Image"
+- runFlow: ../common/pick_first_gallery_image.yaml
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_finish"
+    timeout: 10000
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"
+- repeat:
+    times: 5
+    while:
+      notVisible:
+        text: "Image Resize"
+    commands:
+      - back
+- extendedWaitUntil:
+    visible:
+      text: "Image Resize"
+    timeout: 5000
+- tapOn: "Wide Image"
+- tapOn: "Choose Image"
+- runFlow: ../common/pick_first_gallery_image.yaml
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_finish"
+    timeout: 10000
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"
+- repeat:
+    times: 5
+    while:
+      notVisible:
+        text: "Image Resize"
+    commands:
+      - back
+- extendedWaitUntil:
+    visible:
+      text: "Image Resize"
+    timeout: 5000
+- tapOn: "Tall Image"
+- tapOn: "Choose Image"
+- runFlow: ../common/pick_first_gallery_image.yaml
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_finish"
+    timeout: 10000
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"
+- repeat:
+    times: 5
+    while:
+      notVisible:
+        text: "Start"
+    commands:
+      - back
+- extendedWaitUntil:
+    visible:
+      text: "Start"
+    timeout: 5000

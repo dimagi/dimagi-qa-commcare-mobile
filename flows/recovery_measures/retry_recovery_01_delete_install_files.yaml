@@ -53,6 +53,13 @@ tags:
 # retry_recovery_02_network_toggle_retry.yaml exercises independently rather
 # than chaining off of this file, per docs/FRAMEWORK.md's "each flow must be
 # runnable in isolation" convention):
+#
+# UPDATE, confirmed 2026-08-11 (logic review, not a live CI failure - this
+# file has no assertion to catch it): `clearState: true` was a real bug -
+# it wipes the app's install/data entirely, undoing the exact adb-corruption
+# precondition this flow exists to act on and the pending recovery measure
+# along with it. The header's own stated intent is just "closing and
+# reopening" - `clearState: true` contradicts that. Removed (Maestro's
+# launchApp defaults clearState to false).
 - stopApp
-- launchApp:
-    clearState: true
+- launchApp
