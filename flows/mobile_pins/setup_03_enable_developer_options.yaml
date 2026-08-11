@@ -36,6 +36,15 @@ tags:
 #       is true (app/src/org/commcare/preferences/MainConfigurablePreferences.java
 #       findPreference(DEVELOPER_SETTINGS)).
 #     dialog.ok=OK (About CommCare dialog's positive button).
+#
+# UPDATE, confirmed live 2026-08-11 (CI run 31476507436, build
+# 606d5932732d5f9a92c405940f6ee35974d96d5a): the final "Assert that 'Start'
+# is visible" failed - the failure screenshot showed the device sitting on
+# the Samsung OS home screen (Gallery/Play Store/Google folder, phone dock),
+# not CommCare at all. Settings is only ONE screen deep from Start - a
+# single `back` already returns there; the second `back` this flow used to
+# send afterward over-shot past the app's own root activity and exited to
+# the OS. Removed the redundant second back.
 - runFlow:
     file: ../common/install_app_by_code.yaml
     env:
@@ -63,6 +72,5 @@ tags:
 - tapOn: "More options"
 - tapOn: "Settings"
 - assertVisible: "Developer Options"
-- back
 - back
 - assertVisible: "Start"

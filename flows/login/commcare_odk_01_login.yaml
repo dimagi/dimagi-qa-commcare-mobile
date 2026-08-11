@@ -27,20 +27,27 @@ tags:
 #     login_button (LoginActivity.java field ids).
 #   android_translatable_strings.txt home.start=Start - the home-screen
 #     landmark asserted below (same as every other flow in this repo).
+#
+# UPDATE, confirmed live 2026-08-11 (CI run 31476507436, build
+# cab0f13a6eade2841d2eedc5e9376bdeb398cbb4): this used to hand-roll its own
+# username/password entry + login tap instead of calling
+# ../common/login.yaml, missing every real-world hardening that shared
+# subflow has picked up (Gboard's one-time keyboard-consent popup, a "Bad
+# Server Response" transient key-exchange failure needing a real retry, and
+# - the actual cause of this specific failure - the post-login data-restore/
+# sync dialog, which can sit on "Processing Data from Server" well past
+# when a bare `assertVisible: "Start"` fires). Switched to the shared
+# subflow rather than re-duplicating its own fixes here - this drops the
+# "Logging in" dialog check (common/login.yaml has no hook for it), but
+# that check was already flagged `optional` above since Maestro's poll may
+# not catch a fast dialog anyway, so nothing reliably-tested is lost.
 - runFlow:
     file: ../common/install_app_by_code.yaml
     env:
       APP_CODE: ${APP_CODE_BASIC_TESTS}
-- tapOn:
-    id: "org.commcare.dalvik:id/edit_username"
-- inputText: "${CC_TEST_USERNAME}"
-- tapOn:
-    id: "org.commcare.dalvik:id/edit_password"
-- inputText: "${CC_TEST_PASSWORD}"
-- hideKeyboard
-- tapOn:
-    id: "org.commcare.dalvik:id/login_button"
-- assertVisible:
-    text: "Logging in"
-    optional: true
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
 - assertVisible: "Start"

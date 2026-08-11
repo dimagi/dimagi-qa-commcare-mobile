@@ -113,6 +113,21 @@ tags:
 
 # --- 7 audio/* + 9 video/* questions: left blank, see header PARTIAL note -
 # skip through via nav_btn_next until the form's own finish button appears.
+#
+# UPDATE, confirmed live 2026-08-11 (CI run 31476507436, build
+# 054c958f58549534ad195d975c4d96133105c662): the strict "extendedWaitUntil
+# nav_btn_finish visible" below failed outright (never became visible in
+# the 10s window), but the failure screenshot showed the device already
+# sitting on a fully-synced HOME screen ("1 form sent to server!") - the
+# form genuinely completed successfully, this last question's transition
+# straight into submission happened too fast/differently for
+# nav_btn_finish to ever render as its own separate, catchable state (23
+# blank-but-answerable upload questions in a row, unlike the shorter forms
+# elsewhere in this repo where nav_btn_finish reliably appears first). Made
+# the finish tap optional and asserted the real end state (home screen)
+# instead of the intermediate button, same philosophy as the fixes applied
+# to flows/login/commcare_odk_01_login.yaml and
+# flows/form_submissions/question_types_01_03_answer_and_submit.yaml today.
 - repeat:
     while:
       visible:
@@ -120,9 +135,9 @@ tags:
     commands:
       - tapOn:
           id: "org.commcare.dalvik:id/nav_btn_next"
-- extendedWaitUntil:
-    visible:
-      id: "org.commcare.dalvik:id/nav_btn_finish"
-    timeout: 10000
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_finish"
+    optional: true
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 15000

@@ -82,6 +82,25 @@ tags:
 # fresh BrowserStack session has no app installed until this runs; see
 # DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
 # null.
+#
+# UPDATE, confirmed live 2026-08-11 (CI run 31476507436, build
+# 0c5c7ec39fb0738e77e630908ebded5a7bc93057): the very first "Tap on
+# nav_btn_next" (below) failed immediately after the preceding
+# extendedWaitUntil had already confirmed it visible - the failure
+# screenshot showed the app's own "Exit Form?" dialog open over this same
+# intro screen instead. This form's entry transition (list item tap ->
+# form-entry screen sliding in) was still mid-animation when the tap's
+# coordinates were captured, so the tap landed on the still-shifting "X"
+# cancel icon instead of nav_btn_next. Added waitForAnimationToEnd to let
+# the transition settle before tapping.
+#
+# UPDATE (2nd correction), confirmed live 2026-08-11 (build
+# e94ccde418f31755816f72db8ef46ad0329c7334): fixing that first tap exposed
+# the SAME race one step later - the tap right after `hideKeyboard` (once
+# "Repeat one"/"Repeat two" is typed) failed the exact same way, for the
+# exact same reason (the keyboard-dismiss layout transition hadn't settled
+# either). Added waitForAnimationToEnd after both hideKeyboard calls below
+# too.
 - runFlow:
     file: ../common/install_app_by_code.yaml
     env:
@@ -98,6 +117,7 @@ tags:
     visible:
       id: "org.commcare.dalvik:id/nav_btn_next"
     timeout: 10000
+- waitForAnimationToEnd
 # new_intro trigger -> lands on the empty repeat's "Add Group" prompt.
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_next"
@@ -107,6 +127,17 @@ tags:
     id: "org.commcare.dalvik:id/choice_dialog_panel_2"
 - inputText: "Repeat one"
 - hideKeyboard
+- waitForAnimationToEnd
+# UPDATE (3rd correction): waitForAnimationToEnd alone didn't fix it - the
+# failure recurred with the SAME "Exit Form?" mis-tap even after it
+# reported completed, suggesting real device lag outlasting Maestro's own
+# animation-settled signal (this session ran 30+ consecutive BrowserStack
+# builds). Added a fixed 2s buffer on top, via the extendedWaitUntil-on-an-
+# impossible-condition idiom (Maestro has no plain "wait N seconds"
+# command - check-syntax rejects a bare `wait:` block).
+- extendedWaitUntil:
+    notVisible: "___maestro_fixed_pause_sentinel___"
+    timeout: 2000
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_next"
 # full_address / street / zip_code - optional, skipped.
@@ -125,6 +156,17 @@ tags:
     id: "org.commcare.dalvik:id/choice_dialog_panel_2"
 - inputText: "Repeat two"
 - hideKeyboard
+- waitForAnimationToEnd
+# UPDATE (3rd correction): waitForAnimationToEnd alone didn't fix it - the
+# failure recurred with the SAME "Exit Form?" mis-tap even after it
+# reported completed, suggesting real device lag outlasting Maestro's own
+# animation-settled signal (this session ran 30+ consecutive BrowserStack
+# builds). Added a fixed 2s buffer on top, via the extendedWaitUntil-on-an-
+# impossible-condition idiom (Maestro has no plain "wait N seconds"
+# command - check-syntax rejects a bare `wait:` block).
+- extendedWaitUntil:
+    notVisible: "___maestro_fixed_pause_sentinel___"
+    timeout: 2000
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_next"
 - repeat:

@@ -218,7 +218,16 @@ tags:
     optional: true
 
 # Done trigger - "Great work, you're done!" - last question before Finish.
-- assertVisible: "Great work, you're done!"
+# UPDATE, confirmed live 2026-08-11 (CI run 31476507436, build
+# 634acf0766953bbb4b83793f9101cd1313789e4c): a bare assertVisible here
+# failed, but the build's own failure screenshot showed the device already
+# sitting on a fully-synced HOME screen ("1 form sent to server!") - the
+# form genuinely completed successfully, this text just rendered and
+# cleared faster than a single instant check could catch it. Wrapped in
+# extendedWaitUntil, same as the nav_btn_finish wait immediately below.
+- extendedWaitUntil:
+    visible: "Great work, you're done!"
+    timeout: 10000
 - extendedWaitUntil:
     visible:
       id: "org.commcare.dalvik:id/nav_btn_finish"
