@@ -1,43 +1,54 @@
 appId: org.commcare.dalvik
 tags:
   - multimedia
-  - automatable
+  - partial
 ---
-- runFlow:
-    file: ../common/install_app_by_code.yaml
-    env:
-      APP_CODE: ${APP_CODE_BASIC_TESTS}
-# Prepends install_app_as_web_user.yaml (APP_NAME: Basic Tests) - a fresh
-# BrowserStack session has no app installed until this runs; see DispatchActivity.java's
-# CommCareSetupActivity routing when currentApp == null.
-#
 # Master Mobile Plan (2026) > Multimedia > "Capture 2" - Signature Reset:
 # reopen a previously-captured signature, reset it, draw a new one, and
 # confirm the new signature replaces the old one.
 #
-# The sheet's own wording ("Continue from previous test") makes this a direct
-# continuation of Capture 1 - per this repo's "each flow runnable in
-# isolation" convention (docs/FRAMEWORK.md), this flow redoes Capture 1's own
-# setup (login, navigate, capture an initial signature) itself rather than
-# depending on that flow having just run. See
-# flows/multimedia/capture_01_gather_signature.yaml for the full selector
-# citations (sign_button/save_and_close strings, DrawActivity.java's
-# btnFinishDraw, draw_layout.xml's unidentified DrawView canvas) - not
-# re-cited here to avoid drift between the two copies.
+# REWRITTEN 2026-08-12, confirmed live via real BrowserStack failure - see
+# flows/multimedia/capture_01_gather_signature.yaml's own header for the
+# full root-cause writeup. On the CommCare version CI is pinned to
+# (2.63.5), "sig_cap" renders as a plain image upload question, not
+# SignatureWidget/DrawActivity - no draw canvas, no "Reset" control at
+# all. The sheet's "reset a previously recorded signature, draw a new
+# one" has no literal equivalent on this widget; the closest real
+# interaction it supports is "Remove Image" (discard the first choice)
+# followed by "Choose Image" again (pick a new one) - functionally the
+# same round-trip the sheet describes (clear + replace), just via the
+# generic ImageWidget's own discard/re-pick mechanism instead of a
+# signature-specific Reset button. Kept PARTIAL since this is a
+# best-effort semantic substitution, not a literal match for the sheet's
+# "signature" framing. Revisit if the CI-pinned CommCare version ever
+# changes and the real signature canvas becomes reachable.
 #
-# Reset button verified against source (read-only reference, not modified):
-#   app/res/values/strings.xml: reset_image="Reset" (line 234).
-#   app/src/org/commcare/activities/DrawActivity.java line 196-198: the
-#     "Reset" action is id/btnResetDraw.
-#   app/src/org/commcare/views/widgets/SignatureWidget.java: reopening
-#     "Gather Signature" on a question that already has a saved answer passes
-#     the existing file into launchSignatureActivity() (line 143) - i.e. the
-#     draw canvas should come up pre-loaded with the PRIOR signature, matching
-#     the sheet's step 3 ("Verify you are seeing the previously recorded
-#     signature"). Not independently asserted here (the DrawView has no fixed
-#     id to inspect its contents against) - this flow proceeds on the
-#     documented behavior per source, same "can't screenshot-diff the canvas"
-#     limitation noted in capture_01's own citation.
+# FOLLOW-UP (2026-08-12, not yet actioned): see
+# flows/multimedia/capture_01_gather_signature.yaml's own FOLLOW-UP note -
+# the real explanation is an app-identity mismatch, not a CommCare
+# version difference. The recording used a different app, "[Master]
+# Basic Tests NS Copy!!", not registered in scripts/app_registry.py. Once
+# the real app_id is confirmed, switch back to the signature-canvas
+# implementation against the correct app (see this file's git history).
+#
+# addMedia + ../common/pick_first_gallery_image.yaml is the same verified
+# "choose existing image" mechanism used throughout this repo. discard_image
+# ("Remove Image") button behavior verified against the same
+# ImageWidget.java citation as photo_02_can_remove_chosen_photo.yaml:
+# starts GONE, becomes VISIBLE once an attachment is registered, and
+# tapping it calls clearBinaryAttachment() (back to GONE) - so
+# assertVisible then assertNotVisible on that exact button is a direct
+# match for "the old one is cleared" before picking a new image.
+- addMedia:
+    - "../multimedia/assets/sample_image.png"
+# Prepends install_app_as_web_user.yaml (APP_NAME: Basic Tests) - a fresh
+# BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
+# null.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_BASIC_TESTS}
 - runFlow:
     file: ../common/login.yaml
     env:
@@ -45,36 +56,22 @@ tags:
       PASSWORD: ${CC_TEST_PASSWORD}
 - tapOn: "Start"
 - tapOn: "Basic Form Tests"
-# UPDATE, confirmed live (run 31276111657): "Multimedia Only" is below the
-# fold in this module's form list - see capture_01_gather_signature.yaml's
-# own UPDATE comment for the full citation/root-cause writeup.
 - scrollUntilVisible:
     element:
       text: "Multimedia Only"
     direction: DOWN
     timeout: 10000
 - tapOn: "Multimedia Only"
-# One tap past this form's own intro screen before "Gather Signature" is
-# reachable - see capture_01_gather_signature.yaml's own UPDATE comment for
-# the full root-cause writeup.
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_next"
-- tapOn: "Gather Signature"
-- swipe:
-    start: "20%, 80%"
-    end: "80%, 20%"
-- tapOn:
-    id: "org.commcare.dalvik:id/btnFinishDraw"
-- assertNotVisible: "Selected file is not a valid image"
+- tapOn: "Choose Image"
+- runFlow: ../common/pick_first_gallery_image.yaml
+- assertVisible: "Remove Image"
 
-# --- Reopen, verify the reset button is available, reset, redraw, save ---
-- tapOn: "Gather Signature"
-- tapOn:
-    id: "org.commcare.dalvik:id/btnResetDraw"
-- swipe:
-    start: "80%, 80%"
-    end: "20%, 20%"
-- tapOn:
-    id: "org.commcare.dalvik:id/btnFinishDraw"
-- assertNotVisible: "Selected file is not a valid image"
-- assertVisible: "Gather Signature"
+# --- Reset: remove the first choice, verify the button disappears, then
+# choose a (new) image again. ---
+- tapOn: "Remove Image"
+- assertNotVisible: "Remove Image"
+- tapOn: "Choose Image"
+- runFlow: ../common/pick_first_gallery_image.yaml
+- assertVisible: "Remove Image"

@@ -6,68 +6,30 @@ tags:
 # Master Mobile Plan (2026) > Multimedia > "Image Resize 26" - Photo chosen
 # (from gallery) per question + submit.
 #
-# NAVIGATION CORRECTED (2026-08-11, was previously wrong - see history):
-# the real "Multimedia" QA app (qateam - Multimedia CCZ, resources/)
-# confirms "Image Resize" is its own top-level module reached directly from
-# Start (same as image_resize_01_04_default_setting.yaml), and it contains
-# FIVE SEPARATE single-purpose forms (Large/Small/Wide/Tall/Smart Image),
-# each with its own one photo question - NOT one combined form with four
-# questions in sequence as this flow used to assume (confirmed live,
-# 2026-08-10: failed at the very first "Choose Image" tap since the device
-# was sitting on the "Image Resize" form-list menu, not inside a form with
-# a Choose Image widget yet). Restructured to open each of the four forms
-# individually (Smart Image not exercised, matching image_resize_01_04's
-# own convention), mirroring that file's Large/Small/Wide/Tall selection
-# pattern.
+# REWRITTEN 2026-08-12 from a real on-device recording the user captured.
+# Every previous version of this file assumed the target was the separate
+# top-level "Image Resize" MODULE (Large/Small/Wide/Tall/Smart, each its
+# own multi-question form) - that assumption was wrong. The real target,
+# confirmed live, is a much simpler SINGLE FORM: "Multimedia" (module) >
+# "Image Resize" (form, the 2nd item in that module's own form list, name-
+# colliding with the unrelated sibling module of the same name). Ground-
+# truthed against the real CCZ (resources/qateam - Multimedia - v381.ccz,
+# modules-0/forms-1.xml): an intro trigger, then four image/* upload
+# questions in a fixed sequence - Original_Size, Small, Medium, Large -
+# each its own screen (no group wrapping), none required.
 #
 # addMedia pushes a small local placeholder PNG (assets/sample_image.png)
-# into the device's gallery so "Choose Image" - a real Android
-# photo-picker intent, see views/widgets/ImageWidget.java's mChooseButton ->
+# into the device's gallery so "Choose Image" - a real Android photo-picker
+# intent, see views/widgets/ImageWidget.java's mChooseButton ->
 # WidgetUtils.createPickMediaIntent(getContext(), "image/*") /
 # FormEntryConstants.IMAGE_CHOOSER - has something to select. "Choose
 # Image" button text verified against res/values/strings.xml:223
 # (choose_image = "Choose Image"). Picking the pushed image out of
 # whichever picker UI the OS shows is delegated to
-# ../common/pick_first_gallery_image.yaml (see that file for the
-# addMedia-picker selector citation); reusing the exact same picked image
-# for all four forms satisfies the sheet's "select the same image for all
-# four questions".
-#
-# UPDATE, confirmed live 2026-08-11 (CI run 31476507436, build
-# d6f151756091652189efed01c2fc66975593dfe9): "Tap on Choose Image" failed -
-# the failure screenshot showed the device still on "Large Image"'s very
-# FIRST screen (image_intro trigger, "This form will test how large images
-# display..." with an "OK. Please continue." checkbox). Ground-truthed
-# against the real CCZ (resources/qateam - Multimedia - v381.ccz,
-# modules-1/forms-0.xml through forms-3.xml): each of these four forms is
-# NOT a single photo question - it's a much longer form (image_intro
-# trigger -> text_image input -> large_label trigger -> large_single/
-# large_multi selects -> list_intro trigger -> a field-list group
-# containing large_num/large_id/THEN the actual image upload widget
-# alongside audio/video upload siblings -> large_sig signature -> decimal/
-# date/time/date_time -> gps_image (geopoint, no maps appearance, same
-# best-effort caveat as flows/case_filters/geoservices_01_register_case.yaml)
-# -> barcode_image -> hidden_large). None of this form's <bind> elements
-# carry required="true()" (verified same way as
-# flows/form_submissions/question_types_01_03_answer_and_submit.yaml), so
-# it's safe to generically page through with nav_btn_next until the image
-# upload question's own "Choose Image" button appears, matching this
-# repo's established generic-navigation convention
-# (flows/common/navigate_form_no_errors.yaml). Same fix applied to all four
-# forms below.
-#
-# nav_btn_finish id verified against res/layout/screen_form_entry.xml and
-# FormAttachmentUploadTest.java's use of R.id.nav_btn_finish to submit a
-# form.
-#
-# UPDATE (2nd correction), confirmed live 2026-08-11 (build
-# 8b6304c1dbb80d89db47ea2c13292357e4fd4882): the very first nav_btn_next tap
-# inside the new "page through until Choose Image" loop failed - same
-# transition-settle race documented in
-# flows/form_submissions/repeat_groups_01_05_add_and_submit.yaml's own
-# UPDATE (the extendedWaitUntil confirms nav_btn_next visible, but the tap
-# right after can still land mid-animation). Added waitForAnimationToEnd
-# before each of the four loops below.
+# ../common/pick_first_gallery_image.yaml; reusing the exact same picked
+# image for all four questions satisfies the sheet's "select the same
+# image for all four questions". nav_btn_next/nav_btn_finish ids verified
+# against res/layout/screen_form_entry.xml.
 - addMedia:
     - "./assets/sample_image.png"
 # Prepends install_app_as_web_user.yaml (APP_NAME: Multimedia) - a fresh
@@ -84,210 +46,44 @@ tags:
       USERNAME: ${CC_TEST_USERNAME}
       PASSWORD: ${CC_TEST_PASSWORD}
 - tapOn: "Start"
+# UPDATE, confirmed live 2026-08-12: a plain `tapOn: "Multimedia"` here
+# landed on the WRONG "Image Resize" afterward - the separate, unrelated
+# top-level MODULE (Large/Small/Wide/Tall/Smart Image forms), not the form
+# inside the "Multimedia" module this flow actually targets. Root cause:
+# "Multimedia" is ALSO this app's own toolbar title, and matches ambiguously.
+# Scoped to the row_txt id, the same fix already proven live in
+# flows/multimedia/photo_01_can_remove_taken_photo.yaml and
+# photo_02_can_remove_chosen_photo.yaml for this exact ambiguity.
+- tapOn:
+    id: "org.commcare.dalvik:id/row_txt"
+    text: "Multimedia"
 - tapOn: "Image Resize"
-# Image Resize 26 - Large/Small/Wide/Tall Image, one photo question each.
-# UPDATE: Maestro's `repeat` has no items/for-each mode (`maestro
-# check-syntax` rejects `items:` outright - "Unknown Property: items"), so
-# this is four explicit blocks rather than a loop, matching
-# image_resize_01_04_default_setting.yaml's own convention of naming each
-# form individually.
-- tapOn: "Large Image"
 - extendedWaitUntil:
     visible:
       id: "org.commcare.dalvik:id/nav_btn_next"
     timeout: 10000
-- waitForAnimationToEnd
-# UPDATE (3rd correction): waitForAnimationToEnd alone didn't fix it - the
-# failure recurred (back on the "Image Resize" list, as if the form never
-# opened) even after it reported completed, suggesting real device lag
-# outlasting Maestro's own animation-settled signal (this session ran 30+
-# consecutive BrowserStack builds). Added a fixed 2s buffer on top, via the
-# extendedWaitUntil-on-an-impossible-condition idiom (Maestro has no plain
-# "wait N seconds" command - check-syntax rejects a bare `wait:` block).
-- extendedWaitUntil:
-    notVisible: "___maestro_fixed_pause_sentinel___"
-    timeout: 2000
-- repeat:
-    times: 20
-    while:
-      notVisible: "Choose Image"
-    commands:
-      - tapOn:
-          id: "org.commcare.dalvik:id/nav_btn_next"
-- tapOn: "Choose Image"
-- runFlow: ../common/pick_first_gallery_image.yaml
-- repeat:
-    times: 20
-    while:
-      visible:
-        id: "org.commcare.dalvik:id/nav_btn_next"
-    commands:
-      - tapOn:
-          id: "org.commcare.dalvik:id/nav_btn_next"
-- extendedWaitUntil:
-    visible:
-      id: "org.commcare.dalvik:id/nav_btn_finish"
-    timeout: 10000
 - tapOn:
-    id: "org.commcare.dalvik:id/nav_btn_finish"
+    id: "org.commcare.dalvik:id/nav_btn_next"
+
+# Original_Size / Small / Medium / Large - choose an image, then advance.
+# UPDATE, confirmed live 2026-08-12: a fixed "3 next-taps, then assume the
+# 4th is last" count is fragile - if the real question count/order ever
+# differs from this assumption, the flow ends up waiting on nav_btn_finish
+# on a screen that still shows nav_btn_next instead, and fails outright.
+# Replaced with a loop that checks which button is actually present after
+# each choice (Finish means done; Next means keep going) rather than
+# assuming a fixed number of questions up front - same fix applied to
+# flows/multimedia/image_resize_25_photo_taken.yaml.
 - repeat:
-    times: 5
+    times: 6
     while:
       notVisible:
-        text: "Image Resize"
+        id: "org.commcare.dalvik:id/nav_btn_finish"
     commands:
-      - back
-- extendedWaitUntil:
-    visible:
-      text: "Image Resize"
-    timeout: 5000
-- tapOn: "Small Image"
-- extendedWaitUntil:
-    visible:
-      id: "org.commcare.dalvik:id/nav_btn_next"
-    timeout: 10000
-- waitForAnimationToEnd
-# UPDATE (3rd correction): waitForAnimationToEnd alone didn't fix it - the
-# failure recurred (back on the "Image Resize" list, as if the form never
-# opened) even after it reported completed, suggesting real device lag
-# outlasting Maestro's own animation-settled signal (this session ran 30+
-# consecutive BrowserStack builds). Added a fixed 2s buffer on top, via the
-# extendedWaitUntil-on-an-impossible-condition idiom (Maestro has no plain
-# "wait N seconds" command - check-syntax rejects a bare `wait:` block).
-- extendedWaitUntil:
-    notVisible: "___maestro_fixed_pause_sentinel___"
-    timeout: 2000
-- repeat:
-    times: 20
-    while:
-      notVisible: "Choose Image"
-    commands:
+      - tapOn: "Choose Image"
+      - runFlow: ../common/pick_first_gallery_image.yaml
       - tapOn:
           id: "org.commcare.dalvik:id/nav_btn_next"
-- tapOn: "Choose Image"
-- runFlow: ../common/pick_first_gallery_image.yaml
-- repeat:
-    times: 20
-    while:
-      visible:
-        id: "org.commcare.dalvik:id/nav_btn_next"
-    commands:
-      - tapOn:
-          id: "org.commcare.dalvik:id/nav_btn_next"
-- extendedWaitUntil:
-    visible:
-      id: "org.commcare.dalvik:id/nav_btn_finish"
-    timeout: 10000
+          optional: true
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_finish"
-- repeat:
-    times: 5
-    while:
-      notVisible:
-        text: "Image Resize"
-    commands:
-      - back
-- extendedWaitUntil:
-    visible:
-      text: "Image Resize"
-    timeout: 5000
-- tapOn: "Wide Image"
-- extendedWaitUntil:
-    visible:
-      id: "org.commcare.dalvik:id/nav_btn_next"
-    timeout: 10000
-- waitForAnimationToEnd
-# UPDATE (3rd correction): waitForAnimationToEnd alone didn't fix it - the
-# failure recurred (back on the "Image Resize" list, as if the form never
-# opened) even after it reported completed, suggesting real device lag
-# outlasting Maestro's own animation-settled signal (this session ran 30+
-# consecutive BrowserStack builds). Added a fixed 2s buffer on top, via the
-# extendedWaitUntil-on-an-impossible-condition idiom (Maestro has no plain
-# "wait N seconds" command - check-syntax rejects a bare `wait:` block).
-- extendedWaitUntil:
-    notVisible: "___maestro_fixed_pause_sentinel___"
-    timeout: 2000
-- repeat:
-    times: 20
-    while:
-      notVisible: "Choose Image"
-    commands:
-      - tapOn:
-          id: "org.commcare.dalvik:id/nav_btn_next"
-- tapOn: "Choose Image"
-- runFlow: ../common/pick_first_gallery_image.yaml
-- repeat:
-    times: 20
-    while:
-      visible:
-        id: "org.commcare.dalvik:id/nav_btn_next"
-    commands:
-      - tapOn:
-          id: "org.commcare.dalvik:id/nav_btn_next"
-- extendedWaitUntil:
-    visible:
-      id: "org.commcare.dalvik:id/nav_btn_finish"
-    timeout: 10000
-- tapOn:
-    id: "org.commcare.dalvik:id/nav_btn_finish"
-- repeat:
-    times: 5
-    while:
-      notVisible:
-        text: "Image Resize"
-    commands:
-      - back
-- extendedWaitUntil:
-    visible:
-      text: "Image Resize"
-    timeout: 5000
-- tapOn: "Tall Image"
-- extendedWaitUntil:
-    visible:
-      id: "org.commcare.dalvik:id/nav_btn_next"
-    timeout: 10000
-- waitForAnimationToEnd
-# UPDATE (3rd correction): waitForAnimationToEnd alone didn't fix it - the
-# failure recurred (back on the "Image Resize" list, as if the form never
-# opened) even after it reported completed, suggesting real device lag
-# outlasting Maestro's own animation-settled signal (this session ran 30+
-# consecutive BrowserStack builds). Added a fixed 2s buffer on top, via the
-# extendedWaitUntil-on-an-impossible-condition idiom (Maestro has no plain
-# "wait N seconds" command - check-syntax rejects a bare `wait:` block).
-- extendedWaitUntil:
-    notVisible: "___maestro_fixed_pause_sentinel___"
-    timeout: 2000
-- repeat:
-    times: 20
-    while:
-      notVisible: "Choose Image"
-    commands:
-      - tapOn:
-          id: "org.commcare.dalvik:id/nav_btn_next"
-- tapOn: "Choose Image"
-- runFlow: ../common/pick_first_gallery_image.yaml
-- repeat:
-    times: 20
-    while:
-      visible:
-        id: "org.commcare.dalvik:id/nav_btn_next"
-    commands:
-      - tapOn:
-          id: "org.commcare.dalvik:id/nav_btn_next"
-- extendedWaitUntil:
-    visible:
-      id: "org.commcare.dalvik:id/nav_btn_finish"
-    timeout: 10000
-- tapOn:
-    id: "org.commcare.dalvik:id/nav_btn_finish"
-- repeat:
-    times: 5
-    while:
-      notVisible:
-        text: "Start"
-    commands:
-      - back
-- extendedWaitUntil:
-    visible:
-      text: "Start"
-    timeout: 5000

@@ -26,6 +26,17 @@ tags:
 #     modules.m0="Interface" containing forms.m0f3="Keyboard Tests" -
 #     matches this tab's own "Start -> Interface -> Keyboard Tests"
 #     navigation exactly.
+#
+# UPDATE, confirmed live 2026-08-12: the strict "extendedWaitUntil
+# nav_btn_finish visible" below failed outright, but the failure
+# screenshot showed the device already back on the home screen ("1 form
+# sent to server!") - the form genuinely completed successfully, this
+# button just didn't stay on screen long enough for a single poll window
+# to catch it (same race already fixed in
+# flows/login/commcare_odk_01_login.yaml and
+# flows/form_submissions/question_types_01_03_answer_and_submit.yaml).
+# Made the finish tap optional and asserted the real end state (Start)
+# instead.
 - runFlow:
     file: ../common/install_app_by_code.yaml
     env:
@@ -46,10 +57,9 @@ tags:
     commands:
       - tapOn:
           id: "org.commcare.dalvik:id/nav_btn_next"
-- extendedWaitUntil:
-    visible:
-      id: "org.commcare.dalvik:id/nav_btn_finish"
-    timeout: 10000
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_finish"
-- assertVisible: "Start"
+    optional: true
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 15000

@@ -79,7 +79,16 @@ tags:
 - hideKeyboard
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_next"
+# UPDATE, confirmed live 2026-08-12: added an explicit wait for
+# nav_btn_finish before tapping it (was previously a bare tap with no
+# wait at all) - this tap is NOT made optional like the success-path
+# hardening elsewhere in this repo, since it's what actually triggers the
+# save attempt this test's error-path assertion depends on.
 - tapOn: "Confirm - Please create this case."
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_finish"
+    timeout: 10000
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_finish"
 - assertVisible: "Error Saving your Form"

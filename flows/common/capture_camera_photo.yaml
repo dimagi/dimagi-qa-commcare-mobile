@@ -24,6 +24,18 @@ appId: org.commcare.dalvik
 # guarantee a photo was actually captured. Treat any flow depending on this
 # as best-effort per coverage_matrix.csv's own note that camera capture is
 # "flaky/unsupported on most cloud emulators".
+# UPDATE, confirmed live 2026-08-12 (real BrowserStack camera capture):
+# the camera app's own first-run "Turn on Location tags?" dialog can
+# appear before the shutter is even reachable - this is a setting owned by
+# the CAMERA app itself, not a CommCare runtime-permission prompt, so it
+# can't be pre-granted via launchApp's own `permissions:` config (that
+# only affects org.commcare.dalvik, not whatever separate camera app the
+# capture intent hands off to). Declines it (no geotagging needed for
+# these tests) rather than granting, to avoid any location-permission
+# side effects.
+- tapOn:
+    text: "Cancel"
+    optional: true
 - extendedWaitUntil:
     visible:
       id: "com.android.camera2:id/shutter_button"

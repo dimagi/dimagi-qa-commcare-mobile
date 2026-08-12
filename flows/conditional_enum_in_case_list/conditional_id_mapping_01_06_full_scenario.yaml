@@ -88,10 +88,18 @@ tags:
 # Appointment Date - defaults to today already, no interaction needed.
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_next"
+# UPDATE, confirmed live 2026-08-12: hardened against the same
+# already-advanced-past-Finish race fixed elsewhere in this repo today -
+# every nav_btn_finish tap in this file is now optional, with a fallback
+# wait on the real end state (Start), instead of a bare tap + immediate
+# assertVisible.
 - inputText: "16"
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_finish"
-- assertVisible: "Start"
+    optional: true
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 15000
 
 # === Conditional ID Mapping 1 (part 2): create "Test Two" (age 21, yesterday). ===
 - tapOn: "Start"
@@ -111,7 +119,10 @@ tags:
 - inputText: "21"
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_finish"
-- assertVisible: "Start"
+    optional: true
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 15000
 
 # === Conditional ID Mapping 2: update Test One, verify computed properties. ===
 - tapOn: "Start"
@@ -186,7 +197,10 @@ tags:
 - tapOn: "Checkup"
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_finish"
-- assertVisible: "Start"
+    optional: true
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 15000
 
 # === Conditional ID Mapping 4: update Test Two, verify computed properties. ===
 - tapOn: "Start"
@@ -215,7 +229,10 @@ tags:
 - tapOn: "no"
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_finish"
-- assertVisible: "Start"
+    optional: true
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 15000
 
 # === Conditional ID Mapping 6: verify final "Appointment Attended?" values. ===
 - tapOn: "Start"

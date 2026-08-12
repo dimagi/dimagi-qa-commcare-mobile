@@ -58,11 +58,18 @@ tags:
 # newlines; each assertion below still targets the same one combined
 # element, which is fine - they're independent regex checks, not separate
 # widgets.
+# UPDATE, confirmed live 2026-08-12: hardened against the same
+# already-advanced-past-Finish race fixed elsewhere in this repo today
+# (flows/login/commcare_odk_01_login.yaml,
+# flows/other_error_tests/keyboard_navigation.yaml) - the tap is now
+# optional and the real end state (Start) is asserted with a generous
+# timeout, rather than requiring nav_btn_finish to still be on screen.
 - assertVisible: "(?s).*Date chosen long form:.*"
 - assertVisible: "(?s).*Date chosen short form:.*"
 - assertVisible: "(?s).*Date chosen, unformatted:.*"
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_finish"
-- assertVisible:
-    text: "1 form sent to server!"
     optional: true
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 15000

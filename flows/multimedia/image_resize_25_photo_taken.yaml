@@ -12,54 +12,25 @@ tags:
 # outright "Camera capture is flaky/unsupported on most cloud emulators;
 # feasible only if the BrowserStack device supports an injected camera
 # image." This flow is written on that same understanding and should be
-# treated as a best-effort attempt, not a reliable CI gate.
+# treated as a best-effort attempt, not a reliable CI gate. The camera-side
+# interaction is delegated to ../common/capture_camera_photo.yaml (see
+# that file's header for the full best-effort/unverified caveat).
 #
-# Unlike Image Resize 26 (gallery pick), there is no Maestro
-# `addMedia`-equivalent for camera capture: ImageWidget.java's
-# mCaptureButton fires a real `android.provider.MediaStore.ACTION_IMAGE_
-# CAPTURE` intent (verified: buildSystemCaptureIntent(), line 291) which
-# hands off to whichever camera app is registered on the device/emulator -
-# a real capture UI Maestro doesn't control, whose ids/behavior vary by OS
-# build, vendor camera app, and BrowserStack's own per-device virtual/
-# injected camera feed. The camera-side interaction is delegated to
-# ../common/capture_camera_photo.yaml (see that file's header for the full
-# best-effort/unverified caveat - every tap there is optional so a
-# non-matching camera UI degrades to a silent no-op rather than a hard
-# failure, but that also means this flow cannot guarantee a photo was
-# actually captured on a given device image).
+# REWRITTEN 2026-08-12 from a real on-device recording the user captured.
+# Every previous version of this file assumed the target was the separate
+# top-level "Image Resize" MODULE (Large/Small/Wide/Tall/Smart, each its
+# own multi-question form) - that assumption was wrong. The real target,
+# confirmed live, is a much simpler SINGLE FORM: "Multimedia" (module) >
+# "Image Resize" (form, the 2nd item in that module's own form list, name-
+# colliding with the unrelated sibling module of the same name). Ground-
+# truthed against the real CCZ (resources/qateam - Multimedia - v381.ccz,
+# modules-0/forms-1.xml): an intro trigger, then four image/* upload
+# questions in a fixed sequence - Original_Size, Small, Medium, Large -
+# each its own screen (no group wrapping), none required. "Take Picture"
+# button text verified against res/values/strings.xml:174
+# (capture_image = "Take Picture"). nav_btn_next/nav_btn_finish ids
+# verified against res/layout/screen_form_entry.xml.
 #
-# UPDATE, confirmed live 2026-08-11 (CI run 31476507436): "Repeat 3 times:
-# Take Picture" failed with element not found - the previous assumption
-# below (one form with four photo questions in sequence) was wrong, the
-# exact same wrong assumption image_resize_26_photo_chosen.yaml used to
-# make before its own 2026-08-11 correction. Ground-truthed against the
-# real CCZ (resources/qateam - Multimedia - v381.ccz, modules-1/forms-0.xml
-# through forms-3.xml): "Image Resize" contains FOUR SEPARATE forms (Large/
-# Small/Wide/Tall Image, Smart Image not exercised, matching
-# image_resize_26's own convention), each a much longer form than a single
-# photo question - image_intro trigger -> text_image input -> large_label
-# trigger -> single/multi selects -> list_intro trigger -> a field-list
-# group containing num/id/THEN the camera-capture image question alongside
-# audio/video upload siblings -> signature -> decimal/date/time/date_time ->
-# geopoint -> barcode -> hidden field. None of this form's <bind> elements
-# carry required="true()" (verified the same way as
-# flows/form_submissions/question_types_01_03_answer_and_submit.yaml), so
-# it's safe to generically page through with nav_btn_next until the "Take
-# Picture" button appears, matching this repo's established
-# generic-navigation convention. Restructured to open each of the four
-# forms individually below, mirroring image_resize_26's own restructuring.
-#
-# "Take Picture" button text verified against res/values/strings.xml:174
-# (capture_image = "Take Picture"). nav_btn_next / nav_btn_finish ids
-# verified the same way as image_resize_26_photo_chosen.yaml -
-# res/layout/screen_form_entry.xml and FormAttachmentUploadTest.java's use
-# of R.id.nav_btn_next/nav_btn_finish to advance/submit a form.
-#
-# UPDATE (2nd correction), confirmed live 2026-08-11: same
-# transition-settle race found and fixed in
-# image_resize_26_photo_chosen.yaml's own 2nd correction - added
-# waitForAnimationToEnd before each of the four "page through until Take
-# Picture" loops below.
 # Prepends install_app_as_web_user.yaml (APP_NAME: Multimedia) - a fresh
 # BrowserStack session has no app installed until this runs; see
 # DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
@@ -74,208 +45,47 @@ tags:
       USERNAME: ${CC_TEST_USERNAME}
       PASSWORD: ${CC_TEST_PASSWORD}
 - tapOn: "Start"
+# UPDATE, confirmed live 2026-08-12: a plain `tapOn: "Multimedia"` here
+# landed on the WRONG "Image Resize" afterward - the separate, unrelated
+# top-level MODULE (Large/Small/Wide/Tall/Smart Image forms), not the form
+# inside the "Multimedia" module this flow actually targets. Root cause:
+# "Multimedia" is ALSO this app's own toolbar title, and matches ambiguously.
+# Scoped to the row_txt id, the same fix already proven live in
+# flows/multimedia/photo_01_can_remove_taken_photo.yaml and
+# photo_02_can_remove_chosen_photo.yaml for this exact ambiguity.
+- tapOn:
+    id: "org.commcare.dalvik:id/row_txt"
+    text: "Multimedia"
 - tapOn: "Image Resize"
-
-- tapOn: "Large Image"
 - extendedWaitUntil:
     visible:
       id: "org.commcare.dalvik:id/nav_btn_next"
     timeout: 10000
-- waitForAnimationToEnd
-# UPDATE (3rd correction): same fixed 2s buffer added in
-# image_resize_26_photo_chosen.yaml's own 3rd correction - see that file's
-# comment for the full root-cause writeup (waitForAnimationToEnd alone
-# wasn't enough against real device lag from 30+ consecutive builds this
-# session).
-- extendedWaitUntil:
-    notVisible: "___maestro_fixed_pause_sentinel___"
-    timeout: 2000
-- repeat:
-    times: 20
-    while:
-      notVisible: "Take Picture"
-    commands:
-      - tapOn:
-          id: "org.commcare.dalvik:id/nav_btn_next"
-- tapOn: "Take Picture"
-- runFlow: ../common/capture_camera_photo.yaml
-- repeat:
-    times: 20
-    while:
-      visible:
-        id: "org.commcare.dalvik:id/nav_btn_next"
-    commands:
-      - tapOn:
-          id: "org.commcare.dalvik:id/nav_btn_next"
-          optional: true
-- extendedWaitUntil:
-    visible:
-      id: "org.commcare.dalvik:id/nav_btn_finish"
-    timeout: 10000
 - tapOn:
-    id: "org.commcare.dalvik:id/nav_btn_finish"
-    optional: true
-- repeat:
-    times: 5
-    while:
-      notVisible:
-        text: "Image Resize"
-    commands:
-      - back
-- extendedWaitUntil:
-    visible:
-      text: "Image Resize"
-    timeout: 5000
+    id: "org.commcare.dalvik:id/nav_btn_next"
 
-- tapOn: "Small Image"
-- extendedWaitUntil:
-    visible:
-      id: "org.commcare.dalvik:id/nav_btn_next"
-    timeout: 10000
-- waitForAnimationToEnd
-# UPDATE (3rd correction): same fixed 2s buffer added in
-# image_resize_26_photo_chosen.yaml's own 3rd correction - see that file's
-# comment for the full root-cause writeup (waitForAnimationToEnd alone
-# wasn't enough against real device lag from 30+ consecutive builds this
-# session).
-- extendedWaitUntil:
-    notVisible: "___maestro_fixed_pause_sentinel___"
-    timeout: 2000
+# Original_Size / Small / Medium / Large - take a photo, then advance.
+# None of these questions are required, so the capture is best-effort per
+# the header caveat - a non-matching camera UI degrades to a silent no-op
+# (see capture_camera_photo.yaml) and nav_btn_next still advances.
+#
+# UPDATE, confirmed live 2026-08-12: a fixed "3 next-taps, then assume the
+# 4th is last" count is fragile - if the real question count/order ever
+# differs from this assumption, the flow ends up waiting on nav_btn_finish
+# on a screen that still shows nav_btn_next instead, and fails outright.
+# Replaced with a loop that checks which button is actually present after
+# each capture (Finish means done; Next means keep going) rather than
+# assuming a fixed number of questions up front.
 - repeat:
-    times: 20
+    times: 6
     while:
-      notVisible: "Take Picture"
+      notVisible:
+        id: "org.commcare.dalvik:id/nav_btn_finish"
     commands:
-      - tapOn:
-          id: "org.commcare.dalvik:id/nav_btn_next"
-- tapOn: "Take Picture"
-- runFlow: ../common/capture_camera_photo.yaml
-- repeat:
-    times: 20
-    while:
-      visible:
-        id: "org.commcare.dalvik:id/nav_btn_next"
-    commands:
+      - tapOn: "Take Picture"
+      - runFlow: ../common/capture_camera_photo.yaml
       - tapOn:
           id: "org.commcare.dalvik:id/nav_btn_next"
           optional: true
-- extendedWaitUntil:
-    visible:
-      id: "org.commcare.dalvik:id/nav_btn_finish"
-    timeout: 10000
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_finish"
-    optional: true
-- repeat:
-    times: 5
-    while:
-      notVisible:
-        text: "Image Resize"
-    commands:
-      - back
-- extendedWaitUntil:
-    visible:
-      text: "Image Resize"
-    timeout: 5000
-
-- tapOn: "Wide Image"
-- extendedWaitUntil:
-    visible:
-      id: "org.commcare.dalvik:id/nav_btn_next"
-    timeout: 10000
-- waitForAnimationToEnd
-# UPDATE (3rd correction): same fixed 2s buffer added in
-# image_resize_26_photo_chosen.yaml's own 3rd correction - see that file's
-# comment for the full root-cause writeup (waitForAnimationToEnd alone
-# wasn't enough against real device lag from 30+ consecutive builds this
-# session).
-- extendedWaitUntil:
-    notVisible: "___maestro_fixed_pause_sentinel___"
-    timeout: 2000
-- repeat:
-    times: 20
-    while:
-      notVisible: "Take Picture"
-    commands:
-      - tapOn:
-          id: "org.commcare.dalvik:id/nav_btn_next"
-- tapOn: "Take Picture"
-- runFlow: ../common/capture_camera_photo.yaml
-- repeat:
-    times: 20
-    while:
-      visible:
-        id: "org.commcare.dalvik:id/nav_btn_next"
-    commands:
-      - tapOn:
-          id: "org.commcare.dalvik:id/nav_btn_next"
-          optional: true
-- extendedWaitUntil:
-    visible:
-      id: "org.commcare.dalvik:id/nav_btn_finish"
-    timeout: 10000
-- tapOn:
-    id: "org.commcare.dalvik:id/nav_btn_finish"
-    optional: true
-- repeat:
-    times: 5
-    while:
-      notVisible:
-        text: "Image Resize"
-    commands:
-      - back
-- extendedWaitUntil:
-    visible:
-      text: "Image Resize"
-    timeout: 5000
-
-- tapOn: "Tall Image"
-- extendedWaitUntil:
-    visible:
-      id: "org.commcare.dalvik:id/nav_btn_next"
-    timeout: 10000
-- waitForAnimationToEnd
-# UPDATE (3rd correction): same fixed 2s buffer added in
-# image_resize_26_photo_chosen.yaml's own 3rd correction - see that file's
-# comment for the full root-cause writeup (waitForAnimationToEnd alone
-# wasn't enough against real device lag from 30+ consecutive builds this
-# session).
-- extendedWaitUntil:
-    notVisible: "___maestro_fixed_pause_sentinel___"
-    timeout: 2000
-- repeat:
-    times: 20
-    while:
-      notVisible: "Take Picture"
-    commands:
-      - tapOn:
-          id: "org.commcare.dalvik:id/nav_btn_next"
-- tapOn: "Take Picture"
-- runFlow: ../common/capture_camera_photo.yaml
-- repeat:
-    times: 20
-    while:
-      visible:
-        id: "org.commcare.dalvik:id/nav_btn_next"
-    commands:
-      - tapOn:
-          id: "org.commcare.dalvik:id/nav_btn_next"
-          optional: true
-- extendedWaitUntil:
-    visible:
-      id: "org.commcare.dalvik:id/nav_btn_finish"
-    timeout: 10000
-- tapOn:
-    id: "org.commcare.dalvik:id/nav_btn_finish"
-    optional: true
-- repeat:
-    times: 5
-    while:
-      notVisible:
-        text: "Start"
-    commands:
-      - back
-- extendedWaitUntil:
-    visible:
-      text: "Start"
-    timeout: 5000

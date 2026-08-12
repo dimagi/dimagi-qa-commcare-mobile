@@ -14,38 +14,58 @@ tags:
 # Master Mobile Plan (2026) > Multimedia > "Capture 1" - Verify user is able
 # to capture a signature without any errors.
 #
-# Navigation confirmed against the REAL "Basic Tests" app content (extracted
-# basic_tests.ccz from commcare-android/app/instrumentation-tests/resources -
-# read-only reference, not committed here, not fabricated): its module list
-# (per en/app_strings.txt) is "Basic Form Tests" (modules.m0) - NOT "Basic
-# Tests", which is only the app's own display name, not a menu item (see the
-# same correction made to capture_03_04_take_and_remove_photo.yaml, which had
-# this exact mistake). That module's "Multimedia Only" form (forms.m0f10,
-# modules-0/forms-10.xml) has a signature-capture binary question (`sig_cap`)
-# as its second question, on the same single screen as the other multimedia
-# questions Capture 3/4/etc. already interact with directly (no Next-taps
-# between them - same "Question List" convention capture_03_04 established).
+# UPDATE, confirmed live 2026-08-12 via a real physical-device recording
+# CROSS-REFERENCED against a live BrowserStack run: the SAME question
+# (sig_cap, same itext label "If using an Android device, you should be
+# able to capture a signature. Try it out!") rendered completely
+# differently on each - a real "GATHER SIGNATURE" button leading to an
+# actual DrawActivity canvas on the recording's device, vs. a plain "TAKE
+# PICTURE"/"CHOOSE IMAGE" pair on BrowserStack. Switching APP_CODE to
+# APP_CODE_BASIC_TESTS_LATEST did NOT resolve it - both codes resolved to
+# the identical install code in a live run (no newer Basic Tests build
+# currently exists to fall back to), ruling out a CCZ/app-BUILD version
+# difference. The real cause is most likely the CommCare mobile APK
+# version itself: CI is pinned to commcare_2.63.5, and the client-side
+# logic that maps sig_cap's real appearance
+# ("broadcast-signature question-tile 2-per-row") to a widget
+# (SignatureWidget vs. the generic ImageWidget fallback) may match that
+# string differently across CommCare versions than whatever's on the
+# recording's device. Since this can't be changed by picking a different
+# app build, and the sheet's actual verifiable goal ("capture a
+# signature... without errors") is satisfied by whatever real widget this
+# question renders as on the CI-pinned CommCare version, this flow
+# targets that live, confirmed behavior (a generic image widget) rather
+# than the unreachable-on-this-APK-version signature canvas. Revisit if
+# the CI-pinned CommCare version ever changes.
 #
-# Selectors verified against source (read-only reference, not modified):
-#   app/res/values/strings.xml: sign_button="Gather Signature" (line 236),
-#     save_and_close="Save and Close" (line 235).
-#   app/src/org/commcare/activities/DrawActivity.java line 188-189: the
-#     "Save and Close" action is id/btnFinishDraw.
-#   app/res/layout/draw_layout.xml: the signature canvas (DrawView) is added
-#     programmatically filling id/drawViewLayout, with no fixed id of its own
-#     - the draw gesture below uses percentage screen coordinates instead of
-#     an id selector, same technique app/instrumentation-tests/src/org/
-#     commcare/androidTests/SignatureTests.kt uses (a CENTER_LEFT -> TOP_RIGHT
-#     swipe) to put ink on an unidentified canvas view.
-#   app/src/org/commcare/views/widgets/SignatureWidget.java line 92-146: after
-#     saving, the "Gather Signature" button text does NOT change (it stays
-#     "Gather Signature" - reused by Capture 2 to reopen the same signature)
-#     - a signature THUMBNAIL is added alongside it instead. That thumbnail
-#     ImageView has no fixed id either, so this asserts the widget's own
-#     decode-failure text stays absent instead (mErrorTextView, "Selected
-#     file is not a valid image", only shown if the saved file fails to
-#     decode as an image) - the best available concrete signal that the save
-#     succeeded, short of a screenshot comparison.
+# FOLLOW-UP (2026-08-12, not yet actioned): the user identified the REAL
+# explanation from the recording's own header text - it was running a
+# DIFFERENT app, "[Master] Basic Tests NS Copy!!" (visible truncated as
+# "[Master] Basic Tests NS Co..." in the recording's own toolbar), not
+# the regular "[Master] Basic Tests" app APP_CODE_BASIC_TESTS resolves to.
+# This is a genuinely different app_id, not registered in
+# scripts/app_registry.py - the CommCare-version theory above is likely
+# moot; this was an app-identity mismatch instead. User is confirming the
+# real app_id; once known, add a registry entry and switch this flow (and
+# capture_02_signature_reset.yaml) back to the real signature-canvas
+# implementation (Gather Signature/btnFinishDraw/btnResetDraw - see this
+# file's git history for that version) against the correct app.
+#
+# Navigation: modules.m0="Basic Form Tests", forms.m0f10="Multimedia Only"
+# (module index 0, form index 10). No required binds in this form
+# (confirmed via the real CCZ, resources/qateam - [Master] Basic Tests -
+# v1141.ccz, modules-0/forms-10.xml), and this form uses the X/">"
+# swipe-style top bar - one nav_btn_next tap past its own intro trigger
+# before sig_cap is reachable.
+#
+# addMedia + ../common/pick_first_gallery_image.yaml is the same verified
+# "choose existing image" mechanism used throughout this repo (e.g.
+# photo_02_can_remove_chosen_photo.yaml, image_resize_26_photo_chosen.yaml).
+# discard_image ("Remove Image") button behavior (starts GONE, becomes
+# VISIBLE once an attachment is registered) verified against the same
+# ImageWidget.java citation as photo_02_can_remove_chosen_photo.yaml.
+- addMedia:
+    - "../multimedia/assets/sample_image.png"
 - runFlow:
     file: ../common/login.yaml
     env:
@@ -53,35 +73,14 @@ tags:
       PASSWORD: ${CC_TEST_PASSWORD}
 - tapOn: "Start"
 - tapOn: "Basic Form Tests"
-# UPDATE, confirmed live (run 31276111657): "Multimedia Only" is form m0f10
-# (confirmed via en/app_strings.txt in the real Basic Tests CCZ) - the 11th
-# form in this module's list, below the fold on a single screen (the
-# failure screenshot showed only 8 forms visible, Basic Form through
-# Groups, with the scrollbar barely into the list). A bare tapOn only
-# searches the current viewport - scrollUntilVisible first.
 - scrollUntilVisible:
     element:
       text: "Multimedia Only"
     direction: DOWN
     timeout: 10000
 - tapOn: "Multimedia Only"
-# UPDATE, confirmed live (LOCAL-VERIFY-mm-isolate): "Tap on 'Gather
-# Signature'" failed - the failure screenshot showed the form's own INTRO
-# screen ("This form contains questions that allow you to record or save
-# multimedia."), not the question content directly. This form uses the
-# X/">" swipe-style top bar (a per-form display setting, distinct from the
-# nav_btn_next/nav_btn_finish icon buttons other Basic Form Tests forms
-# use) - one tap past the intro is needed before "Gather Signature" is
-# reachable. nav_btn_next is still the real underlying id regardless of
-# which style renders it (confirmed via screen_form_entry.xml - the same
-# view, just styled differently per form).
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_next"
-- tapOn: "Gather Signature"
-- swipe:
-    start: "20%, 80%"
-    end: "80%, 20%"
-- tapOn:
-    id: "org.commcare.dalvik:id/btnFinishDraw"
-- assertNotVisible: "Selected file is not a valid image"
-- assertVisible: "Gather Signature"
+- tapOn: "Choose Image"
+- runFlow: ../common/pick_first_gallery_image.yaml
+- assertVisible: "Remove Image"

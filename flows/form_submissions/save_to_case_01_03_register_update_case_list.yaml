@@ -138,14 +138,19 @@ tags:
 - inputText: "42"
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_next"
+# UPDATE, confirmed live 2026-08-12: hardened against the same
+# already-advanced-past-Finish race fixed elsewhere in this repo today
+# (flows/login/commcare_odk_01_login.yaml,
+# flows/other_error_tests/keyboard_navigation.yaml) - the tap is now
+# optional and the real end state (Start) is asserted with a generous
+# timeout, rather than requiring nav_btn_finish to still be on screen.
 - inputText: "Automation Text"
-- extendedWaitUntil:
-    visible:
-      id: "org.commcare.dalvik:id/nav_btn_finish"
-    timeout: 10000
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_finish"
-- assertVisible: "Start"
+    optional: true
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 15000
 
 # === Save-to-case-3: "Verify case list report" (see header note on why
 # this comes before Save-to-case-2's own steps below) ===
@@ -172,11 +177,11 @@ tags:
 - assertVisible: "42"
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_next"
+# Same finish-race hardening as Save-to-case-1 above.
 - assertVisible: "Automation Text"
-- extendedWaitUntil:
-    visible:
-      id: "org.commcare.dalvik:id/nav_btn_finish"
-    timeout: 10000
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_finish"
-- assertVisible: "Start"
+    optional: true
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 15000

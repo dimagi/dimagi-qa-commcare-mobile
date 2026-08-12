@@ -6,14 +6,16 @@ tags:
 # Master Mobile Plan (2026) > Multimedia > "Photo 2" - Can remove chosen
 # photo.
 #
-# PARTIAL DEPENDENCY (kept tagged `automatable` to match
-# coverage_matrix.csv, but flagging this in the header comment per the
-# task): assumes the Multimedia QA test app is installed with a
-# "Multimedia" menu containing a "Gif/Remove Image" form whose "Choose
-# Image" question is reachable directly (the sheet doesn't mention any
-# required questions before it). Navigation is tapOn-by-visible-text so it
-# matches regardless of list position, but hasn't been verified against
-# that specific CCZ's structure.
+# UPDATE, confirmed live 2026-08-12 (real on-device recording): ground-
+# truthed against the real CCZ (resources/qateam - Multimedia - v381.ccz,
+# modules-0/forms-3.xml) - the "Gif/Remove Image" form opens on an
+# unrelated intro trigger (this_should_play_a_gif) with no "Choose Image"
+# button at all; the previous version of this flow tapped "Choose Image"
+# with zero navigation and would never have found it. One nav_btn_next tap
+# reaches take_a_photo, the form's first real media question (which - per
+# MediaWidget.java - carries BOTH a "Take Picture" and a "Choose Image"
+# button), satisfying this row's "choose then remove" check just as well
+# as the form's separate, later choose_image question would.
 #
 # addMedia pushes the same local placeholder PNG used by
 # image_resize_26 (assets/sample_image.png) into the device's gallery; see
@@ -58,11 +60,18 @@ tags:
     id: "org.commcare.dalvik:id/row_txt"
     text: "Multimedia"
 - tapOn: "Gif/Remove Image"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
 - tapOn: "Choose Image"
 - runFlow: ../common/pick_first_gallery_image.yaml
 - assertVisible: "Remove Image"
 - tapOn: "Remove Image"
 - assertNotVisible: "Remove Image"
+# One more question (choose_image, Q3, not required) still follows this
+# one before nav_btn_finish appears - see the header's ground-truthed
+# question-order citation.
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
 - extendedWaitUntil:
     visible:
       id: "org.commcare.dalvik:id/nav_btn_finish"

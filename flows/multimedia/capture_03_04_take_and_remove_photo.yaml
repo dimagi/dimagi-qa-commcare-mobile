@@ -72,47 +72,19 @@ tags:
 # the full root-cause writeup.
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_next"
+# UPDATE, confirmed live 2026-08-12: this used to hand-roll its own
+# shutter/confirm taps (twice) instead of calling
+# ../common/capture_camera_photo.yaml - missing that shared subflow's own
+# fix for the camera app's first-run "Turn on Location tags?" dialog,
+# which can block the shutter button entirely. Switched both capture
+# points to the shared subflow rather than re-duplicating its fixes here.
 # --- Capture 3: take a picture, verify it attached ---
 - tapOn: "Take Picture"
-- tapOn:
-    id: "com.android.camera2:id/shutter_button"
-    optional: true
-- tapOn:
-    id: "com.google.android.GoogleCamera:id/shutter_button"
-    optional: true
-- tapOn:
-    text: "Shutter"
-    optional: true
-- tapOn:
-    id: "com.android.camera2:id/done_button"
-    optional: true
-- tapOn:
-    id: "com.google.android.GoogleCamera:id/done_button"
-    optional: true
-- tapOn:
-    text: "(?i)^(done|ok|confirm|save)$"
-    optional: true
+- runFlow: ../common/capture_camera_photo.yaml
 - assertVisible: "Remove Image"
 # --- Capture 4: remove it, then retake ---
 - tapOn: "Remove Image"
 - assertNotVisible: "Remove Image"
 - tapOn: "Take Picture"
-- tapOn:
-    id: "com.android.camera2:id/shutter_button"
-    optional: true
-- tapOn:
-    id: "com.google.android.GoogleCamera:id/shutter_button"
-    optional: true
-- tapOn:
-    text: "Shutter"
-    optional: true
-- tapOn:
-    id: "com.android.camera2:id/done_button"
-    optional: true
-- tapOn:
-    id: "com.google.android.GoogleCamera:id/done_button"
-    optional: true
-- tapOn:
-    text: "(?i)^(done|ok|confirm|save)$"
-    optional: true
+- runFlow: ../common/capture_camera_photo.yaml
 - assertVisible: "Remove Image"

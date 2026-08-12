@@ -26,10 +26,18 @@ tags:
 #
 # Continues from the same "Gif/Remove Image" form as
 # gif_can_add_gif.yaml/photo_02_can_remove_chosen_photo.yaml (Multimedia >
-# Gif/Remove Image) and progresses forward to a "Take a photo" question -
-# POSITION-ASSUMED via a bounded Next-tap loop (mirrors
-# flows/common/navigate_form_no_errors.yaml's exact repeat/optional-tap
-# idiom) since the form's real question order/count is unverified.
+# Gif/Remove Image) and progresses forward to a "Take a photo" question.
+#
+# UPDATE, confirmed live 2026-08-12 (real on-device recording): ground-
+# truthed against the real CCZ (resources/qateam - Multimedia - v381.ccz,
+# modules-0/forms-3.xml) - this form has exactly THREE questions, none
+# required: this_should_play_a_gif (trigger, Q1 - the form's own opening
+# screen), take_a_photo (image, Q2), choose_image (image, Q3). Only ONE
+# nav_btn_next tap separates Q1 from "Take Picture" - the previous blind
+# "tap next 6 times" would have overshot straight past both image
+# questions to FINISH. Replaced with a loop that stops as soon as "Take
+# Picture" is visible, matching the generic-navigate-until-target
+# convention already used in flows/multimedia/image_resize_25_photo_taken.yaml.
 #
 # mCaptureButton text verified against res/values/strings.xml:174
 # (capture_image = "Take Picture") - app/src/org/commcare/views/widgets/
@@ -73,37 +81,19 @@ tags:
 - tapOn: "Gif/Remove Image"
 - repeat:
     times: 6
+    while:
+      notVisible: "Take Picture"
     commands:
       - tapOn:
           id: "org.commcare.dalvik:id/nav_btn_next"
-          optional: true
-- extendedWaitUntil:
-    visible:
-      text: "Take Picture"
-    timeout: 5000
+# UPDATE, confirmed live 2026-08-12: this used to hand-roll its own
+# shutter/confirm taps instead of calling ../common/capture_camera_photo.yaml
+# - missing that shared subflow's own fix for the camera app's first-run
+# "Turn on Location tags?" dialog, which can block the shutter button
+# entirely. Switched to the shared subflow rather than re-duplicating its
+# fixes here.
 - tapOn: "Take Picture"
-# BEST-EFFORT camera capture - see header caveat. Tries a shutter button on
-# a couple of common Android camera-app packages, then a "done"/checkmark
-# confirm button, all optional since none of these are confirmed for the
-# actual device image this runs on.
-- tapOn:
-    id: "com.android.camera2:id/shutter_button"
-    optional: true
-- tapOn:
-    id: "com.google.android.GoogleCamera:id/shutter_button"
-    optional: true
-- tapOn:
-    text: "Shutter"
-    optional: true
-- tapOn:
-    id: "com.android.camera2:id/done_button"
-    optional: true
-- tapOn:
-    id: "com.google.android.GoogleCamera:id/done_button"
-    optional: true
-- tapOn:
-    text: "(?i)^(done|ok|confirm|save)$"
-    optional: true
+- runFlow: ../common/capture_camera_photo.yaml
 - assertVisible: "Remove Image"
 - tapOn: "Remove Image"
 - assertNotVisible: "Remove Image"

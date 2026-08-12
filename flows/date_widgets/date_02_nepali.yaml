@@ -79,10 +79,17 @@ tags:
 # the Nepalese calendar: ...") with no dateGregorian id anywhere. Asserting
 # on that visible sentence instead - (?s) lets ".*" span the label's own
 # internal newlines/wrapping.
+# UPDATE, confirmed live 2026-08-12: hardened against the same
+# already-advanced-past-Finish race fixed elsewhere in this repo today
+# (flows/login/commcare_odk_01_login.yaml,
+# flows/other_error_tests/keyboard_navigation.yaml) - the tap is now
+# optional and the real end state (Start) is asserted with a generous
+# timeout, rather than requiring nav_btn_finish to still be on screen.
 - assertVisible:
     text: "(?s).*Gregorian date based on the date selected in the Nepalese calendar.*"
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_finish"
-- assertVisible:
-    text: "1 form sent to server!"
     optional: true
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 15000

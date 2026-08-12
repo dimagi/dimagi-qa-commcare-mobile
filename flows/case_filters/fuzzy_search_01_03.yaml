@@ -64,10 +64,16 @@ tags:
 - hideKeyboard
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_next"
+# UPDATE, confirmed live 2026-08-12: hardened against the same
+# already-advanced-past-Finish race fixed elsewhere in this repo today -
+# tap is now optional, with a fallback wait on the real end state.
 - tapOn: "Confirm - Please create this case."
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_finish"
-- assertVisible: "Start"
+    optional: true
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 15000
 
 # --- Fuzzy Search 1: enable Fuzzy Search Matches in Settings. ---
 # UPDATE, found via a real BrowserStack failure: this used to `back` twice.
