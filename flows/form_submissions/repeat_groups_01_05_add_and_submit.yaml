@@ -13,94 +13,67 @@ tags:
 #
 # PARTIAL: the sheet's own verification for this section is largely a
 # VISUAL judgment call - it describes a progress bar that should visibly
-# shorten/lengthen as repeat groups are added/removed, turn GREEN, and show
-# "FINISH" text at the end. Maestro can assert that specific TEXT is visible
-# (done below: this flow asserts "FINISH" appears on nav_btn_finish once the
-# form's last screen is reached), but it has no API to inspect a view's
-# rendered length or color - judging whether a progress bar visually
-# shortened/lengthened or turned the correct shade of green is a human visual
-# check with no text/accessibility-tree equivalent, so that specific part of
-# "Repeat Groups 1-5" is NOT automated here and stays a documented gap
-# (same convention as flows/menu_badges/menu_badges_03_04_badge_loads.yaml's
-# own PARTIAL header, which flags an analogous "legible/not fuzzy" visual-only
-# check as out of scope while still automating everything else on that
-# screen). Everything ELSE checkable - creating repeat-group iterations via
-# the real "Add Group"/"Do Not Add" dialog buttons, and submitting - is fully
-# automated below.
+# shorten/lengthen as repeat groups are added/removed (Repeat Groups 1-3),
+# turn GREEN, and show "FINISH" text at the end (Repeat Groups 4). Maestro
+# can assert that specific TEXT is visible (done below), but has no API to
+# inspect a view's rendered length or color, so that visual judgment stays a
+# documented gap (same convention as
+# flows/menu_badges/menu_badges_03_04_badge_loads.yaml's own PARTIAL
+# header). Repeat Groups 3's own "swipe backwards, verify the bar shortens"
+# step is a pure navigation round-trip with no effect on the data
+# ultimately submitted (you land back where you started), so it's not
+# reproduced here either - only the number-question's own "enter, wait,
+# replace with 1" interaction (the one non-visual part of that row) is.
+# Repeat Groups 5 (Submit History verification on HQ) is out of scope - a
+# browser/HQ check, not an on-device Maestro action.
 #
-# Form structure verified against the real CCZ (read-only reference, not
-# committed): resources/qateam - [Master] Basic Tests - v1141.ccz, unzipped
-# and inspected -
-#   en/app_strings.txt: forms.m0f2=Repeats.
-#   modules-0/forms-2.xml: the real question order/appearances/binds. Its
-#     intro text literally instructs "Please create two, and enter values
-#     for them" for the first (user-addable) repeat group
-#     (/data/question1, itext id new_intro-label) - this flow creates
-#     exactly two.
-#   /data/question1/question3 (bind required="true()") and
-#     /data/question1/question2 (bind required="true()", a select1 with
-#     choices One/Two) are the only required fields inside that
-#     user-addable repeat - answered below for both iterations so
-#     navigation isn't blocked by a validation error. Every other question
-#     in the form (the fixed-count 3x repeat, the nested 2x3 outer/inner
-#     repeat, num_repeats and its own repeat, the County/City lookup
-#     selects) has NO required bind, so those sections are paged through
-#     via a generic next-loop without answering, per this repo's
-#     established generic-navigation convention (see
-#     flows/common/navigate_form_no_errors.yaml).
+# REWRITTEN 2026-08-12 from a real on-device screen recording the user
+# captured after this flow failed four straight rounds of live BrowserStack
+# verification (builds 0c5c7ec39fb0738e77e630908ebded5a7bc93057,
+# e94ccde418f31755816f72db8ef46ad0329c7334,
+# 55a789429ba20da1638af77d88cfcd7455514818, plus a defensive-dismiss guess
+# that was never confirmed). The recording revealed the ORIGINAL structure
+# below was simply wrong about the form's content, not suffering from a
+# timing race as every prior round assumed:
+#   - The first user-addable repeat is "Repeat_Group_Multimedia", not a
+#     plain text+select repeat. Each iteration has FOUR sub-questions in
+#     sequence - Image (Take Picture/Choose Image), Audio (Start
+#     recording), Video (Record/Choose/Play Video), then a generic "input
+#     group" text field - none required, all safely skippable via
+#     nav_btn_next (confirmed live: the recording never interacts with any
+#     of the capture buttons, just advances).
+#   - The text-input + "Choose an option: One/Two" pair this file used to
+#     put inside that first repeat actually belongs to a SEPARATE, later,
+#     fixed-count (not user-addable) "Fixed Repeat Group" section that
+#     always runs exactly 3 times with no Add/Do Not Add dialog at all.
+#   - This explains the previously mysterious "Exit Form?" dialog stealing
+#     every nav_btn_next tap right after `hideKeyboard`: this flow's old
+#     code was typing text and dismissing a keyboard on what is actually an
+#     Image/Audio/Video capture screen with NO text field and thus no
+#     keyboard open - `hideKeyboard` appears to fall back to a hardware
+#     back-key press when there's no keyboard to dismiss, and pressing back
+#     mid-form is exactly what opens "Exit Form?". Root cause confirmed via
+#     recording, not just inferred.
+#   - Past the two repeats, the real form continues into a numeric question
+#     ("Enter a number here, then wait a couple seconds. Then, replace it
+#     with '1' and proceed." - reproduced below via eraseText, matching
+#     Repeat Groups 3's own literal instruction), a repeat-count-of-1 driven
+#     by that number, a "This is a repeat" text field, and finally a
+#     cascading county/city multi-select before FINISH.
 #
-# UPDATE, confirmed live (2026-08-08, real BrowserStack failure + user
-# screenshot): the ORIGINAL text-based taps below ("Add Group" / "(?i)do not
-# add.*") were wrong - the real on-screen button text is NOT the generic
-# repeat.dialog.add/leave/exit localization strings this header originally
-# (incorrectly) cited. FormEntryActivityUIController.createRepeatDialog()
-# builds addAnotherText from `repeatCaptionPrompt.getRepeatText(...)`, which
-# pulls the FORM's OWN itext binding for that specific question (e.g. "Add a
-# new This is a repeat group: Add a few iterations and enter a number each
-# time.?" or "Add a new Repeat_Group_Multimedia?" on a different form) - a
-# per-question, form-authored string, not a fixed app string at all.
-# Matching on literal text here was never going to work reliably.
-#
-# Fix: HorizontalPaneledChoiceDialog.setupThreePanelView() (read-only
-# reference, verified against source) wires this 3-button dialog to FIXED,
-# content-independent ids regardless of the dynamic caption text:
-#   R.id.choice_dialog_panel_1 = "Go Back"
-#   R.id.choice_dialog_panel_2 = "Add Another" (repeat.dialog.add/add-empty)
-#   R.id.choice_dialog_panel_3 = "Skip" (repeat.dialog.leave/exit)
-# Tapping by these ids works regardless of which form or which specific
-# repeat-group label is showing.
-#
-# form.entry.finish.button="FINISH"
-# (android_translatable_strings.txt:173) backs the literal "FINISH" text
-# assertion. nav_btn_next/nav_btn_finish ids and
-# form.entry.complete.save.success="Form successfully completed"
-# (android_translatable_strings.txt:169) verified the same way, same
-# regex-assertion convention as
-# flows/recovery_measures/point_release_flow.yaml.
+# This form's nav_btn_next/nav_btn_finish ids back the same top-progress-bar
+# chevron on every single-question screen in this form (confirmed live -
+# there is no separate bottom nav button here, unlike
+# flows/form_submissions/question_types_01_03_answer_and_submit.yaml's
+# form), and choice_dialog_panel_2/3 are the same fixed,
+# content-independent "Add.../Do Not Add" ids already used elsewhere in
+# this file's own history and in
+# flows/mobile_pins/setup_03_enable_developer_options.yaml's dialog.
 #
 # Prepends install_app_as_web_user.yaml (APP_NAME: ".*Basic Tests$") - a
 # fresh BrowserStack session has no app installed until this runs; see
 # DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
 # null.
-#
-# UPDATE, confirmed live 2026-08-11 (CI run 31476507436, build
-# 0c5c7ec39fb0738e77e630908ebded5a7bc93057): the very first "Tap on
-# nav_btn_next" (below) failed immediately after the preceding
-# extendedWaitUntil had already confirmed it visible - the failure
-# screenshot showed the app's own "Exit Form?" dialog open over this same
-# intro screen instead. This form's entry transition (list item tap ->
-# form-entry screen sliding in) was still mid-animation when the tap's
-# coordinates were captured, so the tap landed on the still-shifting "X"
-# cancel icon instead of nav_btn_next. Added waitForAnimationToEnd to let
-# the transition settle before tapping.
-#
-# UPDATE (2nd correction), confirmed live 2026-08-11 (build
-# e94ccde418f31755816f72db8ef46ad0329c7334): fixing that first tap exposed
-# the SAME race one step later - the tap right after `hideKeyboard` (once
-# "Repeat one"/"Repeat two" is typed) failed the exact same way, for the
-# exact same reason (the keyboard-dismiss layout transition hadn't settled
-# either). Added waitForAnimationToEnd after both hideKeyboard calls below
-# too.
 - runFlow:
     file: ../common/install_app_by_code.yaml
     env:
@@ -117,101 +90,198 @@ tags:
     visible:
       id: "org.commcare.dalvik:id/nav_btn_next"
     timeout: 10000
-- waitForAnimationToEnd
 # new_intro trigger -> lands on the empty repeat's "Add Group" prompt.
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_next"
 
-# --- Repeat iteration 1 ---
+# === Repeat Groups 1: add Repeat_Group_Multimedia twice ===
+# UPDATE (confirmed live 2026-08-12, 3rd BrowserStack round, build
+# dd86855a64ce9459a850883a4388389f3efbeca1): a 2nd-round guess that each
+# iteration was only 3 sub-questions (Image/Audio/Video) was wrong - the
+# failure screenshot showed iteration 1 still sitting on its 4th question
+# ("input group", keyboard open) when the flow tried to tap
+# choice_dialog_panel_2 for the 2nd add. Reverted to 4 taps/iteration
+# (matching the original recording-based read). Also confirmed live
+# (previous round): after the 3rd prompt's "Do Not Add", a SECOND, separate
+# "Do Not Add" prompt immediately follows - both are required to fully
+# leave this repeat.
+# The 4th sub-question ("input group") auto-focuses a text field and opens
+# the keyboard (confirmed live via its own failure screenshot) - CommCare's
+# adjustResize layout can squeeze the top action bar (where nav_btn_next
+# lives here) out of reach while that keyboard is up, so hideKeyboard is
+# called ONLY here, right before that specific tap, where a keyboard is
+# actually guaranteed open. (Calling it on the prior Image/Audio/Video
+# taps, where no keyboard is ever open, is exactly what caused the
+# "Exit Form?" mis-tap bug this whole rewrite fixed - hideKeyboard appears
+# to fall back to a hardware back-press when there's no keyboard to
+# dismiss.)
+# --- Iteration 1: Image / Audio / Video / input group. ---
 - tapOn:
     id: "org.commcare.dalvik:id/choice_dialog_panel_2"
-- inputText: "Repeat one"
-- hideKeyboard
-- waitForAnimationToEnd
-# UPDATE (3rd correction): waitForAnimationToEnd alone didn't fix it - the
-# failure recurred with the SAME "Exit Form?" mis-tap even after it
-# reported completed, suggesting real device lag outlasting Maestro's own
-# animation-settled signal (this session ran 30+ consecutive BrowserStack
-# builds). Added a fixed 2s buffer on top, via the extendedWaitUntil-on-an-
-# impossible-condition idiom (Maestro has no plain "wait N seconds"
-# command - check-syntax rejects a bare `wait:` block).
-- extendedWaitUntil:
-    notVisible: "___maestro_fixed_pause_sentinel___"
-    timeout: 2000
-- tapOn:
-    id: "org.commcare.dalvik:id/nav_btn_next"
-# full_address / street / zip_code - optional, skipped.
 - repeat:
     times: 3
     commands:
       - tapOn:
           id: "org.commcare.dalvik:id/nav_btn_next"
-# required select1 question2 (label "Choose an option:", choices One/Two).
-- tapOn: "One"
+- hideKeyboard
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_next"
 
-# --- Repeat iteration 2 ---
+# --- Iteration 2: same four sub-questions. ---
 - tapOn:
     id: "org.commcare.dalvik:id/choice_dialog_panel_2"
-- inputText: "Repeat two"
-- hideKeyboard
-- waitForAnimationToEnd
-# UPDATE (3rd correction): waitForAnimationToEnd alone didn't fix it - the
-# failure recurred with the SAME "Exit Form?" mis-tap even after it
-# reported completed, suggesting real device lag outlasting Maestro's own
-# animation-settled signal (this session ran 30+ consecutive BrowserStack
-# builds). Added a fixed 2s buffer on top, via the extendedWaitUntil-on-an-
-# impossible-condition idiom (Maestro has no plain "wait N seconds"
-# command - check-syntax rejects a bare `wait:` block).
-- extendedWaitUntil:
-    notVisible: "___maestro_fixed_pause_sentinel___"
-    timeout: 2000
-- tapOn:
-    id: "org.commcare.dalvik:id/nav_btn_next"
 - repeat:
     times: 3
     commands:
       - tapOn:
           id: "org.commcare.dalvik:id/nav_btn_next"
-- tapOn: "Two"
+- hideKeyboard
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_next"
 
-# Stop at exactly two iterations - panel_3 is the "Skip" choice regardless
-# of whether its dynamic label reads "Do Not Add" or "Do Not Add. I'm
-# Finished." (that variance is exactly why this uses the fixed id, not text).
+# === Repeat Groups 2: on the 3rd prompt, Do Not Add - twice. ===
 - tapOn:
     id: "org.commcare.dalvik:id/choice_dialog_panel_3"
+- tapOn:
+    id: "org.commcare.dalvik:id/choice_dialog_panel_3"
+    optional: true
 
-# Rest of the form (fixed 3x repeat, "toofew"/"repeat_total" info triggers,
-# nested 2x3 outer/inner repeat, num_repeats + its own repeat, intro_label,
-# County/City lookup selects) - all optional per header CAVEAT, paged
-# through generically. times: 40 is a generous upper bound; the `while`
-# condition stops the loop as soon as nav_btn_next disappears (i.e. the last
-# screen, with nav_btn_finish instead, is reached).
-# UPDATE, confirmed live (2026-08-08, real BrowserStack failure + user
-# screenshot, on question_types_01_03's identical dialog): the rest of this
-# form has its OWN additional repeat groups (nested outer/inner repeat,
-# num_repeats + its own repeat) beyond the one already handled above - each
-# can show the SAME "Add a new...?" dialog, and it doesn't only appear at a
-# single predictable point. Defensively dismiss it (Do Not Add) before every
-# generic Next tap, not just the one explicit handling point above.
+# "You should see three repeat groups with a fixed count." info trigger.
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+
+# === Fixed Repeat Group - always exactly 3 iterations, no Add dialog. ===
+# Each iteration: an optional free-text question (skipped on iteration 1,
+# labelled "Enter anything here for repeat N" on iterations 2-3), Full
+# Address, Street, Zip Code (all optional text, skipped), then a required-
+# feeling "Choose an option: One/Two" select answered for real to avoid
+# risking the "not enough repeats" validation seen live further down.
+#
+# UPDATE (confirmed live 2026-08-12, build
+# fb871028871052e25245e8b4755cbe18b9c04d07): a blind fixed count of
+# nav_btn_next taps per iteration desynced, because iteration 1 has ONE
+# FEWER leading question than iterations 2-3 (no "Enter anything..." text
+# field on the very first iteration) - the whole sequence shifted and only
+# 1 of 3 real Fixed Repeat Group iterations completed before the "not
+# enough repeats" hard validation trap further down blocked all progress.
+# Switched to looping nav_btn_next until "Choose an option:" itself is
+# visible - resilient to however many optional questions precede it on a
+# given iteration - matching the generic-navigate-until-target convention
+# already used in flows/multimedia/image_resize_25_photo_taken.yaml and
+# image_resize_26_photo_chosen.yaml.
 - repeat:
-    times: 40
-    while:
-      visible:
-        id: "org.commcare.dalvik:id/nav_btn_next"
+    times: 3
     commands:
+      - repeat:
+          times: 6
+          while:
+            notVisible: "Choose an option:"
+          commands:
+            - tapOn:
+                id: "org.commcare.dalvik:id/nav_btn_next"
+      - tapOn: "One"
+      - tapOn:
+          id: "org.commcare.dalvik:id/nav_btn_next"
+
+# UPDATE (confirmed live in the recording): a "You have not created enough
+# repeats. Please go back and create more." validation trigger can appear
+# here - defensively acknowledge it (its own "OK. Please continue."
+# checkbox) and advance if it shows, otherwise this is a silent no-op.
+- tapOn:
+    text: "OK. Please continue."
+    optional: true
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+    optional: true
+
+# === Repeat Groups 3: numeric question - enter a number, wait, replace
+# with "1", proceed (the one non-visual part of this row - see header). ===
+- inputText: "6"
+- hideKeyboard
+- extendedWaitUntil:
+    notVisible: "___maestro_fixed_pause_sentinel___"
+    timeout: 2500
+- eraseText
+- inputText: "1"
+- hideKeyboard
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+
+# UPDATE (confirmed live 2026-08-12, build
+# 03082c405496d292052629fca7caad4ef922013a): the "not enough repeats" trap
+# and the "Add a new Outer Repeat?" dialog (see below) both sit behind this
+# exact nav_btn_next tap, and in THIS order - dismissing the trap first is
+# what actually reveals the Outer Repeat dialog underneath it. The reverse
+# order (Outer Repeat dialog checked first) silently no-ops both optional
+# taps and fails one step later. Order matters here.
+- tapOn:
+    text: "OK. Please continue."
+    optional: true
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+    optional: true
+
+# UPDATE (confirmed live 2026-08-12, build
+# 86ed211399ff353f9990883eba0f1c8fe0962deb): the number entered above
+# drives a THIRD user-addable repeat, "Outer Repeat" - not an automatic
+# count-driven repeat as the question's own text implies. It shows the
+# same "Add a new Outer Repeat?" dialog convention as the earlier repeats
+# in this form. Since "1" was entered, exactly one Add is needed; the
+# second (immediately following) prompt gets Do Not Add.
+- tapOn:
+    id: "org.commcare.dalvik:id/choice_dialog_panel_2"
+    optional: true
+- tapOn:
+    id: "org.commcare.dalvik:id/choice_dialog_panel_3"
+    optional: true
+
+# UPDATE (confirmed live 2026-08-12, build
+# e6cf61d52529ff51d3d0b042b45082999e1009de): the "Outer Repeat" driven by
+# the number entered above turned out to ALSO contain its own nested
+# "Inner Repeat" ("Outer Repeat (1) > Inner Repeat (2)", a text field
+# "This question is inside the inner repeat.") - already 2 iterations deep
+# by the time this was discovered, with its own keyboard-open state and
+# presumably its own Add/Do Not Add cycle. Enumerating every dialog this
+# form can produce one live failure at a time has hit diminishing returns.
+# Replaced the rest of this section with a generic recovery loop: on each
+# pass, dismiss the "not enough repeats" trap if present, dismiss any
+# Add/Do Not Add dialog with Do Not Add (stop growing repeats - only the
+# earlier, deliberately-counted ones should exist), then tap nav_btn_next -
+# repeating until the county multi-select ("Suffolk") is reached. This
+# trades precise step-by-step documentation for resilience against however
+# many more nested repeats or validation traps this form still has past
+# this point. Deliberately does NOT call hideKeyboard here (unlike the
+# Repeat_Group_Multimedia section above, where it's called only right
+# before the one tap known to have a keyboard open) - blindly calling it
+# on every pass of a generic loop like this one, including on screens with
+# no keyboard open at all, is exactly the mistake that caused the
+# "Exit Form?" mis-tap bug this whole rewrite fixed in the first place.
+- repeat:
+    times: 15
+    while:
+      notVisible: "Suffolk"
+    commands:
+      - tapOn:
+          text: "OK. Please continue."
+          optional: true
       - tapOn:
           id: "org.commcare.dalvik:id/choice_dialog_panel_3"
           optional: true
       - tapOn:
           id: "org.commcare.dalvik:id/nav_btn_next"
+          optional: true
 
-# PARTIAL boundary: this confirms the literal "FINISH" text is present (the
-# one sub-part of the progress-bar/FINISH-state check Maestro CAN verify -
-# see header comment) - it does NOT judge the progress bar's color/length.
+# County multi-select - "De-select exactly one of the options below, and
+# remember which options remain checked" (Suffolk/Middlesex/Essex, all
+# checked by default).
+- tapOn: "Essex"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+
+# === Repeat Groups 4: cascading city multi-select, then FINISH. ===
+- tapOn:
+    text: "Boston"
+    optional: true
 - assertVisible: "FINISH"
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_finish"
