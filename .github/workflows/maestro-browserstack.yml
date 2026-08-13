@@ -125,7 +125,12 @@ jobs:
           HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
           HQ_WEB_USER_PASSWORD: ${{ secrets.HQ_WEB_USER_PASSWORD }}
         run: |
-          ARGS=(--devices "${{ github.event.inputs.devices || 'Samsung Galaxy S20-10.0' }}" --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}")
+          # --retry-failed: re-triggers a second build with just the flows
+          # that failed a real assertion, and reports a pass-on-retry as
+          # "rerun" (flaky) instead of "failed" - previously only used in
+          # ad-hoc local dispatches, never wired into CI itself, so a
+          # genuinely flaky test had no chance to recheck here before today.
+          ARGS=(--devices "${{ github.event.inputs.devices || 'Samsung Galaxy S20-10.0' }}" --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}" --retry-failed)
           for T in ${{ matrix.tags }}; do ARGS+=(--tag "$T"); done
           if [ -n "${{ github.event.inputs.release_tag }}" ]; then ARGS+=(--release-tag "${{ github.event.inputs.release_tag }}"); fi
           if [ -n "${{ github.event.inputs.hq_setup }}" ]; then ARGS+=(--hq-setup "${{ github.event.inputs.hq_setup }}"); fi
