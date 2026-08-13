@@ -241,7 +241,7 @@ def run_all_builds(bs, flow_files, app_url, args, env_variables, other_app_urls,
                 # anything, so status/counts are left alone; just note it so
                 # it isn't invisible (confirmed live: a flow that needed 2
                 # retries reported a clean 100% pass rate with Rerun: 0).
-                note = f"(passed after {upload_attempts} upload attempts due to intermittent BROWSERSTACK_TESTSUITE_PARSE_ERROR)"
+                note = f"(passed after {upload_attempts} upload attempts due to an intermittent BrowserStack-side build failure - parse error or a mid-run session error)"
                 for r in normalized:
                     r.error = f"{r.error} {note}".strip() if r.error else note
             test_results.extend(normalized)
@@ -256,8 +256,10 @@ def run_all_builds(bs, flow_files, app_url, args, env_variables, other_app_urls,
             missing = [f for f in covered_files if f"{f.parent.name}/{f.stem}" not in seen_names]
             test_results.extend(synthesize_missing(
                 missing,
-                f"BrowserStack build {build_id} was a total testsuite parse error - this "
-                f"flow never actually ran (see the CI log for retry/fallback details)."
+                f"BrowserStack build {build_id} stayed a total failure "
+                f"({_describe_build_failure(result)}) even after retry/fallback - this "
+                f"flow's real result (if any) couldn't be recovered (see the CI log for "
+                f"retry/fallback details)."
                 if build_id else
                 "Skipped: this run's overall wall-clock budget was exceeded before this "
                 "flow could even be attempted (see DEFAULT_WALL_CLOCK_BUDGET_SECONDS in "
@@ -275,20 +277,73 @@ def _is_testsuite_parse_error(result):
     zip-structure or flow-content bug - re-uploading the identical content as
     a fresh test-suite (new bs:// id) reliably clears it. --retry-failed
     can't help here since match_flow_files has no failed test NAMES to match
-    against when the whole build reports zero testcases."""
+    against when the whole build reports zero testcases.
+
+    UPDATE, confirmed live (CI run 31616429191, build
+    c4c49e90d5da5ecfdbcb3b95a1ef8be3bb14bbdf): a SEPARATE BrowserStack
+    infra-level failure mode hit a 15-flow chunk - session status "error",
+    message "Could not start a session : Something went wrong during test
+    execution.", with a NONZERO build-level aggregate (testcases.count=15,
+    12 passed/0 failed/3 error) - i.e. this ORIGINALLY looked like a normal
+    completed build, not a parse error, so this function returned False and
+    run_build accepted the result as final with zero retries. The real
+    problem: BrowserStack's separate per-session detail endpoint
+    (browserstack_client.get_session, which normalize_build calls to get
+    actual per-test names/statuses - the build-level response only ever
+    carries the aggregate count) returned an EMPTY testcases.data array for
+    this session despite that nonzero aggregate - confirmed live via a
+    direct GET .../builds/<id>/sessions/<id> call. With no per-test data to
+    read, report_generator has no way to know WHICH of the 15 passed, so
+    ALL 15 got silently synthesized as "failed" by run_all_builds's own
+    missing-flow fallback - even though 12 genuinely passed on
+    BrowserStack's side. Any session-level status=="error" (BrowserStack's
+    own signal that its infra broke before a trustworthy per-test result
+    was produced, distinct from "failed" which means the test itself ran
+    and failed) is now treated the same as a parse error: retry, then fall
+    back to individual single-flow builds if it persists - matching the
+    same "re-upload/re-run to get real per-test data" remedy that already
+    works for the classic 0-count parse error."""
     if not isinstance(result, dict):
         return False
     for device in result.get("devices", []):
         for session in device.get("sessions", []):
             error = session.get("error") or {}
             count = (session.get("testcases") or {}).get("count", 0)
+            status = session.get("status")
             if count == 0 and (
                 "PARSE_ERROR" in (error.get("message") or "")
                 or error.get("short_error_message") == "No Tests Ran"
             ):
                 continue
+            if status == "error":
+                continue
             return False
     return bool(result.get("devices"))
+
+
+def _describe_build_failure(result):
+    """Human-readable reason a build tripped _is_testsuite_parse_error -
+    either the classic 0-count parse error, or the session-status=="error"
+    infra failure documented in that function's own UPDATE - so log/failure
+    messages stop unconditionally saying "PARSE_ERROR (0 tests ran)" for a
+    build that BrowserStack's own aggregate says actually ran real tests."""
+    if not isinstance(result, dict):
+        return "an unrecognized build response"
+    reasons = []
+    for device in result.get("devices", []):
+        for session in device.get("sessions", []):
+            error = session.get("error") or {}
+            count = (session.get("testcases") or {}).get("count", 0)
+            if count == 0:
+                reasons.append("BROWSERSTACK_TESTSUITE_PARSE_ERROR (0 tests ran)")
+            else:
+                status_line = (session.get("testcases") or {}).get("status", {})
+                reasons.append(
+                    f"session status=\"error\" ({error.get('message') or 'no message'}) "
+                    f"with a nonzero aggregate ({count} tests, {status_line}) but no "
+                    f"retrievable per-test data"
+                )
+    return "; ".join(reasons) if reasons else "an unrecognized build response"
 
 
 def _run_build_once(bs, flow_files, app_url, args, env_variables, other_app_urls, tmp_dir, build_name=None):
@@ -396,8 +451,8 @@ def run_build(bs, flow_files, app_url, args, env_variables, other_app_urls, tmp_
                 print(f"Wall-clock budget exceeded mid-retry for build {build_id} - "
                       f"accepting its last parse-error result rather than retrying further.")
                 break
-            print(f"Build {build_id} was a total BROWSERSTACK_TESTSUITE_PARSE_ERROR "
-                  f"(0 tests ran) - retrying with a fresh upload ...")
+            print(f"Build {build_id} stayed a total failure ({_describe_build_failure(result)}) "
+                  f"- retrying with a fresh upload ...")
 
     if len(non_common) <= 1:
         return [(build_id, result, non_common, max_parse_retries + 1)]
@@ -405,7 +460,8 @@ def run_build(bs, flow_files, app_url, args, env_variables, other_app_urls, tmp_
         print(f"Wall-clock budget exceeded - skipping the per-file fallback for "
               f"{[str(f.name) for f in non_common]} outright.")
         return [(None, None, non_common, 0)]
-    print(f"Build {build_id} stayed a total parse error after {max_parse_retries + 1} attempts - "
+    print(f"Build {build_id} stayed a total failure ({_describe_build_failure(result)}) "
+          f"after {max_parse_retries + 1} attempts - "
           f"falling back to {len(non_common)} individual single-flow builds ...")
     quads = []
     for i, f in enumerate(non_common):
