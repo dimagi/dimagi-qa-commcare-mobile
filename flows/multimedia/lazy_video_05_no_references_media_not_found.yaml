@@ -6,9 +6,18 @@ tags:
 - runFlow:
     file: ../common/install_app_by_code.yaml
     env:
-      APP_CODE: ${APP_CODE_MULTIMEDIA}
+      APP_CODE: ${APP_CODE_LAZY_VIDEOS}
 # Master Mobile Plan (2026) > Multimedia > "Lazy Video 5" - 'Media not
 # found' message for unreferenced videos.
+#
+# UPDATE (2026-08-13): switched from APP_CODE_MULTIMEDIA to
+# APP_CODE_LAZY_VIDEOS - confirmed via a user-supplied recording
+# (Recording_20260813_115417.mp4) that "Video Questions" is a SEPARATE,
+# unregistered "Lazy Videos" app, not a menu inside the Multimedia app.
+# App_id user-confirmed (qateam/9348a6c0baa5b98d1082a8e94048697a) and
+# registered as LAZY_VIDEOS in scripts/app_registry.py. The
+# navigation/selectors below were already ground-truthed correctly against
+# this app's real screens - only the app_id was wrong.
 #
 # PARTIAL DEPENDENCY (kept tagged `automatable` to match
 # coverage_matrix.csv, but flagging this in the header comment per the
@@ -24,8 +33,7 @@ tags:
 # Verified against source: a question first shows the same
 # video_download_prompt / download-icon prompt as lazy_video_02 (the URI
 # itself still resolves, so allowDownload=true), but tapping the download
-# icon (res/layout/missing_media_view.xml -> id/download_media_icon) then
-# calls mediadownload/MissingMediaDownloadHelper.kt's
+# trigger then calls mediadownload/MissingMediaDownloadHelper.kt's
 # downloadMissingMediaResource(), which can't find any resource id matching
 # that URI at all and returns:
 #   res/values/strings.xml:331 -> media_not_found_error = "Media not found
@@ -33,6 +41,26 @@ tags:
 #   (MissingMediaDownloadHelper.kt:200-204). The result's message then
 #   replaces the prompt text in the same missing_media_tv TextView
 #   (views/media/MediaLayout.java:403).
+#
+# UPDATE (2026-08-13): confirmed live via BrowserStack's own commandlogs
+# hierarchy dump (build 5f45ccaab3feb04c74202455ca2ee4e5f432af2a) - the
+# hard-required tap on id/download_media_icon FAILED outright on QUESTION
+# 1 (element not found anywhere in the real hierarchy); that question's
+# actual clickable download trigger is id/video_button (an ImageButton,
+# confirmed clickable=true in the dump), sitting alongside a non-clickable
+# id/audio_video_button container. Switched Q1's tap.
+#
+# UPDATE (2nd correction): blanket-switching Q2's tap to video_button too
+# was WRONG - confirmed live on the very next run (build
+# 9d0340131b9133cb0186828ff7c0c361b9a6cd48) that Q2 ("No reference video
+# 2") FAILED to find video_button, and its own hierarchy dump showed the
+# real element there IS id/download_media_icon (an ImageView,
+# clickable=true) - the classic missing_media_view widget this file's
+# source citation above always described. So this form mixes TWO different
+# question widget types: Q1 renders as the "standard" audio_video_button/
+# video_button widget (no missing_media_view at all), Q2 renders as the
+# classic inline missing-media widget (download_media_icon). Reverted only
+# Q2's tap back to download_media_icon; Q1 stays on video_button.
 #
 # Prepends install_app_as_web_user.yaml (APP_NAME: Multimedia) - a fresh
 # BrowserStack session has no app installed until this runs; see
@@ -48,7 +76,7 @@ tags:
 # Question 1
 - assertVisible: "Video file is missing for this question, click the download button above to download"
 - tapOn:
-    id: "org.commcare.dalvik:id/download_media_icon"
+    id: "org.commcare.dalvik:id/video_button"
 - assertVisible: "Media not found in the application"
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_next"

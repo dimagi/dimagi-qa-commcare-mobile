@@ -83,6 +83,17 @@ APP_REGISTRY = {
     "CC_UPDATE_NEEDED": ("qateam", "8fc02611dd694001a147749a6ea558c0"),
     "POINT_RELEASE": ("qateam", "df1c05ddfb640f32c9d453f780442ce4"),
     "HEARTBEAT": ("qateam", "35b9a60884c8f8e69e507c56cbe8f370"),
+    # A genuinely different, unregistered app from "Basic Tests" - see
+    # capture_01_gather_signature.yaml's own header for the full root-cause
+    # writeup (the recording's real signature-canvas widget only renders on
+    # THIS app, not on APP_CODE_BASIC_TESTS). User-confirmed app_id
+    # (2026-08-13) via its HQ Releases page URL.
+    "BASIC_TESTS_NS_COPY": ("qateam", "8a04cdf1b9474ee2b090b1d7896b1bd7"),
+    # A separate app from "Multimedia" - see lazy_video_05's own header for
+    # the root-cause writeup (video-question forms, reached via a "Video
+    # Questions" menu item that doesn't exist on APP_CODE_MULTIMEDIA).
+    # User-confirmed app_id (2026-08-13) via its HQ Releases page URL.
+    "LAZY_VIDEOS": ("qateam", "9348a6c0baa5b98d1082a8e94048697a"),
 }
 
 # Keys that must always resolve to the app's single most recent build,
