@@ -254,23 +254,18 @@ tags:
 # UPDATE (2026-08-13): confirmed live via a user-supplied screen recording
 # (frame-by-frame review, not reproduced on a physical device) - right as
 # "Setting Up App" finishes and the login screen (edit_username) should
-# render, the screen can go solid black and STAY black for 20s+, even
-# though the Activity is alive and the keyboard underneath is fully
-# interactive (Next/Done responds correctly to typing) - a real Android
-# window-paint race after this flow's clearState reinstall, not a crash or
-# a wrong selector. A short first wait covers the normal case; if
-# edit_username still isn't visible (the black-screen case), a plain
-# launchApp (clearState: false - only re-foregrounds this SAME running
-# Activity, does not reinstall) forces a fresh window draw before the real
-# wait below. Harmless no-op when the screen already rendered normally.
+# render.
+#
+# UPDATE (2nd correction, 2026-08-13): the launchApp-based "force a
+# repaint" fix tried here was ITSELF causing real, confirmed damage - see
+# flows/common/install_app_by_code.yaml's own 2nd-correction UPDATE
+# comment for the full writeup (CI run 31691239630 showed ~15+ unrelated
+# flows across every module failing at this exact wait, matching a
+# user-supplied recording of the install stalling and reverting to the
+# pre-install screen - launchApp backgrounding the app mid-install can
+# interrupt CommCare's own background install task). Removed the
+# relaunch; just a longer plain wait instead.
 - extendedWaitUntil:
     visible:
       id: "org.commcare.dalvik:id/edit_username"
-    timeout: 30000
-    optional: true
-- launchApp:
-    clearState: false
-- extendedWaitUntil:
-    visible:
-      id: "org.commcare.dalvik:id/edit_username"
-    timeout: 90000
+    timeout: 120000

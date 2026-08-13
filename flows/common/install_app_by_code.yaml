@@ -111,26 +111,23 @@ appId: org.commcare.dalvik
             id: "org.commcare.dalvik:id/edit_username"
           timeout: 15000
           optional: true
-# UPDATE (2026-08-13): confirmed live via a user-supplied screen recording
-# (frame-by-frame review, not reproduced on a physical device) - right as
-# this install finishes and the login screen (edit_username) should
-# render, the screen can go solid black and STAY black for 20s+, even
-# though the Activity is alive and the keyboard underneath is fully
-# interactive (Next/Done responds correctly to typing) - a real Android
-# window-paint race after this flow's clearState reinstall, not a crash or
-# a wrong selector. A short first wait covers the normal case; if
-# edit_username still isn't visible (the black-screen case), a plain
-# launchApp (clearState: false - only re-foregrounds this SAME running
-# Activity, does not reinstall) forces a fresh window draw before the real
-# wait below. Harmless no-op when the screen already rendered normally.
+# UPDATE (2nd correction, 2026-08-13): the launchApp-based "force a
+# repaint" fix tried here was ITSELF causing real, confirmed damage -
+# CI run 31691239630 showed ~15+ completely unrelated flows across every
+# module all failing at this exact wait, with a user-supplied recording
+# showing the install stalling at "Setting Up App - Step 10 of 12" and
+# then reverting all the way back to the pre-install "Welcome to
+# CommCare! Please choose an installation method" screen. launchApp
+# backgrounds and re-foregrounds the app UNCONDITIONALLY on every single
+# run (not just the black-screen edge case) - if CommCare's background
+# install/resource-download task is still finishing at that moment,
+# backgrounding it via launchApp can interrupt that OS-level task
+# entirely, losing the whole install. The original black-screen premise
+# was also never solidly confirmed to begin with - the one case fully
+# root-caused via a hierarchy dump (capture_01/02's "Basic Form Tests"
+# tap) turned out to be a plain text mismatch, not a rendering bug.
+# Removed the relaunch; just a longer plain wait instead.
 - extendedWaitUntil:
     visible:
       id: "org.commcare.dalvik:id/edit_username"
-    timeout: 30000
-    optional: true
-- launchApp:
-    clearState: false
-- extendedWaitUntil:
-    visible:
-      id: "org.commcare.dalvik:id/edit_username"
-    timeout: 90000
+    timeout: 120000
