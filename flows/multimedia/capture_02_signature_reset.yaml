@@ -83,6 +83,14 @@ tags:
 - tapOn:
     id: "org.commcare.dalvik:id/btnFinishDraw"
 - assertNotVisible: "Selected file is not a valid image"
+# UPDATE (2026-08-13): confirmed live via BrowserStack's own commandlogs
+# hierarchy dump - see capture_01_gather_signature.yaml's own UPDATE
+# comment for the full root-cause writeup (this app auto-advances to the
+# NEXT question after Save and Close, rather than staying on sig_cap with
+# a thumbnail as the source citation assumed). Step back one question to
+# reach sig_cap again before reopening it.
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_prev"
 
 # --- Reopen, verify the reset button is available, reset, redraw, save ---
 - tapOn: "Gather Signature"
@@ -94,4 +102,6 @@ tags:
 - tapOn:
     id: "org.commcare.dalvik:id/btnFinishDraw"
 - assertNotVisible: "Selected file is not a valid image"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_prev"
 - assertVisible: "Gather Signature"

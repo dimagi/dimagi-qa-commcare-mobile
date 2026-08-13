@@ -109,4 +109,17 @@ tags:
 - tapOn:
     id: "org.commcare.dalvik:id/btnFinishDraw"
 - assertNotVisible: "Selected file is not a valid image"
+# UPDATE (2026-08-13): confirmed live via BrowserStack's own commandlogs
+# hierarchy dump (build 087e0eb5802773a34c2497712b8fe722447b8c0d) - after
+# Save and Close, this app auto-advances the form to the NEXT question
+# ("If available on your device, this question should only allow you to
+# take a picture." / TAKE PICTURE), rather than staying on sig_cap with a
+# thumbnail added alongside "Gather Signature" as the source citation
+# above assumed (that assumption held for the regular Basic Tests app, but
+# this "NS Copy" variant's build evidently isn't the same single-screen
+# "Question List" layout for every question - this is a real, confirmed
+# navigation difference on this app, not a rendering glitch). Step back
+# one question first to land on sig_cap again before re-checking it.
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_prev"
 - assertVisible: "Gather Signature"
