@@ -75,14 +75,30 @@ tags:
       PASSWORD: ${CC_TEST_PASSWORD}
 - assertVisible: "Start"
 
-# === Conditional ID Mapping 1 (part 1): create "Test One" (age 16, today). ===
+# UPDATE (2026-08-17): confirmed live via a user-supplied recording - the
+# SECOND PARTIAL CAVEAT above was worse than estimated: a search for "Test
+# One" in this domain's Followup list showed "2 of 5405 results", not just
+# "a dozen+ duplicates". At that scale a plain "Test One"/"Test Two" name
+# genuinely can't be trusted to resolve to THIS run's own case rather than
+# an older one already carrying different (already-answered) computed
+# state - exactly the mismatch that produced the live "Assert that 'Child'
+# is visible" failure. Fixed properly this time: generate a real unique
+# suffix once, on the test-runner side (Date.now(), not device-derived),
+# and use "Test One <suffix>"/"Test Two <suffix>" everywhere below instead
+# of the literal sheet names - the only way to guarantee this run's own
+# case is the one found, no matter how large this shared domain's case
+# list grows.
+- runScript:
+    file: assets/generate_run_suffix.js
+
+# === Conditional ID Mapping 1 (part 1): create "Test One <suffix>" (age 16, today). ===
 - tapOn: "Start"
 - tapOn: "Case List"
 - tapOn: "Register form"
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_next"
     optional: true
-- inputText: "Test One"
+- inputText: "Test One ${output.runSuffix}"
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_next"
 # Appointment Date - defaults to today already, no interaction needed.
@@ -101,11 +117,11 @@ tags:
     visible: "Start"
     timeout: 15000
 
-# === Conditional ID Mapping 1 (part 2): create "Test Two" (age 21, yesterday). ===
+# === Conditional ID Mapping 1 (part 2): create "Test Two <suffix>" (age 21, yesterday). ===
 - tapOn: "Start"
 - tapOn: "Case List"
 - tapOn: "Register form"
-- inputText: "Test Two"
+- inputText: "Test Two ${output.runSuffix}"
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_next"
 # BEST-EFFORT/UNVERIFIED: decrement the day-of-month NumberPicker column by
@@ -178,12 +194,94 @@ tags:
 # Followup" -> "Tap on ^Test One$" with nothing in between). Restored the
 # missing steps, matching Conditional ID Mapping 4/6 below which still had
 # theirs.
-- tapOn:
-    id: "org.commcare.dalvik:id/search_action_bar"
-- inputText: "Test One"
-- hideKeyboard
-- tapOn:
-    text: "^Test One$"
+# UPDATE (2026-08-17, 5th correction): confirmed live via BrowserStack's
+# own hierarchy dump (build 8d2334866d9f9580091421ecbef01be36657a0e7) -
+# the search itself worked perfectly (found exactly "1 of 5407 results"
+# for the unique suffixed name, confirming output.runSuffix substitution
+# IS working correctly despite the command log's own static description
+# always showing the unresolved "${output.runSuffix}" template - that's
+# just how BrowserStack renders the log line, not what actually executed).
+# The REAL bug: at the "Assert that 'Child' is visible" failure, the
+# hierarchy showed we were STILL on this search-results list screen with
+# the keyboard STILL open - hideKeyboard didn't reliably dismiss it before
+# the tap, so the tap likely landed on the keyboard overlay instead of the
+# list row underneath it (same class of hideKeyboard unreliability this
+# file's own 2nd/3rd/4th corrections already fought, just recurring here
+# too). First fix attempt (re-hiding the keyboard on every retry
+# iteration) made things WORSE for the Test Two case: confirmed live
+# (build d0d08a9715a371bc06443489ef3ea35d985a1875) that repeatedly calling
+# hideKeyboard once it was ALREADY closed sent a real back-press each
+# time, which cleared the search filter entirely and landed on the full,
+# unfiltered list instead - exactly the "hideKeyboard always back-presses
+# regardless of whether a keyboard is showing" bug this repo has fought
+# many times before (see e.g. flows/common/install_app_as_web_user.yaml's
+# own citation).
+#
+# UPDATE (6th correction, 2026-08-17): the "hideKeyboard exactly once,
+# then only retry the tap" fix above STILL failed live (build
+# 476d526ec5914ba3cf00d1f731a8a79ab8137807) - the hierarchy dump at the
+# "Assert Child" failure showed the search box's own EditText and the
+# full on-screen keyboard STILL rendered, meaning one hideKeyboard call
+# genuinely isn't always enough. The deeper bug: search_action_bar was
+# never a valid retry signal in the first place - it's just this list
+# screen's own toolbar chrome, present regardless of whether the keyboard
+# is open, so "while: visible: search_action_bar" could never actually
+# tell the loop whether the keyboard had closed.
+#
+# UPDATE (7th correction, 2026-08-17): switching to Samsung's own keyboard
+# root view (com.samsung.android.honeyboard:id/layout_honeyboard) ALSO
+# failed live (build e9522e60ad63ac61f7df8c83c472fca5c591cf5c) - the loop
+# reported completing (implying the id was never visible, so it exited
+# instantly without ever calling hideKeyboard), yet the hierarchy dump at
+# the SAME "Assert Child" failure still showed a full on-screen keyboard
+# rendered - i.e. this device/session didn't expose that specific IME
+# package id, even though a real keyboard was genuinely still up. Guessing
+# at IME package names is inherently fragile (it can vary by session).
+# Stopped trying to detect "is the keyboard gone" at all - instead loop on
+# the thing that actually matters: keep hiding the keyboard and retrying
+# the tap until the REAL destination content ("Child", confirmed to exist
+# only on the case-detail screen this tap is supposed to reach) actually
+# appears, regardless of which keyboard package is involved or why the
+# first tap didn't land.
+#
+# UPDATE (8th correction, 2026-08-17): the 7th correction's inner tap-retry
+# STILL failed live (build 2e4db48637ed6bc823d6650500939f21f688b5f4) - the
+# search itself worked perfectly (exactly "1 of 5417 results" for the full
+# "Test One <suffix>" query), but the keyboard was still fully rendered in
+# the failure dump after all 4 hideKeyboard+tap attempts, meaning the tap
+# never reached the real row underneath it even once. Two changes per
+# direct user guidance: (1) search by the bare run suffix alone instead of
+# "Test One <suffix>"/"Test Two <suffix>" - this still resolves to only
+# this run's own 2 cases (no other case on this shared domain can share
+# today's Date.now() suffix), so there's no ambiguity lost, while removing
+# any dependence on how CommCare's search tokenizes a name+number combo;
+# the row is still picked by its own anchored full-name text underneath.
+# (2) wrapped the whole search+retry in an outer retry that redoes the
+# search itself (erase + retype + re-loop) if the inner tap-retry still
+# hasn't reached the destination - if the keyboard problem is actually a
+# stuck/stale search-results render rather than just an unlucky tap
+# target, restarting the search from scratch gives it a fresh chance
+# rather than only ever retrying the tap against a possibly-stale list.
+- repeat:
+    times: 2
+    while:
+      notVisible:
+        text: "Child"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/search_action_bar"
+      - eraseText
+      - inputText: "${output.runSuffix}"
+      - repeat:
+          times: 4
+          while:
+            notVisible:
+              text: "Child"
+          commands:
+            - hideKeyboard
+            - tapOn:
+                text: "^Test One ${output.runSuffix}$"
+                optional: true
 - assertVisible: "Child"
 - assertVisible: "Even"
 - assertVisible: "Today"
@@ -213,12 +311,29 @@ tags:
 # Anchored tap + hideKeyboard - see Conditional ID Mapping 2's UPDATE
 # comment above for why (the results banner's own text contains "Test Two"
 # too, which a bare substring tapOn can match instead of the real row).
-- tapOn:
-    id: "org.commcare.dalvik:id/search_action_bar"
-- inputText: "Test Two"
-- hideKeyboard
-- tapOn:
-    text: "^Test Two$"
+# Same 8th-correction search-by-suffix-only + outer search-retry as
+# Conditional ID Mapping 2's own UPDATE comment above - see that for the
+# full writeup.
+- repeat:
+    times: 2
+    while:
+      notVisible:
+        text: "Adult"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/search_action_bar"
+      - eraseText
+      - inputText: "${output.runSuffix}"
+      - repeat:
+          times: 4
+          while:
+            notVisible:
+              text: "Adult"
+          commands:
+            - hideKeyboard
+            - tapOn:
+                text: "^Test Two ${output.runSuffix}$"
+                optional: true
 - assertVisible: "Adult"
 - assertVisible: "Odd"
 - assertVisible: "Not Today"
@@ -240,23 +355,68 @@ tags:
 - tapOn: "Followup"
 # Anchored tap + hideKeyboard - see Conditional ID Mapping 2's UPDATE
 # comment above for why.
-- tapOn:
-    id: "org.commcare.dalvik:id/search_action_bar"
-- inputText: "Test One"
-- hideKeyboard
-- tapOn:
-    text: "^Test One$"
+# Same 8th-correction search-by-suffix-only + outer search-retry as
+# Conditional ID Mapping 2's own UPDATE comment above - see that for the
+# full writeup.
+- repeat:
+    times: 2
+    while:
+      notVisible:
+        text: "Seen by doctor"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/search_action_bar"
+      - eraseText
+      - inputText: "${output.runSuffix}"
+      - repeat:
+          times: 4
+          while:
+            notVisible:
+              text: "Seen by doctor"
+          commands:
+            - hideKeyboard
+            - tapOn:
+                text: "^Test One ${output.runSuffix}$"
+                optional: true
 - assertVisible: "Seen by doctor"
-- back
-# `back` returns to this same Followup list, which may still be showing the
-# "Test One" search filter from just above (state-preservation on
-# back-navigation isn't confirmed either way) - erase defensively before
-# typing the next query rather than assuming either behavior.
-- tapOn:
-    id: "org.commcare.dalvik:id/search_action_bar"
-- eraseText
-- inputText: "Test Two"
-- hideKeyboard
-- tapOn:
-    text: "^Test Two$"
+# UPDATE (3rd correction, 2026-08-17): tried a single `back` to the
+# already-suffix-filtered search results (since that search already
+# contains both this run's cases) instead of re-navigating from Start -
+# confirmed live it's NOT reliable: in one run `back` landed on the
+# module menu, in another it went all the way past that to the true home
+# screen, and "Test Two" was never found either time. The back-stack
+# depth from this case-detail screen isn't deterministic. Per direct user
+# guidance: reverted to full re-navigation from Start for reliability,
+# with a higher retry count on the back-until-"Start"-visible loop
+# (rather than a fixed single/double back) to absorb that same
+# inconsistency instead of guessing an exact press count.
+- repeat:
+    times: 5
+    while:
+      notVisible: "Start"
+    commands:
+      - back
+- tapOn: "Start"
+- tapOn: "Case List"
+- tapOn: "Followup"
+- repeat:
+    times: 2
+    while:
+      notVisible:
+        text: "Needs followup"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/search_action_bar"
+      - eraseText
+      - inputText: "${output.runSuffix}"
+      - repeat:
+          times: 4
+          while:
+            notVisible:
+              text: "Needs followup"
+          commands:
+            - hideKeyboard
+            - tapOn:
+                text: "^Test Two ${output.runSuffix}$"
+                optional: true
 - assertVisible: "Needs followup"

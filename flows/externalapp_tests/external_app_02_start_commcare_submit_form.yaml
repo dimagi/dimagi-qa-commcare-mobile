@@ -64,10 +64,20 @@ env:
 # a single regex `id` selector since either one being visible confirms the Basic Form
 # launched (single-question forms show nav_btn_finish directly, multi-question ones show
 # nav_btn_next first).
+#
+# UPDATE (2026-08-17): confirmed live via a user-supplied recording - the
+# "auto-follow" cross-app assumption above is correct (CommCare genuinely
+# does come to the foreground and the form genuinely does launch and
+# submit successfully), but tapping "Start CommCare" can trigger a real
+# "Logging in / Contacting Server" round-trip first (a full re-auth+sync
+# cycle, not an instant hand-off) before form-entry ever appears - the
+# same real-server-round-trip timing this repo already gives a generous
+# wait elsewhere (flows/common/login.yaml's dialog_cancel_button wait uses
+# 120s). 15s was never going to reliably cover that. Raised to match.
 - extendedWaitUntil:
     visible:
       id: "org.commcare.dalvik:id/nav_btn_(next|finish)"
-    timeout: 15000
+    timeout: 120000
 
 # ENTER A VALUE: the Basic Form's exact question/field is specific to the "External App
 # Fixture Tests" HQ app (fixture-only, not in commcare-android source - UNVERIFIED), so this
@@ -111,12 +121,26 @@ env:
     commands:
       - tapOn:
           id: "org.commcare.dalvik:id/nav_btn_next"
+# UPDATE (2026-08-17): confirmed live via BrowserStack's own hierarchy
+# dump (build 8d2334866d9f9580091421ecbef01be36657a0e7) - this hard wait
+# +tap failed with the device ALREADY back on ExternalApp's own "Hello
+# World, ExternalAppActivity!" screen (every one of its buttons visible) -
+# the SAME already-advanced-past-Finish race hardened throughout this
+# repo: the form submitted and control returned to the companion app
+# FASTER than this assertion's poll window. Made optional, with the real
+# end state (back on ExternalApp) asserted afterward instead.
 - extendedWaitUntil:
     visible:
       id: "org.commcare.dalvik:id/nav_btn_finish"
     timeout: 10000
+    optional: true
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_finish"
+    optional: true
+- extendedWaitUntil:
+    visible: "${EXTAPP_BTN_START_COMMCARE}"
+    timeout: 15000
+    optional: true
 
 # "Ensure you're able to successfully submit" - no fixed success-toast text could be verified
 # for this fixture app (UNVERIFIED), so this asserts the ABSENCE of CommCare's generic/

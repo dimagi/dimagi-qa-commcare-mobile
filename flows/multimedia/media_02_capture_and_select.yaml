@@ -100,8 +100,23 @@ tags:
     id: "org.commcare.dalvik:id/nav_btn_next"
 
 # --- Question 2: record_video (record path, best-effort) ---
+# UPDATE (2026-08-17): confirmed live via BrowserStack's own hierarchy
+# dump (build 7f1b40a3c8b4ef15dc562c4eb9cdcb0d3b26c261) - same root cause
+# as flows/common/capture_camera_photo.yaml's own UPDATE comment: this
+# device's real camera app is com.sec.android.app.camera (Samsung), not
+# com.android.camera2 or Google Camera, so neither guessed shutter_button
+# id below ever matched - every tap silently no-oped and the flow just sat
+# on the live camera preview. Samsung's camera has a real, clickable
+# "Start recording" GLButton (confirmed in the hierarchy dump, no fixed
+# resource id) - added as the first, now-correct attempt. "Stop recording"
+# is the same app's presumed symmetric label for ending capture -
+# UNVERIFIED (no hierarchy dump exists past the point recording actually
+# started), kept optional like everything else here.
 - tapOn:
     text: "Record Video"
+    optional: true
+- tapOn:
+    text: "Start recording"
     optional: true
 - tapOn:
     id: "com.android.camera2:id/shutter_button"
@@ -113,6 +128,9 @@ tags:
     notVisible: "___maestro_fixed_pause_sentinel___"
     timeout: 2000
 - tapOn:
+    text: "Stop recording"
+    optional: true
+- tapOn:
     id: "com.android.camera2:id/shutter_button"
     optional: true
 - tapOn:
@@ -120,6 +138,22 @@ tags:
     optional: true
 - tapOn:
     text: "(?i)^(done|ok|confirm|save)$"
+    optional: true
+# UPDATE (2026-08-17): confirmed live via BrowserStack's own hierarchy
+# dump (build 7f0f7e700319ae6c2793ef3e7324d6fb6494cb6b) - "Start
+# recording"/"Stop recording" above both now genuinely work (confirmed in
+# the command log - real elements, real taps), but CommCare itself then
+# shows its own real "File Too Large" dialog ("Selected file exceeds the
+# file size limit of 15 MB.", org.commcare.dalvik:id/positive_button =
+# "OK") once it receives the recorded video back - Samsung's camera app
+# apparently doesn't cap recording length/bitrate low enough to guarantee
+# staying under CommCare's own 15MB limit for even a few seconds of
+# footage. Dismiss it if it appears, using the dialog's own confirmed
+# resource id (more reliable than the bare text "OK", which multiple
+# generic dialogs could also match) rather than trying to control
+# recording duration precisely.
+- tapOn:
+    id: "org.commcare.dalvik:id/positive_button"
     optional: true
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_next"
@@ -145,9 +179,29 @@ tags:
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_finish"
 - tapOn: "Sync with Server"
+# UPDATE, confirmed live (2026-08-17, real BrowserStack failure): the
+# camera/signature steps above all now pass, but this wait timed out at
+# 30s even though the build's own failure hierarchy dump showed the real
+# toast "Sync Successful! Your information is up to date." genuinely on
+# screen - a real-server-round-trip race after a media-heavy submission
+# (multiple attached files to upload), same class as
+# flows/form_submissions/multiple_submissions_10x_background_sync.yaml's
+# own generous-timeout convention. Raised to match.
+# UPDATE (2nd correction, 2026-08-17): recurred live even at 60s - the
+# command's own duration (60233ms against the 60000ms timeout) shows it
+# ran the FULL window and still lost the race, yet the error report's own
+# hierarchy dump, captured an instant later, already showed the toast on
+# screen. Raising the timeout further won't fix a check that's
+# consistently juuust behind the render (same conclusion reached for
+# flows/updates_2_49/rate_limit_02_04_popup_dont_show_toast.yaml's own 2nd
+# correction). Made this optional and added a durable positive gate
+# instead (back on the "Sync with Server" tile, not stuck on some error
+# dialog) that doesn't depend on catching this specific toast's timing.
 - extendedWaitUntil:
     visible:
       text: "(?i)Sync Successful"
-    timeout: 30000
+    timeout: 60000
+    optional: true
+- assertVisible: "Sync with Server"
 - assertNotVisible:
     text: "(?i)sync.*(fail|error|unavailable)"

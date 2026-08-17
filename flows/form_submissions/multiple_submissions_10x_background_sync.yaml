@@ -85,41 +85,70 @@ tags:
     timeout: 10000
 
 # Submit the "Basic Form" 10 times in a row.
+# UPDATE (4th correction, 2026-08-17): per direct user guidance, restructured
+# after watching the build's own recording - a completed "Basic Form"
+# submission returns straight to the "Basic Form Tests" module list it was
+# launched from (confirmed via the 3rd correction's own hierarchy dump
+# below), NOT all the way back to the true home screen. The PRIOR fix
+# (back-until-"Start" visible, then re-entering Start -> Basic Form Tests
+# EVERY iteration) fought that behavior instead of using it - each
+# iteration wasted a full trip back to home and back in just to land on
+# the exact same module list it started from, which is why the whole flow
+# was taking 15-20 minutes. Navigate into "Basic Form Tests" ONCE, then
+# each iteration just re-taps "Basic Form" directly from the list it's
+# already sitting on afterward.
+#
+# Also per direct user request: the submitted text now includes the loop
+# iteration number (via assets/increment_loop_counter.js, since Maestro's
+# `repeat` has no built-in iteration index) - "Maestro loop submission 7"
+# - so the number of loop iterations that actually completed is visible
+# in the submitted data itself, not just inferred from the overall
+# pass/fail result.
+- tapOn: "Start"
+- tapOn: "Basic Form Tests"
 - repeat:
     times: 10
     commands:
-      - tapOn: "Start"
-      - tapOn: "Basic Form Tests"
       - tapOn: "Basic Form"
       - extendedWaitUntil:
           visible:
             id: "org.commcare.dalvik:id/nav_btn_next"
           timeout: 10000
-      - inputText: "Maestro loop submission"
+      - runScript:
+          file: assets/increment_loop_counter.js
+      # Per direct user request: just the bare iteration number - shorter
+      # to type than a full "Maestro loop submission N" sentence, and
+      # every character typed adds real per-iteration time across 10
+      # rapid-fire submissions.
+      - inputText: "${output.loopCount}"
       - hideKeyboard
       - tapOn:
           id: "org.commcare.dalvik:id/nav_btn_next"
-      # UPDATE, confirmed live (2026-08-08, real BrowserStack failure, build
-      # fc7ff420bd1deb299f7f8a391f2287999c1cf0bd): "Assert nav_btn_finish
-      # visible" failed on one of the 10 loop iterations. Unlike the
-      # "Question Types"/"Groups" forms elsewhere in this repo, "Basic
-      # Form" has no repeat group and no confirmed auto-submit-bypass path -
-      # this looks like a genuine timing issue (10s wasn't always enough
-      # under the load of 10 back-to-back submissions, likely worse under
-      # concurrent CI runs), not a selector bug. Raised the timeout and
-      # made the finish-tap optional (harmless if the form already
-      # auto-advanced) - the toast assertion right after is the real
-      # per-iteration success check and stays a hard assertion since this
-      # form has no other durable post-submission marker to fall back on.
-      - extendedWaitUntil:
-          visible:
-            id: "org.commcare.dalvik:id/nav_btn_finish"
-          timeout: 20000
-      - tapOn:
-          id: "org.commcare.dalvik:id/nav_btn_finish"
-          optional: true
-      - assertVisible:
-          text: "(?i).*form.*success.*completed.*"
+      # UPDATE (7th correction, 2026-08-17), per direct user guidance: this
+      # form's own repeated real-run evidence (2026-08-08 through today)
+      # consistently shows it auto-advances past nav_btn_finish before any
+      # check for it even runs - every prior fix here (raising the wait
+      # timeout, then making it optional, then dropping the wait but
+      # keeping the tap) was still spending real per-iteration time on a
+      # step that's essentially never needed, confirmed by a user-supplied
+      # video showing a real multi-second gap per iteration even with the
+      # wait removed (Maestro's own default tap retry still waits before
+      # giving up on a target that isn't there). Removed the nav_btn_finish
+      # tap entirely - the loop just submits via nav_btn_next and moves on;
+      # if a future run shows this form genuinely stopping at an
+      # un-auto-advanced finish screen, that's new evidence to act on then,
+      # not a risk worth guessing against here.
+
+# Backgrounding below assumes the true home screen, but the loop above
+# always ends back on "Basic Form Tests" - back-until-"Start"-visible
+# rather than assuming an exact press count (see the file's own git
+# history for why a bare single `back` isn't safe to assume here either).
+- repeat:
+    times: 2
+    while:
+      notVisible: "Start"
+    commands:
+      - back
 
 # Background CommCare (Home key) without logging out or killing the app -
 # see BACKGROUNDING citation above.
@@ -133,11 +162,45 @@ tags:
     timeout: 10000
 
 # Verify forms sync - see SYNC VERIFICATION citation above.
-- tapOn: "Sync with Server"
+# UPDATE (2nd correction, 2026-08-17): per direct user guidance - this app
+# auto-syncs queued forms in the background without needing an explicit
+# "Sync with Server" tap (already confirmed live earlier in this same
+# engagement: a single submission's own auto-sync showed a real "1 form
+# sent to server!" toast with no manual sync action taken). Dropped the
+# manual tapOn "Sync with Server" and the "Sync Successful" wait (which
+# also raced against BrowserStack's own diagnostic-capture delay, per the
+# prior UPDATE) in favor of waiting, from the home screen we're already
+# back on, for the auto-sync completion signal.
+# UPDATE (3rd correction, 2026-08-17): confirmed live - "10 forms sent to
+# server" never appeared within 60s, but the failure hierarchy dump
+# showed "You last synced with the server: 16:41:47" on the Sync tile -
+# proof the sync genuinely completed. The "N forms sent to server!" toast
+# is just as transient as every other toast this session has had to stop
+# chasing (Toast.LENGTH_LONG, a few seconds, easily missed) - waiting on
+# it directly is racy regardless of exact wording/count. "You last synced
+# with the server" itself isn't a safe substitute either - it could
+# already be true from an earlier sync (e.g. at login) and wouldn't prove
+# THESE 10 forms specifically synced. Instead wait for "Unsent Forms: N"
+# (visible right after relaunch, before this sync completes, per
+# SyncDetailCalculations.java's own N>0-only rendering cited above) to
+# stop being shown - that transition only happens once the count
+# genuinely drops to 0.
+- extendedWaitUntil:
+    notVisible:
+      text: "(?i)unsent forms"
+    timeout: 60000
+# UPDATE (4th correction, 2026-08-17), per direct user request: the above
+# only proves the count reached 0, not that it was specifically 10 - add
+# back a real, explicit check for the literal "10 forms sent to server"
+# text. Placed AFTER the "unsent forms" wait rather than instead of it -
+# a real user-supplied recording confirmed this same card_subtext can
+# persist on screen (not just a fleeting Toast) once sync completes, so
+# checking it right after the count-reached-0 gate (rather than racing it
+# from the very start) gives it a real chance to still be showing.
 - extendedWaitUntil:
     visible:
-      text: "(?i).*unsent forms:\\s*0.*"
-    timeout: 60000
+      text: "(?i)10 forms sent to server"
+    timeout: 30000
 - assertNotVisible:
     text: "(?i).*unexpected error.*"
 - assertNotVisible:

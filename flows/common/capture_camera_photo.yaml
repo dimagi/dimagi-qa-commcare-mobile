@@ -33,8 +33,27 @@ appId: org.commcare.dalvik
 # capture intent hands off to). Declines it (no geotagging needed for
 # these tests) rather than granting, to avoid any location-permission
 # side effects.
+# UPDATE (2026-08-17): confirmed live via BrowserStack's own hierarchy
+# dumps (builds 88d3f0a51592187c6c4308039b57f6d4e40f8c59 and
+# c2cdf945e2e67c944e9125a7ae4f3318dd1fe803) - this was never actually
+# random flakiness at all; both capture_03_04_take_and_remove_photo.yaml
+# and photo_01_can_remove_taken_photo.yaml failed IDENTICALLY across two
+# separate real CI runs (Aug 14 and Aug 15), always stuck on the SAME
+# screen: com.sec.android.app.camera - Samsung's own camera app (this
+# device is a Samsung Galaxy S20), not com.android.camera2 or Google
+# Camera as guessed below. Neither guessed shutter_button id ever existed
+# in the real hierarchy at all, so every tap here was silently no-oping
+# (all optional) and the flow just sat on the live camera preview until
+# its own timeout. Samsung's camera renders a custom OpenGL UI with NO
+# fixed resource id on most controls (most show resource-id "NONE"), but
+# the real shutter IS a genuine clickable element with the accessibility
+# label "Take picture" (GLButton, clickable=true, confirmed in the
+# hierarchy dump) - added as the first, now-correct attempt below.
 - tapOn:
     text: "Cancel"
+    optional: true
+- tapOn:
+    text: "Take picture"
     optional: true
 - extendedWaitUntil:
     visible:

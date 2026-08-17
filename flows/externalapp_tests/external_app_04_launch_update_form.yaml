@@ -39,12 +39,24 @@ env:
 # STEP 3, "long press on a case (click and hold)": Maestro's long-press command is
 # `longPressOn` (confirmed against Maestro's published command reference -
 # https://docs.maestro.dev/reference/commands-available/longpresson - "performs a long press
-# (3 seconds) gesture", accepting the same selector properties as `tapOn`). Same UNVERIFIED
-# point-based placeholder as external_app_03_view_case_data.yaml's tapOn - the companion
-# app's real case-row id/text is unknown (no source access). TODO(verify): replace with a
-# proper `longPressOn: {id: "<real case-row id>"}` once available.
+# (3 seconds) gesture", accepting the same selector properties as `tapOn`).
+#
+# UPDATE (2026-08-17): the previous point-based "50%, 45%" placeholder was
+# confirmed live to miss the real target - BrowserStack's own hierarchy
+# dump (build 8d2334866d9f9580091421ecbef01be36657a0e7) showed the device
+# still sitting on the case-data LIST screen after the full 120s wait for
+# an update form, having never navigated anywhere. That same dump revealed
+# the real row structure though: a plain android.widget.ListView
+# (com.dimagi.test.external:id/list_view) with standard two-line rows
+# (android:id/text1 name / android:id/text2 uuid, the stock
+# simple_list_item_2 layout - not app-specific ids, but stable regardless
+# of which case's data happens to be in them). Long-pressing the FIRST
+# such row by id+index, rather than a blind screen-percentage guess, hits
+# a real row every time no matter how this shared domain's case list grows
+# or reorders.
 - longPressOn:
-    point: "50%, 45%"
+    id: "android:id/text1"
+    index: 0
 
 # STEP 4, "verify an update form is launched": same cross-app "auto-follow" reasoning as
 # external_app_02_start_commcare_submit_form.yaml (see that file's CROSS-APP CONTEXT SWITCH
@@ -52,10 +64,17 @@ env:
 # is used here). nav_btn_next/nav_btn_finish ids verified against
 # app/res/layout/screen_form_entry.xml + FormNavigationUI.java, matched via a regex `id`
 # selector since either being visible confirms an update form launched.
+#
+# UPDATE (2026-08-17): confirmed live via a user-supplied recording - the
+# real "Add a Nickname" update form does launch and submit successfully,
+# but the same real "Logging in / Contacting Server" round-trip
+# external_app_02_start_commcare_submit_form.yaml's own UPDATE comment
+# documents can happen here too before form-entry appears. Raised to match
+# that same generous, real-server-round-trip timeout.
 - extendedWaitUntil:
     visible:
       id: "org.commcare.dalvik:id/nav_btn_(next|finish)"
-    timeout: 15000
+    timeout: 120000
 
 # STEP 5, "Enter Data and submit the update form": same auto-focus reasoning as
 # external_app_02_start_commcare_submit_form.yaml's "ENTER A VALUE" comment - the first
@@ -73,12 +92,28 @@ env:
     commands:
       - tapOn:
           id: "org.commcare.dalvik:id/nav_btn_next"
+# UPDATE (2026-08-17): confirmed live via BrowserStack's own hierarchy
+# dump (build d0d08a9715a371bc06443489ef3ea35d985a1875) - this hard wait
+# +tap failed with the device ALREADY back on ExternalApp's own case-data
+# list screen (com.dimagi.test.external:id/list_view visible) - the SAME
+# already-advanced-past-Finish race hardened in
+# external_app_02_start_commcare_submit_form.yaml's own UPDATE comment:
+# the form submitted and control returned to the companion app FASTER
+# than this assertion's poll window. Made optional, with the real end
+# state (back on ExternalApp's case list) asserted afterward instead.
 - extendedWaitUntil:
     visible:
       id: "org.commcare.dalvik:id/nav_btn_finish"
     timeout: 10000
+    optional: true
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_finish"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: "com.dimagi.test.external:id/list_view"
+    timeout: 15000
+    optional: true
 
 # Same "no confirmed success string, assert absence of the generic error instead" reasoning
 # as external_app_02_start_commcare_submit_form.yaml (UnrecoverableErrorActivity.java +

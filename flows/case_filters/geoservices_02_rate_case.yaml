@@ -93,7 +93,29 @@ tags:
 - tapOn: "Rate Case"
 - assertVisible:
     id: "org.commcare.dalvik:id/screen_entity_select_list"
-- tapOn: "Geoservices Rate Automation Site"
+# UPDATE (2026-08-17): confirmed live via a user-supplied recording - this
+# domain's geo_case list accumulates cases across every past automation
+# run (no cleanup between runs), already a dozen+ entries deep. A bare
+# tapOn only searches the current viewport, and even a generous
+# scrollUntilVisible timeout only pushes the problem down the road - as
+# this list keeps growing across every future run, any fixed timeout
+# eventually stops being enough (the exact failure mode already documented
+# and fixed the same way in flows/conditional_enum_in_case_list/
+# conditional_id_mapping_01_06_full_scenario.yaml's own header). Using the
+# case list's own search box instead - org.commcare.dalvik:id/
+# search_action_bar is core CommCare chrome on entity-select list screens
+# (confirmed present here too, same screen_entity_select_list id asserted
+# above), so typing the name filters the list live regardless of how large
+# the backing list has grown. Anchored with ^...$ so the tap can't match
+# the search-results banner's own "results for your search: ..." text,
+# which also contains this case name as a substring - same fix as
+# conditional_id_mapping's own UPDATE comment.
+- tapOn:
+    id: "org.commcare.dalvik:id/search_action_bar"
+- inputText: "Geoservices Rate Automation Site"
+- hideKeyboard
+- tapOn:
+    text: "^Geoservices Rate Automation Site$"
 - tapOn: "Continue"
 - tapOn: "3 - Average"
 - tapOn:
@@ -111,9 +133,15 @@ tags:
 - tapOn: "Start"
 - tapOn: "Geoservices"
 - tapOn: "Rate Case"
-- assertVisible: "Geoservices Rate Automation Site"
+# Same accumulating-list risk and search-box fix as the earlier Rate Case
+# section above - see that UPDATE comment for the full writeup.
+- tapOn:
+    id: "org.commcare.dalvik:id/search_action_bar"
+- inputText: "Geoservices Rate Automation Site"
+- hideKeyboard
 - assertVisible: "★★★"
-- tapOn: "Geoservices Rate Automation Site"
+- tapOn:
+    text: "^Geoservices Rate Automation Site$"
 - assertVisible: "★★★"
 - back
 - back

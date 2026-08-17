@@ -116,31 +116,19 @@ tags:
     id: "org.commcare.dalvik:id/search_action_bar"
     optional: true
 - eraseText
-- inputText: "Krist"
-# UPDATE, confirmed live (2026-08-08, real BrowserStack failure, build
-# e45fd74a51806cffdf0c941f9ab6b2cec1663de3): a fuzzy match on "Krist" is
-# genuinely loose - the failing screenshot showed "1 of 71 results for your
-# derp: 'Krist'", with the FIRST/topmost result being an unrelated
-# "Case List Test" case, not "Christy" (fuzzy ranking doesn't put an exact
-# near-match first out of 71 hits). The plain `assertVisible: "Christy"`
-# that follows only searches the CURRENTLY RENDERED hierarchy, which here
-# is a single results row squeezed above the still-open keyboard - it
-# can't see "Christy" further down the list. Fix: hide the keyboard (so
-# the full results list actually has room to render) and scroll through
-# the list to find "Christy" specifically, rather than assuming it's the
-# first/only visible row.
+- inputText: "rist"
+# UPDATE (3rd correction, 2026-08-17): confirmed live - "rist" is an exact
+# substring of "Christy" (Ch-RIST-y), not just a loose fuzzy near-miss like
+# "Krist" was. The earlier two corrections below fought an ever-growing,
+# loosely-matched result set (70+ hits, "Christy" buried far down) that a
+# genuinely fuzzy misspelling like "Krist" produces against this shared,
+# never-pruned domain - switching to a real substring narrows the match
+# dramatically, avoiding that whole class of problem rather than working
+# around it with bigger scrolls/timeouts. Kept the hideKeyboard +
+# scrollUntilVisible safety net below regardless, since this domain's
+# result count only grows over time and a plain assertVisible alone
+# already proved unreliable once (see the two corrections' own history).
 - hideKeyboard
-# UPDATE (2nd correction), confirmed live (2026-08-08, real BrowserStack
-# re-failure, build 6088f0f4e51f008e98bcec32581ae4d4c85e7231): hiding the
-# keyboard wasn't enough either - "Scrolling DOWN until Christy is visible"
-# itself FAILED, meaning Maestro's own bounded scroll attempts (governed by
-# its timeout budget, not an explicit swipe count) never reached "Christy"
-# in what the screen claimed was "1 of 72 results". This is a shared,
-# ever-growing HQ domain (72 fuzzy matches for "Krist" this run, 71 the
-# run before - accumulating over time from every test run), so "Christy"
-# can end up ranked far down a long, loosely-fuzzy-matched list. Doubled
-# the scroll timeout to give it more swipe attempts to traverse a
-# potentially large result set.
 - scrollUntilVisible:
     element:
       text: "Christy"

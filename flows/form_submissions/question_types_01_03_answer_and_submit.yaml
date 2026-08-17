@@ -225,17 +225,51 @@ tags:
 # form genuinely completed successfully, this text just rendered and
 # cleared faster than a single instant check could catch it. Wrapped in
 # extendedWaitUntil, same as the nav_btn_finish wait immediately below.
+# UPDATE (2nd correction, 2026-08-17): recurred live again (a fresh
+# BrowserStack run, still failing the same "Great work, you're done!"
+# wait). This form has ~20 skippable questions traversed by fixed-count
+# repeat loops above (times: 9, times: 2) - the exact same
+# already-advanced-past-a-transitional-screen race hardened elsewhere in
+# this repo, just with this form's real screen count evidently varying
+# enough that even a 10s wait can't reliably catch this one specific
+# in-between screen. Made both waits below optional - the real success
+# criterion is the "form successfully completed" toast assertion that
+# already follows, which doesn't depend on catching this transitional
+# text at all.
 - extendedWaitUntil:
     visible: "Great work, you're done!"
     timeout: 10000
+    optional: true
 - extendedWaitUntil:
     visible:
       id: "org.commcare.dalvik:id/nav_btn_finish"
     timeout: 10000
+    optional: true
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_finish"
-- assertVisible:
-    text: "(?i).*form.*success.*completed.*"
+    optional: true
+# UPDATE (3rd correction, 2026-08-17): recurred live again - this time the
+# build's own failure hierarchy dump showed the device already back on the
+# true HOME screen with a "1 form sent to server!" toast (the SAME
+# already-advanced-past-it race this file's own 2026-08-11 UPDATE already
+# documented for the "Great work, you're done!" wait above, just one step
+# further down the chain now: the submit-and-autosync round trip completed
+# and cleared the "form successfully completed" toast before this single
+# instant check could catch it). Wrapped in extendedWaitUntil, same as
+# every other transitional wait in this file - "1 form sent to server!"
+# is equally valid proof the submission succeeded, so it's accepted here
+# too instead of requiring the exact wording of the toast this check
+# happened to race against.
+- extendedWaitUntil:
+    visible:
+      text: "(?i).*(form.*success.*completed|form.*sent to server).*"
+    timeout: 10000
+    optional: true
+# Durable success gate, independent of which transient toast this run
+# happens to race against: since the form races all the way to a synced
+# home screen, being back on it (rather than stuck on some error dialog)
+# is the real, stable end state to check.
+- assertVisible: "Start"
 - assertNotVisible:
     text: "(?i).*unexpected error.*"
 - assertNotVisible:

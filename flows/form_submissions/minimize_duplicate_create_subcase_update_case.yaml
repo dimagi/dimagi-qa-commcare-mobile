@@ -83,10 +83,14 @@ tags:
 #     the existing case (setvalue ref=.../xforms-ready pulling from
 #     instance('casedb')) and is left as-is.
 #
-# KNOWN-VALUE TEST DATA: this flow types fixed, distinctive strings
-# ("MaestroBasicCase" for the case name, "MaestroSubCase" for the sub case
-# name) specifically so later screens can assert on them by exact text,
-# rather than guessing at real case-list column formatting.
+# KNOWN-VALUE TEST DATA: this flow types one fixed, distinctive string
+# ("MaestroSubCase" for the sub case name) so later screens can assert on
+# it by exact text, rather than guessing at real case-list column
+# formatting. UPDATE (2026-08-17): the parent case does NOT get a
+# controlled name via the real path this flow uses (see the "Create a
+# Case + Create a Sub Case" section below) - CommCare auto-generates it,
+# so there is no "MaestroBasicCase" to search or select by anywhere in
+# this flow; only the sub case's name is ever actually typed.
 #
 # UNVERIFIED SCREEN-TRANSITION CAVEAT: the exact screen returned to
 # immediately after "Create a Case" submits (back at m6's own menu vs.
@@ -111,13 +115,74 @@ tags:
       PASSWORD: ${CC_TEST_PASSWORD}
 - tapOn: "Start"
 - tapOn: "Minimize Duplicates"
-- tapOn: "Create a Sub Case"
 
-# --- Create a Case (via the case-list's "Create a Case" register button,
-# case_list_form.m6) - no coverage_basic case exists yet on a fresh install. ---
+# --- Create a Case + Create a Sub Case, in one combined step. ---
+# UPDATE (2nd correction, 2026-08-17): confirmed live via a user-supplied
+# recording that this entire section's assumed structure was wrong - not
+# a missing/misordered screen, a genuinely different app behavior.
+# Tapping "Minimize Duplicates" does NOT show a 3-item text menu ("Close a
+# Case"/"Create a Sub Case"/"Case List") at all - it goes STRAIGHT to
+# m6's own case-selection list (the "Minimize Duplicates" screen IS that
+# list: a "Name" column of existing coverage_basic cases plus a "CREATE A
+# CASE" register button), confirmed via a real screen recording. Tapping
+# "CREATE A CASE" from there launches the "Create a Sub Case" form (m6-f1)
+# DIRECTLY - registering the parent case AND the sub case in one
+# combined form submission, not two separate ones. That form itself is
+# exactly two screens (confirmed live): "Enter a name for your sub case:"
+# (plain text, blank) then a confirm/cancel radio ("Do you want to create
+# the sub case?", Confirm pre-selected) with FINISH already reachable.
+# There is no separate parent-case-name field anywhere in this path - the
+# parent case gets an auto-generated name CommCare picks itself, not
+# something this flow controls, so "MaestroBasicCase" was never actually
+# typed anywhere real; only "MaestroSubCase" is a name this flow controls
+# and can reliably search/assert on later.
+#
+# UPDATE (3rd correction, 2026-08-17): confirmed live via the actual
+# BrowserStack build video (form-submissions-fix-retry #1) - "CREATE A
+# CASE" IS really there, just below the fold: this shared qateam domain
+# has accumulated many real coverage_basic cases from repeated past runs,
+# and a bare tapOn never scrolls. "CREATE A CASE" is the list's own fixed
+# trailing register row (case_list_form), so unlike a specific case name
+# search (see geoservices_02_rate_case.yaml's own reasoning for why a
+# bigger scrollUntilVisible timeout isn't enough for an unbounded target),
+# it's always just however-many-more scrolls past the last real case row -
+# scrollUntilVisible handles that regardless of how large the list grows.
+#
+# UPDATE (4th correction, 2026-08-17): scrollUntilVisible itself then
+# failed live ("No visible element found: CREATE A CASE") - the failure
+# hierarchy dump showed a case list packed with dozens of "Christy" rows
+# (this shared domain's own fuzzy_search_01_03.yaml test data), meaning
+# this list has grown large enough that scrolling to the bottom no longer
+# reliably finishes inside any bounded attempt. Same
+# unbounded-list-defeats-scrolling problem already fixed for
+# geoservices_02_rate_case.yaml/conditional_id_mapping's own Test One/Two
+# lookups - fixed the same way: this screen is the same EntityListView
+# core chrome as the Followup lists (search_action_bar), so filtering to a
+# query that matches no real case name leaves "CREATE A CASE" - the list's
+# own always-present trailing register row, unaffected by the case-name
+# filter - as the only visible row, reachable with no scrolling at all
+# regardless of how large the case list grows.
+#
+# UPDATE (5th correction, 2026-08-17): confirmed live via the actual
+# failure hierarchy dump - "CREATE A CASE" genuinely launches "Create a
+# Case" (m3-f0: casename text + confirm/cancel radio, "Are you sure you
+# want to create a new case?"), exactly as this file's ORIGINAL
+# CCZ-sourced header analysis said, NOT the combined "Create a Sub Case"
+# form the 2nd/3rd correction UPDATE comments above claimed from a
+# misread recording. Reverted to the original two-step design: answer
+# "Create a Case" first (this is where "MaestroBasicCase" - the parent
+# case name - actually gets typed for real), then separately reach
+# "Create a Sub Case" for the sub case. Per the header's own
+# UNVERIFIED SCREEN-TRANSITION CAVEAT, exactly what's on screen right
+# after "Create a Case" submits (back at a menu vs. straight into "Create
+# a Sub Case" with the new case pre-selected) still isn't confirmed, so
+# every step below stays optional/defensive rather than assuming one
+# specific landing screen.
 - tapOn:
-    text: "Create a Case"
-    optional: true
+    id: "org.commcare.dalvik:id/search_action_bar"
+- inputText: "zzz_no_such_case_zzz"
+- tapOn:
+    text: "CREATE A CASE"
 - extendedWaitUntil:
     visible:
       id: "org.commcare.dalvik:id/nav_btn_next"
@@ -127,56 +192,24 @@ tags:
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_next"
 - tapOn:
-    text: "(?i).*please create this case.*"
-- tapOn:
-    id: "org.commcare.dalvik:id/nav_btn_next"
+    text: "Confirm - Please create this case."
     optional: true
-- extendedWaitUntil:
-    visible:
-      id: "org.commcare.dalvik:id/nav_btn_finish"
-    timeout: 10000
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_finish"
-- assertVisible:
-    text: "(?i).*form.*success.*completed.*"
+    optional: true
+- extendedWaitUntil:
+    visible: "Minimize Duplicates"
+    timeout: 15000
 
-# --- Create a Sub Case (per the stack redirect this should land back on m6;
-# re-navigate defensively in case it landed on the plain Minimize Duplicates
-# menu instead). ---
-# UPDATE, confirmed live (2026-08-08, real BrowserStack failure, build
-# f4c6f946911651871ca62d4e6ef1847052a6d612): "Tap on Create a Sub Case"
-# failed (hard, non-optional) - the failing screenshot showed neither
-# "Start" nor the "Minimize Duplicates" menu, but a THIRD landing screen
-# this header's own caveat didn't anticipate: the case-SELECTION list for
-# "Create a Sub Case" itself (a "Name" column of existing cases) - i.e.
-# case_list_form.m6's "Create a Case" register button, once submitted,
-# returns straight into the case-list screen that was ALREADY mid-navigation
-# for "Create a Sub Case" (m6-f1), not back out to a menu at all. That
-# screen has no "Create a Sub Case" text anywhere on it, so the hard tap
-# failed before ever reaching this file's own already-optional
-# "MaestroBasicCase" case-selection tap two steps below. Made every step in
-# this defensive re-navigation block optional so whichever screen the app
-# actually lands on, only the applicable taps fire and the real
-# case-selection tap below is reached regardless.
-- tapOn:
-    text: "Start"
-    optional: true
-- tapOn:
-    text: "Minimize Duplicates"
-    optional: true
+# --- Create a Sub Case (m6-f1), now that a parent case exists. ---
+# Defensive/optional throughout - covers landing back on a menu (tap
+# "Create a Sub Case", then select the parent case) as well as landing
+# straight inside the sub-case form already (both taps below no-op if
+# their target isn't on screen, and the nav_btn_next wait is the real,
+# non-optional gate confirming we actually reached the form either way).
 - tapOn:
     text: "Create a Sub Case"
     optional: true
-# Confirmed live (same build as above): the real landing screen is the
-# case-SELECTION list (not a form), so nav_btn_next genuinely isn't visible
-# yet at this point - this wait must be optional too, or it hard-fails
-# before ever reaching the case-selection tap below.
-- extendedWaitUntil:
-    visible:
-      id: "org.commcare.dalvik:id/nav_btn_next"
-    timeout: 10000
-    optional: true
-# Case-selection screen (if shown) - select the case by its known name.
 - tapOn:
     text: "MaestroBasicCase"
     optional: true
@@ -184,26 +217,42 @@ tags:
     visible:
       id: "org.commcare.dalvik:id/nav_btn_next"
     timeout: 10000
-# sub_case_intro trigger.
-- tapOn:
-    id: "org.commcare.dalvik:id/nav_btn_next"
 - inputText: "MaestroSubCase"
+# UPDATE, confirmed live (2026-08-17, real BrowserStack failure): the
+# following tapOn nav_btn_next failed with "Element not found", and the
+# failure hierarchy dump showed CommCare's own "Exit Form?" confirmation
+# dialog (STAY IN FORM / EXIT WITHOUT SAVING / SAVE INCOMPLETE) open
+# instead - the same hideKeyboard-always-sends-a-real-back-press bug
+# class already fought repeatedly elsewhere in this repo (see e.g.
+# flows/common/install_app_as_web_user.yaml's own citation): the keyboard
+# had apparently already auto-dismissed after typing, so hideKeyboard's
+# back-press was interpreted by the form activity as "exit this form"
+# instead. Defensively dismiss that dialog (stay in form) if it appears
+# before proceeding, rather than removing hideKeyboard outright (it works
+# fine in this same file's earlier "Create a Case" section).
 - hideKeyboard
 - tapOn:
-    id: "org.commcare.dalvik:id/nav_btn_next"
-# sub_case_number - optional, skipped.
+    text: "STAY IN FORM"
+    optional: true
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_next"
-- tapOn:
-    text: "(?i).*please create.*maestrosubcase.*"
-- extendedWaitUntil:
-    visible:
-      id: "org.commcare.dalvik:id/nav_btn_finish"
-    timeout: 10000
+# UPDATE (2nd correction, 2026-08-17): confirmed live - nav_btn_finish
+# never appeared after this, and the failure hierarchy dump showed we'd
+# landed BACK on "Enter a name for your sub case:". Guessed this meant
+# the confirm/cancel radio ("Do you want to create the sub case?") isn't
+# actually pre-selected and added an explicit confirm tap + extra
+# nav_btn_next - WRONG per the real BrowserStack recording the user then
+# supplied: it shows "Confirm - Please create <name>." genuinely
+# pre-selected (filled radio) with FINISH already reachable in the
+# toolbar, exactly as this file's ORIGINAL header always said. Reverted
+# to the simple name -> next -> finish sequence; the confirm-tap/extra-next
+# guess is removed.
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_finish"
-- assertVisible:
-    text: "(?i).*form.*success.*completed.*"
+    optional: true
+- extendedWaitUntil:
+    visible: "Minimize Duplicates"
+    timeout: 15000
 
 # --- Verify the sub case appears under "View Case's Sub Case" (m7). ---
 - tapOn: "Start"

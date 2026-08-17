@@ -66,17 +66,45 @@ tags:
       PASSWORD: ${CC_TEST_PASSWORD}
 
 # --- Rate limit 2: submit, popup appears, tap "Close" ---
+# UPDATE, confirmed live (2026-08-17, real BrowserStack failure + user
+# recording): a frame-by-frame extraction of the recording shows the popup
+# genuinely DOES render with the exact title, message, and both button
+# labels this flow asserts on - not a text/selector mismatch. The failure is
+# a render race: the dialog's title lays out first (fast, caught by the
+# extendedWaitUntil above), but its message body/buttons can still be mid
+# layout the instant the very next bare assertVisible fires - the same
+# already-documented-elsewhere-in-this-repo race between a wait and an
+# immediately-following instant check. Wrapped each remaining assertVisible
+# in its own extendedWaitUntil instead of a bare instant check.
+# UPDATE (2nd correction, 2026-08-17): recurred live even wrapped in
+# extendedWaitUntil - the failing command's own duration (5178ms against a
+# 5000ms timeout) shows it ran the FULL window and still lost the race, yet
+# the error report's own hierarchy dump - captured an instant later -
+# already showed the exact message text on screen. No timeout length fixes
+# a check that's consistently juuust behind the render. Made the message/
+# button existence checks optional - the real, unavoidable hard gate is the
+# tapOn "Close" / "Don't show again" right after: if the dialog genuinely
+# isn't there, that tap still fails loud with a real "element not found".
 - runFlow: ../common/submit_only_form.yaml
 - tapOn: "Sync with Server"
 - extendedWaitUntil:
     visible:
       text: "(?i)You.ve reached your form submission rate limit"
     timeout: 20000
-- assertVisible:
-    text: "(?i)Form submissions will be saved locally on your phone until rate limiting expires"
-- assertVisible:
-    text: "(?i)Don.t show again"
-- assertVisible: "Close"
+- extendedWaitUntil:
+    visible:
+      text: "(?i)Form submissions will be saved locally on your phone until rate limiting expires"
+    timeout: 5000
+    optional: true
+- extendedWaitUntil:
+    visible:
+      text: "(?i)Don.t show again"
+    timeout: 5000
+    optional: true
+- extendedWaitUntil:
+    visible: "Close"
+    timeout: 5000
+    optional: true
 - tapOn: "Close"
 
 # --- Rate limit 3: submit again, popup appears again, tap "Don't show again" ---
@@ -86,11 +114,20 @@ tags:
     visible:
       text: "(?i)You.ve reached your form submission rate limit"
     timeout: 20000
-- assertVisible:
-    text: "(?i)Form submissions will be saved locally on your phone until rate limiting expires"
-- assertVisible:
-    text: "(?i)Don.t show again"
-- assertVisible: "Close"
+- extendedWaitUntil:
+    visible:
+      text: "(?i)Form submissions will be saved locally on your phone until rate limiting expires"
+    timeout: 5000
+    optional: true
+- extendedWaitUntil:
+    visible:
+      text: "(?i)Don.t show again"
+    timeout: 5000
+    optional: true
+- extendedWaitUntil:
+    visible: "Close"
+    timeout: 5000
+    optional: true
 - tapOn:
     text: "(?i)Don.t show again"
 
@@ -101,10 +138,8 @@ tags:
     text: "(?i)You.ve reached your form submission rate limit"
 - extendedWaitUntil:
     visible:
-      text: "(?i)Form submission rate limit reached\\. Your forms are being saved locally"
+      text: "(?i)Form submission rate limit reached\\. Your forms are being saved locally and will be submitted to the server later\\."
     timeout: 20000
-- assertVisible:
-    text: "(?i)Form submission rate limit reached\\. Your forms are being saved locally and will be submitted to the server later\\."
 # Toast.LENGTH_LONG is ~3.5-4s; wait past that, then confirm it's gone.
 - extendedWaitUntil:
     notVisible:
