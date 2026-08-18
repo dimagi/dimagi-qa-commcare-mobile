@@ -71,21 +71,60 @@ tags:
       PASSWORD: ${CC_TEST_PASSWORD}
 - assertVisible: "Start"
 
+# UPDATE (2026-08-19), per direct user instruction: give this run's site a
+# dynamic, unique name instead of the same literal "Geoservices Rate
+# Automation Site" every run - a shared, never-pruned domain accumulating
+# identically named cases run after run is confusing to eyeball in the
+# case list. Same run-suffix mechanism already established in
+# flows/conditional_enum_in_case_list/conditional_id_mapping_01_06_full_scenario.yaml
+# (a real Date.now() value generated on the test-runner side, not
+# device-derived) - see that flow's own UPDATE comment for the full
+# citation. One runScript call here covers both this file's own
+# registration step below and the Rate Case searches further down, since
+# (per the header) this whole file is self-contained/run in isolation.
+- runScript:
+    file: assets/generate_run_suffix.js
+
 # === Setup: register a geo_case to rate (see header - same steps as
 # geoservices_01_register_case.yaml's own "Case Lists 3"). ===
 - tapOn: "Start"
 - tapOn: "Geoservices"
 - tapOn: "Register Case"
-- inputText: "Geoservices Rate Automation Site"
-- hideKeyboard
+# UPDATE, confirmed live (2026-08-18, real Android 16 failure): dropped
+# hideKeyboard - the failure hierarchy dump showed an unwanted "Exit
+# Form?" dialog (hideKeyboard falls back to a real back-press once the
+# keyboard's already auto-dismissed, device/OS-dependent timing). Maestro
+# taps via the accessibility tree, not pixel coordinates, so an open IME
+# overlay doesn't block finding/tapping "Record Location" underneath it -
+# same fix as this file's own sibling geoservices_01_register_case.yaml.
+- inputText: "Geoservices Rate Automation Site ${output.runSuffix}"
 - tapOn: "Record Location"
 - extendedWaitUntil:
     visible: "Location Found!"
     timeout: 65000
+# UPDATE, confirmed live (2026-08-18, Android 16): failed at exactly the
+# 10s timeout, but the failure hierarchy dump (captured moments later)
+# and a user-supplied screenshot both showed "Latitude: ..." already
+# fully rendered with FINISH reachable - a marginal miss, not a
+# structural bug, same as this file's own sibling
+# geoservices_01_register_case.yaml. Raised the timeout for real headroom
+# instead of guessing at a smaller bump.
+# UPDATE (2nd correction, 2026-08-18): recurred at 20s too, same marginal
+# miss - see geoservices_01_register_case.yaml's own 2nd correction for
+# the locator cross-check that ruled out a text-matching problem (the
+# colon is plain ASCII; this is genuine timing variance, not a selector
+# bug). Raised again. WRONGLY diagnosed as a timing variance.
+# UPDATE (3rd correction, 2026-08-18), per direct user guidance: recurred
+# again even at 40s, ruling out timing - see
+# geoservices_01_register_case.yaml's own 3rd correction for the full
+# citation: the real node text is a multi-line string and Maestro's
+# textRegex requires a FULL match, not substring/contains, so a bare
+# "Latitude:" with no wildcards could never match regardless of wait
+# time. Fixed with the same (?s)-wildcarded pattern.
 - tapOn: "Record Location"
 - extendedWaitUntil:
-    visible: "Latitude:"
-    timeout: 10000
+    visible: "(?s).*Latitude.*"
+    timeout: 15000
 - tapOn: "FINISH"
 - assertVisible: "Geoservices"
 
@@ -112,10 +151,10 @@ tags:
 # conditional_id_mapping's own UPDATE comment.
 - tapOn:
     id: "org.commcare.dalvik:id/search_action_bar"
-- inputText: "Geoservices Rate Automation Site"
+- inputText: "Geoservices Rate Automation Site ${output.runSuffix}"
 - hideKeyboard
 - tapOn:
-    text: "^Geoservices Rate Automation Site$"
+    text: "^Geoservices Rate Automation Site ${output.runSuffix}$"
 - tapOn: "Continue"
 - tapOn: "3 - Average"
 - tapOn:
@@ -141,12 +180,48 @@ tags:
 # section above - see that UPDATE comment for the full writeup.
 - tapOn:
     id: "org.commcare.dalvik:id/search_action_bar"
-- inputText: "Geoservices Rate Automation Site"
+- inputText: "Geoservices Rate Automation Site ${output.runSuffix}"
 - hideKeyboard
-- assertVisible: "★★★"
+# UPDATE, confirmed live (2026-08-18, Android 16): failed - the failure
+# hierarchy dump showed the real rendered text is " ★★★ " with
+# surrounding padding spaces, not the bare "★★★" this asserted (same
+# full-match requirement already fixed for this file's own Latitude
+# check above - Maestro's textRegex needs a full match, and a bare
+# "★★★" can never match a padded " ★★★ "). Wildcarded to tolerate the
+# padding. CONFIRMED PASSING live (2026-08-18, build v6).
+- assertVisible: "(?s).*★★★.*"
 - tapOn:
-    text: "^Geoservices Rate Automation Site$"
-- assertVisible: "★★★"
+    text: "^Geoservices Rate Automation Site ${output.runSuffix}$"
+# Same padded-text fix as the search-results check just above.
+- assertVisible: "(?s).*★★★.*"
+# UPDATE (2026-08-19), per direct user instruction: also verify "SHOW
+# ADDRESS" actually opens Maps with the captured coordinates - previously
+# deliberately skipped (see header's Case Lists 5 steps 4-5 note), but the
+# user asked for this exact check to be added. A user-supplied recording
+# of this exact confirm/detail screen showed tapping it can surface a
+# single-resolver "Open with Maps" chooser (Just once/Always) before Maps
+# actually opens - optional here since that chooser only shows up if Maps
+# isn't already the device's default handler. The real, non-optional
+# confirmation is Maps' own visible "Search here" search-bar placeholder,
+# confirmed in that same recording. Backs out of Maps afterward, landing
+# back on this same confirm screen (a foreign-app back-press returns to
+# the previous app's existing activity, not a new CommCare screen), before
+# the existing back-to-Start sequence below.
+- tapOn: "SHOW ADDRESS"
+- tapOn:
+    text: "(?i)just once"
+    optional: true
+- extendedWaitUntil:
+    visible: "Search here"
+    timeout: 15000
+- back
+# UPDATE (2026-08-19), confirmed live (build v6): 3 backs from this confirm
+# screen only reached the "[Master] Basic Tests" module list (the failure
+# hierarchy dump showed that screen, not "Start") - one level short.
+# Real depth from here: confirm screen -> (back) Rate Case case list ->
+# (back) "Geoservices" menu -> (back) module list -> (back) "Start". Added
+# the 4th back.
+- back
 - back
 - back
 - back

@@ -53,8 +53,18 @@ appId: org.commcare.dalvik
 #     scanning barcode or entering correct code." back on the entry-method
 #     screen - if this flow ever fails waiting for edit_username, check for
 #     that text first before assuming a different bug.
+# UPDATE, confirmed live (2026-08-18, real Android 16/Galaxy S26 failure):
+# a genuine Android 16 OS-level onboarding overlay ("Swipe down from the
+# top right corner of the screen to open the quick settings panel...",
+# "OK" button) can appear right after clearState on this newer OS -
+# confirmed via the failure hierarchy dump, not app content at all. Never
+# happened on the Android 10/Galaxy S20 device this flow was tuned
+# against. Dismiss it defensively if present before continuing.
 - launchApp:
     clearState: true
+- tapOn:
+    text: "OK"
+    optional: true
 - tapOn:
     id: "org.commcare.dalvik:id/enter_app_location"
 - tapOn:

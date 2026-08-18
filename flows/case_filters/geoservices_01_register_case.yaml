@@ -88,20 +88,65 @@ tags:
       PASSWORD: ${CC_TEST_PASSWORD}
 - assertVisible: "Start"
 
+# UPDATE (2026-08-19), per direct user instruction: give this run's site a
+# dynamic, unique name instead of the same literal "Geoservices Automation
+# Site" every run - a shared, never-pruned domain accumulating identically
+# named cases run after run is confusing to eyeball in the case list. Same
+# run-suffix mechanism already established in
+# flows/conditional_enum_in_case_list/conditional_id_mapping_01_06_full_scenario.yaml
+# (a real Date.now() value generated on the test-runner side, not
+# device-derived) - see that flow's own UPDATE comment for the full
+# citation.
+- runScript:
+    file: assets/generate_run_suffix.js
+
 # === Case Lists 3: Register Geoservices case ===
 - tapOn: "Start"
 - tapOn: "Geoservices"
 - tapOn: "Register Case"
-- inputText: "Geoservices Automation Site"
-- hideKeyboard
+# UPDATE, confirmed live (2026-08-18, real Android 16 failure): dropped
+# hideKeyboard - the failure hierarchy dump showed an unwanted "Exit
+# Form?" dialog (hideKeyboard falls back to a real back-press once the
+# keyboard's already auto-dismissed, device/OS-dependent timing). Maestro
+# taps via the accessibility tree, not pixel coordinates, so an open IME
+# overlay doesn't block finding/tapping "Record Location" underneath it -
+# same reasoning already validated for nav_btn_next/nav_btn_finish
+# elsewhere in this repo. A user-supplied recording of normal (non-
+# automated) usage confirms the app itself works fine either way.
+- inputText: "Geoservices Automation Site ${output.runSuffix}"
 - tapOn: "Record Location"
 - extendedWaitUntil:
     visible: "Location Found!"
     timeout: 65000
+# UPDATE, confirmed live (2026-08-18, Android 16): failed at exactly the
+# 10s timeout, but the failure hierarchy dump (captured moments later)
+# showed "Latitude: ..." already fully rendered - a marginal miss, not a
+# structural bug (the exact "diagnostic dump lags slightly behind the
+# real failure moment" pattern already seen elsewhere in this repo).
+# Raised the timeout for real headroom instead of guessing at a smaller
+# bump.
+# UPDATE (2nd correction, 2026-08-18): recurred at 20s too, same marginal
+# miss. Cross-checked the locator against the raw hierarchy dump's own
+# byte codes first (ruled out an encoding issue - the colon is a plain
+# ASCII 0x3a, the only non-ASCII character is the degree symbol later in
+# the string, unrelated to this match) before raising the timeout again -
+# WRONGLY diagnosed as a timing variance.
+# UPDATE (3rd correction, 2026-08-18), per direct user guidance: recurred
+# again even at 40s - if it were genuinely a marginal timing miss, some
+# of these increasingly generous timeouts should eventually have
+# succeeded. The real cause: the real node text is a multi-line string
+# ("Latitude: N ...\nLongitude: ...\nAltitude: ...\nAccuracy: ..."), and
+# Maestro's textRegex requires a FULL match, not a substring/contains
+# match - a bare "Latitude:" with no wildcards can never match that
+# longer string regardless of wait time. Same class of fix already used
+# in flows/common/check_app_version_via_about.yaml's own
+# "(?s).*App v...*" pattern - (?s) lets "." span newlines, and the
+# leading/trailing ".*" let the target appear anywhere within the full
+# multi-line text.
 - tapOn: "Record Location"
 - extendedWaitUntil:
-    visible: "Latitude:"
-    timeout: 10000
+    visible: "(?s).*Latitude.*"
+    timeout: 15000
 - tapOn: "FINISH"
 
 # === End Form 1: verify returned to the "Geoservices" form list ===

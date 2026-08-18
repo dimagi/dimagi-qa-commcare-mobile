@@ -96,8 +96,16 @@ appId: org.commcare.dalvik
 # call must NOT go through this file (clearState would wipe the first app),
 # so it inlines the post-launchApp steps directly instead - see that file's
 # own comment for why.
+# UPDATE, confirmed live (2026-08-18, real Android 16/Galaxy S26 failure) -
+# same OS-level onboarding overlay as install_app_by_code.yaml's own
+# UPDATE comment (full citation there): dismiss defensively before the
+# wait below, which would otherwise time out against real app content
+# sitting behind this overlay.
 - launchApp:
     clearState: true
+- tapOn:
+    text: "OK"
+    optional: true
 - extendedWaitUntil:
     visible: "More options"
     timeout: 20000

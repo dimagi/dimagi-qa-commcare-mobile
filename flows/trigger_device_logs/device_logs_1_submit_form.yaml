@@ -49,8 +49,13 @@ tags:
 - tapOn: "Start"
 - tapOn: "Basic Form Tests"
 - tapOn: "Basic Form"
+# UPDATE, confirmed live (2026-08-18, real Android 16 failure): dropped
+# hideKeyboard - nav_btn_finish lives in the top toolbar, never covered by
+# an open keyboard, and hideKeyboard falls back to a real back-press once
+# the keyboard's already auto-dismissed (device/OS-dependent timing),
+# popping an unwanted "Exit Form?" dialog instead. Same fix already
+# confirmed live on flows/case_filters/fuzzy_search_01_03.yaml.
 - inputText: "Trigger Device Logs 1"
-- hideKeyboard
 - extendedWaitUntil:
     visible:
       id: "org.commcare.dalvik:id/nav_btn_finish"

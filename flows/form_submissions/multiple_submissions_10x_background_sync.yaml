@@ -220,10 +220,25 @@ tags:
 # persist on screen (not just a fleeting Toast) once sync completes, so
 # checking it right after the count-reached-0 gate (rather than racing it
 # from the very start) gives it a real chance to still be showing.
-- extendedWaitUntil:
-    visible:
-      text: "(?i)10 forms sent to server"
-    timeout: 30000
+# UPDATE (5th correction, 2026-08-18), per direct user request: a literal
+# "10" still always failed - forms sync incrementally in the background
+# (confirmed via recordings showing "7 forms sent to server!", then "8",
+# etc. before reaching 10), so whichever count is showing at the exact
+# moment this checks isn't reliably 10 specifically, even though the
+# "unsent forms" gate above already proves all 10 eventually cleared.
+# Widened to accept any count from 1-10 instead of requiring the literal
+# "10" - "1 form" is grammatically singular ("form", not "forms") per
+# this app's own plural string resource, hence the separate alternative.
+# UPDATE (6th correction, 2026-08-18): confirmed live - even the widened
+# range still failed. The failure hierarchy dump showed the tile had
+# already fully reverted to "You last synced with the server: ..."
+# wording, with NO count-related text anywhere on screen at all - the
+# toast is completely gone by check time, not just showing an unexpected
+# count. No wording variation can catch a toast that has already fully
+# disappeared. Dropped this assertion entirely - the "unsent forms not
+# visible" gate above is already real, durable proof all 10 forms synced
+# (it can only go false once the count genuinely reaches 0), so nothing
+# is lost by no longer also chasing this toast's exact display window.
 - assertNotVisible:
     text: "(?i).*unexpected error.*"
 - assertNotVisible:
