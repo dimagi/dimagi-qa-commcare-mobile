@@ -14,6 +14,12 @@ tags:
 #   - Update 16 (Not automatable): "Stage update to V6, interrupt with
 #     CommCare update mid-flow" - timing-critical interleaved binary update,
 #     same category as Test Case 1/2's Setup rows.
+#     CONFIRMED 2026-08-18 (not just assumed): see
+#     flows/updates_partial_failed/scenario_1_staged_update_auto_apply.yaml's
+#     own "REMAINING GAP" note for the full citation - neither Maestro nor
+#     BrowserStack App Automate/App Live expose any API to install a
+#     new/updated APK mid-session, which is exactly what this row would
+#     require.
 #
 # This flow covers the remaining "Automatable" steps that follow those:
 #   - Installation 1: install linked app V2 (Version 18) as a mobile worker -

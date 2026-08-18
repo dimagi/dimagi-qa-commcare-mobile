@@ -40,6 +40,17 @@ tags:
 #   "Update App" (CCZ) action is reused here as the closest on-device,
 #   Maestro-automatable proxy - treat the actual binary swap as already done
 #   by the harness before this flow runs.
+#   CONFIRMED 2026-08-18 (not just assumed): investigated whether the real
+#   binary swap could be driven from inside this flow instead of proxied -
+#   same conclusion as
+#   flows/updates_partial_failed/scenario_1_staged_update_auto_apply.yaml's
+#   own "REMAINING GAP" note (full citation there): neither Maestro nor
+#   BrowserStack App Automate/App Live expose any API to install a
+#   new/updated APK mid-session. "Update 8" below stays marked Automatable
+#   in coverage_matrix.csv because the CCZ-update proxy action it actually
+#   runs IS real and automated - just be aware it is not exercising the
+#   sheet's own literal "swap the CommCare binary" wording, which remains
+#   a harness-level precondition like Setup above.
 # - Update 9 / Update 10: same "Update App" action, each preceded by the HQ
 #   mark-released pre-step noted above.
 # - Update 11: Form One verification.

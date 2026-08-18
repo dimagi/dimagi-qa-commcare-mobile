@@ -12,6 +12,35 @@ tags:
 # mid-download - that must be arranged by hand/harness before this flow runs,
 # ending with the device logged out and the CCZ update staged-but-unapplied.
 #
+# REMAINING GAP (genuinely not automatable in this framework, investigated
+# 2026-08-18 - confirmed, not just assumed): explored whether the Setup step
+# above could be automated by installing an older APK (resources/
+# commcare_2.45_release.apk), staging a CCZ update on it, then installing a
+# newer APK (commcare_2.64.0) mid-flow to interrupt it - the exact scenario
+# this row's own precondition describes. Same class of gap already
+# independently documented in
+# flows/recovery_measures/cc_reinstall_needed_flow.yaml and
+# cc_update_needed_flow.yaml's own "REMAINING GAP" notes (switching the
+# CommCare CLIENT binary version mid-test), confirmed again here against
+# both Maestro's and BrowserStack's own docs:
+#   - Maestro has no installApp (or any) command to install an app package
+#     during a running flow - only launchApp, which requires the app already
+#     installed (https://docs.maestro.dev/api-reference/commands, confirmed
+#     via the full command reference, not just the tapOn/launchApp pages).
+#   - BrowserStack App Automate's trigger_build "otherApps" field (see
+#     scripts/browserstack_client.py's own citation) pre-installs companion
+#     APKs alongside `app` at SESSION START only, before the Maestro flow's
+#     first command ever runs - there is no API to install a second/updated
+#     APK partway through an already-running session.
+#   - BrowserStack App Live's own docs describe installing an app as the
+#     initial session setup (from direct upload/Play Store/etc.), not a
+#     mid-session sideload via API either.
+# Bottom line: even with both APK files available locally, there is no
+# platform hook (Maestro or BrowserStack) to install a new APK AFTER a
+# session/flow has already started - only a fundamentally different,
+# ADB-capable device-farm infrastructure (outside BrowserStack App
+# Automate) could interleave the two installs with real timing control,
+# which is a genuine infrastructure change, not a flow-level fix.
 # This flow covers the three "Automatable" verification steps that follow:
 #   - Update 1: log in and confirm the staged update auto-applied (app
 #     version should now read "Version 2").
