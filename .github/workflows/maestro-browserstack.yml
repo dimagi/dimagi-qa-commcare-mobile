@@ -34,10 +34,23 @@ on:
         description: "commcare-android GitHub release tag to test (e.g. commcare_2.63.4). Leave blank for latest."
         required: false
         default: ""
-      devices:
-        description: "Comma-separated BrowserStack device names."
+      android_version:
+        description: "Android version to test on (maps to a Samsung Galaxy flagship BrowserStack has real devices for at that version). Ignored if 'devices' below is also set."
         required: false
-        default: "Samsung Galaxy S20-10.0"
+        type: choice
+        default: "16.0"
+        options:
+          - "16.0"
+          - "15.0"
+          - "14.0"
+          - "13.0"
+          - "12.0"
+          - "11.0"
+          - "10.0"
+      devices:
+        description: "Comma-separated BrowserStack device names - overrides android_version above when set (e.g. to pick a specific non-Samsung device)."
+        required: false
+        default: ""
       hq_setup:
         description: "Path to an hq_setup/*.json pre-step file to run first (optional)."
         required: false
@@ -125,12 +138,34 @@ jobs:
           HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
           HQ_WEB_USER_PASSWORD: ${{ secrets.HQ_WEB_USER_PASSWORD }}
         run: |
+          # BrowserStack ties each Android version to specific real devices
+          # (not a version you can pick independently of hardware) - this
+          # maps android_version to the Samsung Galaxy flagship BrowserStack
+          # actually has at that version (confirmed against
+          # api-cloud.browserstack.com/app-automate/devices.json), same
+          # device family/tier convention as the S20/Android 10 default this
+          # replaces. Only used when `devices` is left blank - set `devices`
+          # directly to override with a specific/non-Samsung device.
+          declare -A ANDROID_DEVICE_MAP=(
+            ["16.0"]="Samsung Galaxy S26"
+            ["15.0"]="Samsung Galaxy S25"
+            ["14.0"]="Samsung Galaxy S24"
+            ["13.0"]="Samsung Galaxy S23"
+            ["12.0"]="Samsung Galaxy S22"
+            ["11.0"]="Samsung Galaxy S21"
+            ["10.0"]="Samsung Galaxy S20"
+          )
+          ANDROID_VERSION="${{ github.event.inputs.android_version || '16.0' }}"
+          DEVICES="${{ github.event.inputs.devices }}"
+          if [ -z "$DEVICES" ]; then
+            DEVICES="${ANDROID_DEVICE_MAP[$ANDROID_VERSION]}-$ANDROID_VERSION"
+          fi
           # --retry-failed: re-triggers a second build with just the flows
           # that failed a real assertion, and reports a pass-on-retry as
           # "rerun" (flaky) instead of "failed" - previously only used in
           # ad-hoc local dispatches, never wired into CI itself, so a
           # genuinely flaky test had no chance to recheck here before today.
-          ARGS=(--devices "${{ github.event.inputs.devices || 'Samsung Galaxy S20-10.0' }}" --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}" --retry-failed)
+          ARGS=(--devices "$DEVICES" --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}" --retry-failed)
           for T in ${{ matrix.tags }}; do ARGS+=(--tag "$T"); done
           if [ -n "${{ github.event.inputs.release_tag }}" ]; then ARGS+=(--release-tag "${{ github.event.inputs.release_tag }}"); fi
           if [ -n "${{ github.event.inputs.hq_setup }}" ]; then ARGS+=(--hq-setup "${{ github.event.inputs.hq_setup }}"); fi
@@ -229,4 +264,9 @@ jobs:
           REPORT_ARTIFACT_URL: ${{ steps.upload_report.outputs.artifact-url }}
           RUN_TAG: ${{ github.event.inputs.tag }}
           RUN_DURATION: ${{ steps.duration.outputs.text }}
+          # Reflects the android_version dropdown, not whatever the
+          # maestro-tests job's own `devices` override might have used -
+          # matches every other RUN_*/env var here in reading the raw
+          # workflow input directly rather than a resolved value.
+          ANDROID_VERSION: ${{ github.event.inputs.android_version || '16.0' }}
         run: python scripts/slack_notify.py

@@ -75,8 +75,12 @@ tags:
 - tapOn: "Start"
 - tapOn: "Case Tests"
 - tapOn: "Create a Case"
+# UPDATE, confirmed live (2026-08-18, Android 16): dropped hideKeyboard -
+# nav_btn_next lives in the top toolbar, never covered by an open
+# keyboard, and this exact hideKeyboard-falls-back-to-a-real-back-press
+# bug (see flows/case_filters/fuzzy_search_01_03.yaml's own UPDATE for
+# the full citation) can pop an unwanted "Exit Form?" dialog here instead.
 - inputText: "CaseNameTooLongCaseNameTooLongCaseNameTooLongCaseNameTooLongCaseNameTooLongCaseNameTooLongCaseNameTooLongCaseNameTooLongCaseNameTooLongCaseNameTooLongCaseNameTooLongCaseNameTooLongCaseNameTooLongCaseNameTooLongCaseNameTooLongCaseNameTooLongCaseNameTooLongCaseNameTooLong"
-- hideKeyboard
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_next"
 # UPDATE, confirmed live 2026-08-12: added an explicit wait for

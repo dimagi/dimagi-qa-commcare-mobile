@@ -83,8 +83,13 @@ env:
 # into it with no preceding tapOn needed. An update form pre-fills existing answers, so this
 # assumes the field is still editable/clearable the same way a blank one is - UNVERIFIED
 # against the real fixture app's update-form field types.
+# UPDATE, confirmed live (2026-08-18, Android 16): dropped hideKeyboard -
+# same fix as this file's own sibling external_app_02_start_commcare_submit_form.yaml
+# already made for this exact bug (nav_btn_next lives in the top toolbar,
+# never covered by an open keyboard; hideKeyboard falls back to a real
+# back-press once the keyboard's already auto-dismissed, popping an
+# unwanted "Exit Form?" dialog instead).
 - inputText: "${EXTAPP_FORM_ANSWER_VALUE}"
-- hideKeyboard
 - repeat:
     while:
       visible:

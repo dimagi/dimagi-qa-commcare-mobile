@@ -155,14 +155,20 @@ def build_message(counts, failed_results, report_artifact_url, run_url):
 
     version_path = REPORTS_DIR / "apk_version.txt"
     apk_version = version_path.read_text(encoding="utf-8").strip() if version_path.exists() else None
+    android_version = os.environ.get("ANDROID_VERSION")
     run_duration = os.environ.get("RUN_DURATION")
     # UPDATE, per explicit formatting request (2026-08-08): "Triggered by
     # <name> · on branch <branchname> · for apk ver <commcare tag> · with
     # total runtime <runtime>", with every <...> value in bold (Slack
     # mrkdwn *bold*, not backtick-code as this line used before).
+    # UPDATE (2026-08-17), per explicit follow-up request: added "on android
+    # ver <version>" right before the runtime, same bold styling, everything
+    # else unchanged.
     branch_line = f"Triggered by *{actor}* · on branch *{ref}*"
     if apk_version:
         branch_line += f" · for apk ver *{apk_version}*"
+    if android_version:
+        branch_line += f" · on android ver *{android_version}*"
     if run_duration:
         branch_line += f" · with total runtime *{run_duration}*"
 

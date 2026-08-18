@@ -109,11 +109,27 @@ tags:
 - repeat:
     times: 10
     commands:
-      - tapOn: "Basic Form"
-      - extendedWaitUntil:
-          visible:
-            id: "org.commcare.dalvik:id/nav_btn_next"
-          timeout: 10000
+      # UPDATE (8th correction, 2026-08-18), per direct user guidance:
+      # dropped the nav_btn_next existence wait that used to sit here -
+      # tapOn "Basic Form" already only returns once that tap actually
+      # lands, and the very next inputText will simply fail loudly if the
+      # form genuinely hasn't loaded yet, same as letting Maestro's own
+      # default retry on the tap below handle it rather than paying for a
+      # separate up-front check every iteration.
+      # UPDATE (10th correction, 2026-08-18), per direct user guidance: both
+      # taps below now set waitToSettleTimeoutMs: 0 (a real, documented
+      # Maestro tapOn property - https://docs.maestro.dev/reference/commands-available/tapon)
+      # to skip Maestro's own post-tap "wait for the screen to settle"
+      # delay, since the user wants zero dwell time anywhere in this loop.
+      # REAL TRADEOFF, not a free win: this tells Maestro to move on
+      # immediately without confirming the UI actually finished
+      # transitioning - if a screen is genuinely still loading, the next
+      # command could fire too early. Flagged here rather than silently
+      # applied; watch for new flakiness this introduces vs. the time it
+      # saves.
+      - tapOn:
+          text: "Basic Form"
+          waitToSettleTimeoutMs: 0
       - runScript:
           file: assets/increment_loop_counter.js
       # Per direct user request: just the bare iteration number - shorter
@@ -121,9 +137,16 @@ tags:
       # every character typed adds real per-iteration time across 10
       # rapid-fire submissions.
       - inputText: "${output.loopCount}"
-      - hideKeyboard
+      # UPDATE (9th correction, 2026-08-18), per direct user guidance/real
+      # Android 16 failure: dropped hideKeyboard - nav_btn_next lives in
+      # the top toolbar, never covered by an open keyboard, and
+      # hideKeyboard falls back to a real back-press once the keyboard's
+      # already auto-dismissed (device/OS-dependent timing), popping an
+      # unwanted "Exit Form?" dialog instead. Same fix already confirmed
+      # live on flows/case_filters/fuzzy_search_01_03.yaml.
       - tapOn:
           id: "org.commcare.dalvik:id/nav_btn_next"
+          waitToSettleTimeoutMs: 0
       # UPDATE (7th correction, 2026-08-17), per direct user guidance: this
       # form's own repeated real-run evidence (2026-08-08 through today)
       # consistently shows it auto-advances past nav_btn_finish before any

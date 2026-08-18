@@ -187,8 +187,12 @@ tags:
     visible:
       id: "org.commcare.dalvik:id/nav_btn_next"
     timeout: 10000
+# UPDATE, confirmed live (2026-08-18, Android 16): dropped hideKeyboard -
+# see flows/case_filters/fuzzy_search_01_03.yaml's own UPDATE for the full
+# citation of this exact bug (nav_btn_next lives in the top toolbar,
+# never covered by an open keyboard; hideKeyboard falls back to a real
+# back-press once the keyboard's already auto-dismissed).
 - inputText: "MaestroBasicCase"
-- hideKeyboard
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_next"
 - tapOn:
@@ -218,22 +222,15 @@ tags:
       id: "org.commcare.dalvik:id/nav_btn_next"
     timeout: 10000
 - inputText: "MaestroSubCase"
-# UPDATE, confirmed live (2026-08-17, real BrowserStack failure): the
-# following tapOn nav_btn_next failed with "Element not found", and the
-# failure hierarchy dump showed CommCare's own "Exit Form?" confirmation
-# dialog (STAY IN FORM / EXIT WITHOUT SAVING / SAVE INCOMPLETE) open
-# instead - the same hideKeyboard-always-sends-a-real-back-press bug
-# class already fought repeatedly elsewhere in this repo (see e.g.
-# flows/common/install_app_as_web_user.yaml's own citation): the keyboard
-# had apparently already auto-dismissed after typing, so hideKeyboard's
-# back-press was interpreted by the form activity as "exit this form"
-# instead. Defensively dismiss that dialog (stay in form) if it appears
-# before proceeding, rather than removing hideKeyboard outright (it works
-# fine in this same file's earlier "Create a Case" section).
-- hideKeyboard
-- tapOn:
-    text: "STAY IN FORM"
-    optional: true
+# UPDATE (2nd correction, 2026-08-18, Android 16): the hideKeyboard that
+# used to sit here (plus a defensive "STAY IN FORM" dismiss for the
+# "Exit Form?" dialog it could accidentally trigger) is dropped entirely
+# now that the root cause is understood and fixed the same way
+# everywhere else in this repo - nav_btn_next lives in the top toolbar,
+# never covered by an open keyboard, so hideKeyboard was never actually
+# needed here to begin with (see
+# flows/case_filters/fuzzy_search_01_03.yaml's own UPDATE for the full
+# citation).
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_next"
 # UPDATE (2nd correction, 2026-08-17): confirmed live - nav_btn_finish
@@ -276,8 +273,10 @@ tags:
     visible:
       id: "org.commcare.dalvik:id/nav_btn_next"
     timeout: 10000
+# UPDATE, confirmed live (2026-08-18, Android 16): dropped both
+# hideKeyboard calls below - see this file's own earlier UPDATE for the
+# full citation of this exact bug.
 - inputText: "Maestro updated text"
-- hideKeyboard
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_next"
 # singleselect, multiselect, phone_number - all optional per
@@ -289,7 +288,6 @@ tags:
           id: "org.commcare.dalvik:id/nav_btn_next"
 # /data/intval - the form's only required field.
 - inputText: "99"
-- hideKeyboard
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_next"
 # geodata, dateval, new_data (trailing info trigger) - optional, skipped.

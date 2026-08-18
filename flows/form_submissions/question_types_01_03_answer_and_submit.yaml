@@ -67,6 +67,16 @@ tags:
 # (android_translatable_strings.txt:169) backs the final assertVisible, same
 # regex convention as flows/recovery_measures/point_release_flow.yaml.
 #
+# UPDATE, confirmed live (2026-08-18, Android 16): every `hideKeyboard`
+# that used to sit between an `inputText` and the following nav_btn_next
+# tap below was dropped - nav_btn_next lives in the top toolbar, never
+# covered by an open keyboard, and hideKeyboard falls back to a real
+# back-press once the keyboard's already auto-dismissed (device/OS-
+# dependent timing - never triggered on the Android 10 device this flow
+# was originally tuned against), popping an unwanted "Exit Form?" dialog
+# instead. Same fix already confirmed live on
+# flows/case_filters/fuzzy_search_01_03.yaml.
+#
 # Prepends install_app_as_web_user.yaml (APP_NAME: ".*Basic Tests$") - a
 # fresh BrowserStack session has no app installed until this runs; see
 # DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
@@ -97,17 +107,14 @@ tags:
 
 # /data/q_text (free text).
 - inputText: "Maestro answer"
-- hideKeyboard
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_next"
 # /data/q_int (integer only).
 - inputText: "5"
-- hideKeyboard
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_next"
 # /data/q_numeric (decimal only).
 - inputText: "5.5"
-- hideKeyboard
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_next"
 # /data/q_date - date picker widget, not required; skipped (no crash check only).
@@ -147,7 +154,6 @@ tags:
 # this flow enters them but does not attempt the manual back-and-forth
 # persistence check (a human visual-inspection step).
 - inputText: "00"
-- hideKeyboard
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_next"
 
@@ -174,7 +180,6 @@ tags:
 
 # /data/group_list/q_text_2 (free text, inside the "Group List Question" group).
 - inputText: "Maestro group answer"
-- hideKeyboard
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_next"
 # /data/group_list/q_multiselect_2 - same choice set as the top-level

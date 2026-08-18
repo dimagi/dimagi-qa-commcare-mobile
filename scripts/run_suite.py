@@ -4,7 +4,7 @@ which Maestro flows to run (by tag), zip them, upload app + flows to
 BrowserStack App Automate, trigger a Maestro build, and wait for the result.
 
 Usage:
-    python scripts/run_suite.py --tag mobile_pins --devices "Samsung Galaxy S20-10.0"
+    python scripts/run_suite.py --tag mobile_pins --devices "Samsung Galaxy S26-16.0"
     python scripts/run_suite.py --tag prompted_updates --hq-setup hq_setup/prompted_updates/varying_prompt_setup.json
     python scripts/run_suite.py --flow flows/install/install_04_see_apps_menu_item_visible.yaml
 """
@@ -487,7 +487,14 @@ def main():
                          help="GitHub release tag to download if --apk isn't given.")
     parser.add_argument("--hq-setup", default=None,
                          help="Path to an hq_setup/*.json pre-step spec to run first.")
-    parser.add_argument("--devices", default="Samsung Galaxy S20-10.0",
+    # UPDATE (2026-08-17), per direct user request: bumped the default
+    # device+Android version from Samsung Galaxy S20 (Android 10) to
+    # Samsung Galaxy S26 (Android 16) - the latest Android version
+    # BrowserStack has a real Samsung flagship device for (confirmed
+    # against api-cloud.browserstack.com/app-automate/devices.json), same
+    # convention as .github/workflows/maestro-browserstack.yml's own
+    # android_version-to-device mapping.
+    parser.add_argument("--devices", default="Samsung Galaxy S26-16.0",
                          help="Comma-separated BrowserStack device names.")
     parser.add_argument("--project", default="QA COMMCARE MOBILE TESTS")
     parser.add_argument("--build-name", default="QA-COMMCARE-MOBILE",

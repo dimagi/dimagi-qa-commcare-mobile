@@ -60,8 +60,18 @@ tags:
 - tapOn: "Start"
 - tapOn: "Case Tests"
 - tapOn: "Create a Case"
+# UPDATE, confirmed live (2026-08-18, real Android 16 failure): the
+# hideKeyboard that used to sit here fell back to a real back-press once
+# the keyboard had already auto-dismissed (device/OS-dependent timing -
+# never triggered on the Android 10 device this flow was originally
+# tuned against), opening an unwanted "Exit Form?" dialog. nav_btn_next
+# lives in the top toolbar (screen_form_entry.xml), above the question
+# content, so an open keyboard covering the bottom never blocks it -
+# same reasoning already proven live in
+# flows/externalapp_tests/external_app_02_start_commcare_submit_form.yaml's
+# own fix for this identical bug. Dropped hideKeyboard entirely instead
+# of trying to guess a safer place to call it.
 - inputText: "Christy"
-- hideKeyboard
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_next"
 # UPDATE, confirmed live 2026-08-12: hardened against the same
