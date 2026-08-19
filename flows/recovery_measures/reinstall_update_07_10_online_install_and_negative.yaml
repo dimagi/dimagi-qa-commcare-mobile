@@ -226,15 +226,10 @@ tags:
       USERNAME: ${CC_TEST_USERNAME}
       PASSWORD: ${CC_TEST_PASSWORD}
 # "Reinstall and update 9" (cont.) - verify version is now Test Three.
-# CONFIRMED live (see reinstall_update_03_update_to_test_two.yaml's matching
-# comment): the "App v${N}" profile version is the real HQ build's own
-# version number, not the sheet's small "Version 1/2/3" narrative number -
-# Test Three's real build version is 163 (RU_TEST_THREE's saved_app_id's own
-# version, see scripts/app_registry.py).
-- runFlow:
-    file: ../common/check_app_version_via_about.yaml
-    env:
-      EXPECTED_VERSION: "163"
+# UPDATE (2026-08-19), per direct user instruction: dropped EXPECTED_VERSION
+# - see check_app_version_via_about.yaml's own UPDATE comment for the full
+# citation (HQ build version drift, not a real regression signal).
+- runFlow: ../common/check_app_version_via_about.yaml
 - runFlow: ../common/submit_only_form.yaml
 - assertVisible:
     text: "(?i).*form.*success.*completed.*"

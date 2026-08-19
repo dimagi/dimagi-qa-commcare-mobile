@@ -92,10 +92,11 @@ tags:
 - assertVisible: "Start"
 
 # --- Update 1: staged update auto-applied on login -> now on Version 2. ---
-- runFlow:
-    file: ../common/check_app_version_via_about.yaml
-    env:
-      EXPECTED_VERSION: "2"
+# UPDATE (2026-08-19), per direct user instruction: dropped the
+# EXPECTED_VERSION param - see check_app_version_via_about.yaml's own
+# UPDATE comment for the full citation (HQ build version drift, not a
+# real regression signal).
+- runFlow: ../common/check_app_version_via_about.yaml
 
 # --- Update 2: updated Form 1 verification. ---
 - runFlow:

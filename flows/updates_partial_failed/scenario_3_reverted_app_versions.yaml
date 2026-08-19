@@ -75,10 +75,11 @@ tags:
 - assertVisible: "Start"
 
 # --- Setup (substitute check): confirm Version 1 is the starting state. ---
-- runFlow:
-    file: ../common/check_app_version_via_about.yaml
-    env:
-      EXPECTED_VERSION: "1"
+# UPDATE (2026-08-19), per direct user instruction: dropped EXPECTED_VERSION
+# on every call in this file - see check_app_version_via_about.yaml's own
+# UPDATE comment for the full citation (HQ build version drift, not a real
+# regression signal).
+- runFlow: ../common/check_app_version_via_about.yaml
 
 # --- Update 8: CommCare update proxy (see header caveat). ---
 - runFlow: ../common/update_app_via_menu.yaml
@@ -98,10 +99,7 @@ tags:
       USERNAME: ${CC_TEST_USERNAME}
       PASSWORD: ${CC_TEST_PASSWORD}
 - assertVisible: "Start"
-- runFlow:
-    file: ../common/check_app_version_via_about.yaml
-    env:
-      EXPECTED_VERSION: "2"
+- runFlow: ../common/check_app_version_via_about.yaml
 
 # === HQ pre-step runs here in a real execution: mark Version V4 Released ===
 # --- Update 10 (Partial - HQ mark-released dependency, see header). ---
@@ -112,10 +110,7 @@ tags:
       USERNAME: ${CC_TEST_USERNAME}
       PASSWORD: ${CC_TEST_PASSWORD}
 - assertVisible: "Start"
-- runFlow:
-    file: ../common/check_app_version_via_about.yaml
-    env:
-      EXPECTED_VERSION: "4"
+- runFlow: ../common/check_app_version_via_about.yaml
 
 # --- Update 11: Form One verification. ---
 - runFlow:

@@ -42,6 +42,14 @@ appId: org.commcare.dalvik
 #     StandardAlertDialog/AlertDialogFragment).
 - tapOn: "Start"
 - tapOn: "${FORM_NAME}"
+# UPDATE (2026-08-19), same defensive dismiss as
+# flows/common/view_form_no_errors_from_menu.yaml's own UPDATE comment -
+# see that file for the full citation (a Google Play services "Location
+# Accuracy" system dialog can appear right after opening a form, blocking
+# nav_btn_next underneath it).
+- tapOn:
+    text: "No thanks"
+    optional: true
 - extendedWaitUntil:
     visible:
       id: "org.commcare.dalvik:id/nav_btn_next"

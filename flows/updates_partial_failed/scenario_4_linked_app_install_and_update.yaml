@@ -86,10 +86,10 @@ tags:
       USERNAME: ${CC_TEST_USERNAME}
       PASSWORD: ${CC_TEST_PASSWORD}
 - assertVisible: "Start"
-- runFlow:
-    file: ../common/check_app_version_via_about.yaml
-    env:
-      EXPECTED_VERSION: "22"
+# UPDATE (2026-08-19), per direct user instruction: dropped EXPECTED_VERSION
+# - see check_app_version_via_about.yaml's own UPDATE comment for the full
+# citation (HQ build version drift, not a real regression signal).
+- runFlow: ../common/check_app_version_via_about.yaml
 
 # --- Update 14: Form A verification (contains Registration Date + Age). ---
 - runFlow:

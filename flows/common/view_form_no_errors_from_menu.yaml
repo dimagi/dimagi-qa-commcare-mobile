@@ -31,6 +31,19 @@ appId: org.commcare.dalvik
 # (activity.task.error.generic / app.handled.error.explanation). Not
 # re-derived here to avoid drift between the two copies.
 - tapOn: "${FORM_NAME}"
+# UPDATE (2026-08-19), confirmed live via a real CI failure (group-a,
+# multimedia/image_resize_21_24_none_resize): a Google Play services
+# system dialog ("To continue, your device will need to use Location
+# Accuracy" / "No thanks" / "Turn on") can appear right after opening a
+# form, blocking nav_btn_next underneath it - not a CommCare runtime
+# permission prompt (same class of gap as flows/common/capture_camera_photo.yaml's
+# own "Turn on Location tags?" dismissal), so it can't be pre-granted via
+# launchApp's `permissions:` config either. Declines it (no location
+# feature under test here) rather than granting, same reasoning as that
+# file.
+- tapOn:
+    text: "No thanks"
+    optional: true
 - extendedWaitUntil:
     visible:
       id: "org.commcare.dalvik:id/nav_btn_next"

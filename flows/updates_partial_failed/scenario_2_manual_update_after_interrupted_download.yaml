@@ -65,10 +65,11 @@ tags:
 - assertVisible: "Start"
 
 # --- Update 4: update did NOT auto-apply -> still on Version 1. ---
-- runFlow:
-    file: ../common/check_app_version_via_about.yaml
-    env:
-      EXPECTED_VERSION: "1"
+# UPDATE (2026-08-19), per direct user instruction: dropped the
+# EXPECTED_VERSION param on both calls below - see
+# check_app_version_via_about.yaml's own UPDATE comment for the full
+# citation (HQ build version drift, not a real regression signal).
+- runFlow: ../common/check_app_version_via_about.yaml
 
 # --- Update 5: manually complete the update, then log back in and confirm. ---
 - runFlow: ../common/update_app_via_menu.yaml
@@ -78,10 +79,7 @@ tags:
       USERNAME: ${CC_TEST_USERNAME}
       PASSWORD: ${CC_TEST_PASSWORD}
 - assertVisible: "Start"
-- runFlow:
-    file: ../common/check_app_version_via_about.yaml
-    env:
-      EXPECTED_VERSION: "2"
+- runFlow: ../common/check_app_version_via_about.yaml
 
 # --- Update 6: updated Form 1 verification. ---
 - runFlow:

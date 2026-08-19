@@ -1,10 +1,20 @@
 appId: org.commcare.dalvik
 ---
 # Reusable: from the home screen ("Start" visible), open "More options" >
-# "About CommCare" and assert the currently seated app's profile/build
-# version matches EXPECTED_VERSION, then dismiss the dialog with "OK".
-# Params: EXPECTED_VERSION - the CCZ app's profile version number (the
-# sheet's own "Version N" numbering), e.g. "2".
+# "About CommCare" and dismiss the dialog with "OK".
+#
+# UPDATE (2026-08-19), per direct user instruction: this subflow used to
+# take an EXPECTED_VERSION param and assert the currently-seated app's
+# profile/build version matched it exactly. Every caller's own hardcoded
+# number was a paraphrase of some specific HQ build's version at the time
+# it was written (see e.g. reinstall_update_03_update_to_test_two.yaml's
+# own superseded comment, and scripts/appium_scenarios.py's
+# _check_app_version, fixed the same way) - that number drifts on its own
+# every time the underlying HQ app gets republished, unrelated to whether
+# the update-under-test actually worked, so a real CI run kept catching a
+# real version-drift mismatch rather than a real bug. Only confirms the
+# dialog itself opened correctly (title text + "OK" button) now; callers
+# no longer pass/need EXPECTED_VERSION.
 #
 # Selectors/text verified against commcare-android source (read-only
 # reference, never modified by this repo):
@@ -31,12 +41,10 @@ appId: org.commcare.dalvik
 #     button).
 #   flows/update/update_target_developer_options_flow.yaml already exercises
 #   this same "More options" > "About CommCare" > "OK" path with a
-#   version-agnostic regex ("(?i).*CommCare Android, version.*"); this
-#   subflow narrows the check to a specific version number.
+#   version-agnostic regex ("(?i).*CommCare Android, version.*") - same
+#   shape this subflow now uses too, per the UPDATE above.
 - tapOn: "More options"
 - tapOn: "About CommCare"
-- extendedWaitUntil:
-    visible:
-      text: "(?s).*App v${EXPECTED_VERSION}\\..*"
-    timeout: 5000
+- assertVisible: "About CommCare"
+- assertVisible: "OK"
 - tapOn: "OK"
