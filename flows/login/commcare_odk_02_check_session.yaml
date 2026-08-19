@@ -48,6 +48,18 @@ tags:
 - swipe:
     start: "50%, 1%"
     end: "50%, 60%"
+# UPDATE (2026-08-19), confirmed live via a real CI run (build
+# QA-COMMCARE-MOBILE-group-b): the failure screenshot showed the exact
+# same Android 16 OS-level onboarding overlay ("Swipe down from the top
+# right corner..." coachmark, "OK" button) covering the notification
+# shade after this top-edge swipe as already fixed in
+# flows/session_expiration/setup_02_restore_user_session_expires.yaml
+# (see that file's own UPDATE comment for the full citation) - same
+# first-time-swipe system coachmark, not app content. Dismiss it
+# defensively before asserting on the real notification text.
+- tapOn:
+    text: "OK"
+    optional: true
 - assertVisible:
     text: "(?i)Logged Into.*"
 - assertVisible:

@@ -50,5 +50,15 @@ tags:
 - swipe:
     start: "50%, 1%"
     end: "50%, 60%"
+# UPDATE (2026-08-19), same defensive Android 16 onboarding-overlay
+# dismiss as flows/session_expiration/setup_02_restore_user_session_expires.yaml
+# and flows/login/commcare_odk_02_check_session.yaml (see either file's own
+# UPDATE comment for the full citation) - a first-time-swipe system
+# coachmark can cover the shade after this exact gesture, and left
+# undismissed it can linger into whatever runs after this flow in the same
+# device session, not just affect this assertion.
+- tapOn:
+    text: "OK"
+    optional: true
 - assertNotVisible: "Device Logs Pending"
 - back
