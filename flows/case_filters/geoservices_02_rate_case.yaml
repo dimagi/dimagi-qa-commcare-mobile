@@ -211,18 +211,34 @@ tags:
 - tapOn:
     text: "(?i)just once"
     optional: true
+# UPDATE (2026-08-19), confirmed live (full CI run 32178919171): the
+# "Search here" wait below failed - the failure hierarchy dump showed
+# Maps' own first-launch sign-in onboarding screen instead ("Make it your
+# map", "Sign in for quick access to your favorite places and get better
+# recommendations", "Sign in"/"Skip" buttons) - a fresh BrowserStack
+# device has never opened Maps before, so this one-time screen appears
+# ahead of the actual map/search bar. Dismiss it via "Skip" before waiting
+# for the real map UI.
+- tapOn:
+    text: "Skip"
+    optional: true
 - extendedWaitUntil:
     visible: "Search here"
     timeout: 15000
-- back
-# UPDATE (2026-08-19), confirmed live (build v6): 3 backs from this confirm
-# screen only reached the "[Master] Basic Tests" module list (the failure
-# hierarchy dump showed that screen, not "Start") - one level short.
-# Real depth from here: confirm screen -> (back) Rate Case case list ->
-# (back) "Geoservices" menu -> (back) module list -> (back) "Start". Added
-# the 4th back.
-- back
-- back
-- back
-- back
+# UPDATE (2026-08-19, 2nd correction), confirmed live (build
+# batch2-regressions-fix-v1): a fixed "1 back to exit Maps + 4 backs to
+# Start" sequence still landed one short, on the "[Master] Basic Tests"
+# module list again - exiting a foreign app's own back-stack isn't a
+# reliably fixed number of presses (same non-determinism already
+# documented for minimize_duplicate_create_subcase_update_case.yaml's own
+# back-to-Start attempts). Replaced the fixed count with a bounded
+# repeat that presses back only until "Start" genuinely becomes visible,
+# generous enough to absorb Maps' own variable exit depth on top of
+# CommCare's own screen stack.
+- repeat:
+    times: 8
+    while:
+      notVisible: "Start"
+    commands:
+      - back
 - assertVisible: "Start"

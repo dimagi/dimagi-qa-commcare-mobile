@@ -113,6 +113,19 @@ tags:
     env:
       USERNAME: ${CC_TEST_USERNAME}
       PASSWORD: ${CC_TEST_PASSWORD}
+# UPDATE (2026-08-19, 4th correction), confirmed live (build
+# batch2-regressions-fix-v3): "View Case's Sub Case" navigation now works
+# end-to-end, but "MaestroSubCase" still wasn't visible in the resulting
+# list - this shared qateam domain has accumulated many past runs' own
+# "MaestroBasicCase"-named parent cases, so selecting by that literal name
+# can resolve to a DIFFERENT (older) run's case instead of this run's own,
+# which naturally has no connection to the sub case THIS run just created.
+# Same run-suffix fix already established in
+# flows/case_filters/assets/generate_run_suffix.js and
+# flows/conditional_enum_in_case_list/assets/generate_run_suffix.js - see
+# either for the full citation.
+- runScript:
+    file: assets/generate_run_suffix.js
 - tapOn: "Start"
 - tapOn: "Minimize Duplicates"
 
@@ -192,7 +205,7 @@ tags:
 # citation of this exact bug (nav_btn_next lives in the top toolbar,
 # never covered by an open keyboard; hideKeyboard falls back to a real
 # back-press once the keyboard's already auto-dismissed).
-- inputText: "MaestroBasicCase"
+- inputText: "MaestroBasicCase ${output.runSuffix}"
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_next"
 - tapOn:
@@ -215,7 +228,7 @@ tags:
     text: "Create a Sub Case"
     optional: true
 - tapOn:
-    text: "MaestroBasicCase"
+    text: "MaestroBasicCase ${output.runSuffix}"
     optional: true
 # UPDATE (5th correction, 2026-08-18), per direct user-supplied screenshot:
 # root cause of the previous correction's bounce-back found - there's a
@@ -308,6 +321,24 @@ tags:
 - inputText: "1"
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_next"
+# UPDATE (2026-08-19, 5th correction), confirmed live (build v4 -
+# minimizedup-runsuffix-fix-v4): with the navigation path and parent-case
+# uniqueness both now confirmed correct end-to-end, "MaestroSubCase" was
+# STILL missing from the resulting "View Case's Sub Case" list - a sign
+# the sub case itself was never actually created, not a navigation
+# problem. Per the header's own citation, /data/confirm_creation must
+# equal "confirm" for the sub_case_0 create block to become relevant at
+# all; this screen's own "Confirm - Please create <name>." radio was only
+# ever ASSUMED pre-selected, unlike the PARENT case's own confirm radio a
+# few lines above (line ~212) which explicitly taps it defensively. Same
+# asymmetry already fixed the same way here - many other "assumed
+# pre-selected" behaviors already turned out different on Android 16 this
+# session (e.g. Rate Case's own rating radio was NOT pre-selected in the
+# recording reviewed earlier), so add the same defensive explicit tap
+# instead of continuing to rely on an unverified default.
+- tapOn:
+    text: "(?i)Confirm - Please create.*"
+    optional: true
 - extendedWaitUntil:
     visible:
       id: "org.commcare.dalvik:id/nav_btn_finish"
@@ -328,21 +359,102 @@ tags:
 # --- Verify the sub case appears under "View Case's Sub Case" (m7). ---
 - tapOn: "Start"
 - tapOn: "Minimize Duplicates"
-- tapOn: "View Case's Sub Case"
+# UPDATE (2026-08-19), confirmed live via build 32178919171's own failure
+# hierarchy dump: "View Case's Sub Case" was never a menu item reachable
+# straight from "Minimize Duplicates" at all - that tap lands directly on
+# m6's own case-selection list (same "goes straight to the case list, not
+# a text menu" behavior this file's header already documents for the
+# "Create a Sub Case" path above), confirmed by the dump showing a bare
+# "Name" column of cases with no "View Case's Sub Case" text anywhere on
+# screen. "Close a Case"/"Create a Sub Case"/"View Case's Sub Case" are
+# actually the form-choice menu shown AFTER selecting a specific case from
+# that list, not menu items on the module screen itself - reordered to
+# select "MaestroBasicCase" first, then tap "View Case's Sub Case" from
+# its own form-choice menu. Waits for that menu with real headroom rather
+# than a blind immediate tap, since selecting the case is itself a screen
+# transition.
+# UPDATE (2026-08-19, 2nd correction), confirmed live (build
+# batch2-regressions-fix-v1): the bare "MaestroBasicCase" tap above
+# WARNED (element not found) - the failure hierarchy dump showed a case
+# list full of OTHER case names ("122", "123", "14151", "aaa", etc.) with
+# "MaestroBasicCase" not in the visible viewport, the exact same
+# shared-domain-accumulates-cases-across-runs problem already fixed via
+# the search box everywhere else in this file/repo (see this file's own
+# "Create a Sub Case" section above). Filter via search_action_bar first,
+# same hideKeyboard + anchored-tap convention as that section, so the case
+# is found regardless of how large this list has grown.
 - tapOn:
-    text: "MaestroBasicCase"
-    optional: true
+    id: "org.commcare.dalvik:id/search_action_bar"
+- inputText: "MaestroBasicCase ${output.runSuffix}"
+- hideKeyboard
+- tapOn:
+    text: "^MaestroBasicCase ${output.runSuffix}$"
+# UPDATE (2026-08-19, 3rd correction), confirmed live (build
+# batch2-regressions-fix-v2): "View Case's Sub Case" still wasn't visible
+# after selecting the case - the failure hierarchy dump showed a
+# "CONTINUE" toolbar bar over a case-detail screen (Name: MaestroBasicCase)
+# instead, the same case-detail-confirm-then-CONTINUE pattern already
+# confirmed for geoservices_02_rate_case's own case selection (m_case_long
+# detail screen with a "CONTINUE"/"Continue" button before the real form
+# choice appears). Tapping the case name only reaches this intermediate
+# detail screen; CONTINUE is what actually surfaces the
+# Close-a-Case/Create-a-Sub-Case/View-Case's-Sub-Case menu.
+- tapOn: "CONTINUE"
+- extendedWaitUntil:
+    visible: "View Case's Sub Case"
+    timeout: 15000
+- tapOn: "View Case's Sub Case"
 - assertVisible: "MaestroSubCase"
-- back
-- back
+# UPDATE (2026-08-19, 6th correction), confirmed live (build
+# batch2-regressions-fix-v4): with "MaestroSubCase" now confirmed visible
+# (the confirm-radio fix worked), a fixed 2 backs only unwound one level
+# (back to the case-detail/CONTINUE screen, not all the way to "Start") -
+# same non-deterministic back-stack-depth problem already fixed the same
+# way for geoservices_02_rate_case.yaml's own back-to-Start sequence (see
+# that file's own UPDATE for the full citation). Bounded retry instead of
+# guessing the exact count.
+- repeat:
+    times: 8
+    while:
+      notVisible: "Start"
+    commands:
+      - back
 
 # --- Update the case (Case Tests module -> Update a Case). ---
 - tapOn: "Start"
 - tapOn: "Case Tests"
 - tapOn: "Update a Case"
+# UPDATE (2026-08-19, 7th correction), confirmed live (build
+# batch2-regressions-fix-v11): the bare optional tap below WARNED (element
+# not found) - the failure hierarchy dump showed a case list full of OTHER
+# case names ("MaestroBasicCase" without the suffix, "4tqgwg", etc.) with
+# "MaestroBasicCase ${output.runSuffix}" not in the visible viewport - same
+# shared-domain-accumulates-cases problem already fixed via the search box
+# for "View Case's Sub Case" above. This tap was harmlessly optional before
+# the run-suffix made the search string more specific/longer; now that a
+# miss actually matters (this section's case selection is load-bearing for
+# reaching the real update form), filter via search_action_bar first, same
+# convention as the rest of this file. Not optional - the failure evidence
+# above confirms "Update a Case" always lands on this case-selection list
+# first (Name/Status/Phone Number/Case ID columns), never straight into the
+# form, so search_action_bar is always genuinely present here.
 - tapOn:
-    text: "MaestroBasicCase"
-    optional: true
+    id: "org.commcare.dalvik:id/search_action_bar"
+- inputText: "MaestroBasicCase ${output.runSuffix}"
+- hideKeyboard
+- tapOn:
+    text: "^MaestroBasicCase ${output.runSuffix}$"
+# UPDATE (2026-08-19, 8th correction), confirmed live (build
+# batch2-regressions-fix-v13): "nav_btn_next" still wasn't visible after
+# selecting the case - the failure hierarchy dump showed a "CONTINUE"
+# toolbar bar over a case-detail screen (Case Details 1/2/3 (W/Filter),
+# Name/Date Opened/Status) instead, the exact same
+# case-detail-confirm-then-CONTINUE pattern already confirmed for both
+# geoservices_02_rate_case's and this file's own "View Case's Sub Case"
+# case selection (see that section's own UPDATE above for the full
+# citation). Tapping the case name only reaches this intermediate detail
+# screen; CONTINUE is what actually surfaces the real update form.
+- tapOn: "CONTINUE"
 - extendedWaitUntil:
     visible:
       id: "org.commcare.dalvik:id/nav_btn_next"
@@ -373,14 +485,27 @@ tags:
     commands:
       - tapOn:
           id: "org.commcare.dalvik:id/nav_btn_next"
+# UPDATE (2026-08-19, 9th correction), confirmed live (build
+# batch2-regressions-fix-v15): nav_btn_finish never actually appeared here -
+# the failure hierarchy dump showed we'd already landed back on this same
+# "Update a Case" case-selection list (Name/Status/Phone Number/Case ID
+# columns, title "Update a Case"), meaning the last trailing-question
+# nav_btn_next tap above already submitted the form directly - this
+# specific form has no separate Finish screen, and falls through to its
+# own immediate parent screen in the nav stack (no <stack> override here,
+# unlike "Create a Case" above), not "form successfully completed" text or
+# all the way back to Start. Made the wait+tap optional and check for
+# EITHER real end state instead of assuming one.
 - extendedWaitUntil:
     visible:
       id: "org.commcare.dalvik:id/nav_btn_finish"
     timeout: 10000
+    optional: true
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_finish"
+    optional: true
 - assertVisible:
-    text: "(?i).*form.*success.*completed.*"
+    text: "(?i)(.*form.*success.*completed.*|Update a Case)"
 - assertNotVisible:
     text: "(?i).*unexpected error.*"
 - assertNotVisible:

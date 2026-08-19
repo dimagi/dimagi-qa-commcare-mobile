@@ -190,8 +190,79 @@ jobs:
           path: reports/
           retention-days: 30
 
+  # Runs the 3 updates_partial_failed scenarios that genuinely need a
+  # mid-session CommCare binary swap (Maestro can't do this at all - see
+  # scripts/run_appium_suite.py's own module docstring for the full
+  # citation) via real Appium sessions against BrowserStack instead of
+  # Maestro. Additive to maestro-tests' own (less complete, but still real)
+  # coverage of these same 3 flows under the updates_partial_failed tag -
+  # not a replacement. Gated the same way those flows already are: any "All"
+  # dispatch, an explicit updates_partial_failed pick, or the nightly
+  # schedule trigger (which has no `tag` input at all, hence the empty-string
+  # check).
+  appium-tests:
+    needs: prepare
+    if: >-
+      github.event.inputs.tag == '' ||
+      github.event.inputs.tag == 'All' ||
+      github.event.inputs.tag == 'updates_partial_failed'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Appium suite on BrowserStack (group-d)
+        env:
+          BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
+          BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
+          HQ_DOMAIN: qateam
+          CC_TEST_USERNAME: ${{ secrets.CC_TEST_USERNAME }}
+          CC_TEST_PASSWORD: ${{ secrets.CC_TEST_PASSWORD }}
+          HQ_MOBILE_WORKER_USERNAME: ${{ secrets.HQ_MOBILE_WORKER_USERNAME }}
+          HQ_MOBILE_WORKER_PASSWORD: ${{ secrets.HQ_MOBILE_WORKER_PASSWORD }}
+          HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
+          HQ_WEB_USER_PASSWORD: ${{ secrets.HQ_WEB_USER_PASSWORD }}
+        run: |
+          # Same android_version-to-device mapping as maestro-tests above -
+          # kept as a separate copy rather than a shared step/composite
+          # action since it's 7 lines and this job already stands alone.
+          declare -A ANDROID_DEVICE_MAP=(
+            ["16.0"]="Samsung Galaxy S26"
+            ["15.0"]="Samsung Galaxy S25"
+            ["14.0"]="Samsung Galaxy S24"
+            ["13.0"]="Samsung Galaxy S23"
+            ["12.0"]="Samsung Galaxy S22"
+            ["11.0"]="Samsung Galaxy S21"
+            ["10.0"]="Samsung Galaxy S20"
+          )
+          ANDROID_VERSION="${{ github.event.inputs.android_version || '16.0' }}"
+          DEVICES="${{ github.event.inputs.devices }}"
+          if [ -z "$DEVICES" ]; then
+            DEVICES="${ANDROID_DEVICE_MAP[$ANDROID_VERSION]}-$ANDROID_VERSION"
+          fi
+          ARGS=(--devices "$DEVICES" --build-name "QA-COMMCARE-MOBILE-group-d")
+          if [ -n "${{ github.event.inputs.release_tag }}" ]; then ARGS+=(--release-tag "${{ github.event.inputs.release_tag }}"); fi
+          python scripts/run_appium_suite.py "${ARGS[@]}"
+
+      # Same artifact-name convention as maestro-tests' own "maestro-report-<name>"
+      # uploads - merge-reports' download-artifact glob (maestro-report-*)
+      # already matches this with no changes needed there.
+      - name: Upload Appium report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maestro-report-group-d
+          path: reports/
+          retention-days: 30
+
   merge-reports:
-    needs: [prepare, maestro-tests]
+    needs: [prepare, maestro-tests, appium-tests]
     if: always()
     runs-on: ubuntu-latest
     steps:

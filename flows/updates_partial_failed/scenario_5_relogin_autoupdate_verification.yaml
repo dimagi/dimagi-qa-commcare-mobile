@@ -20,6 +20,13 @@ tags:
 #     BrowserStack App Automate/App Live expose any API to install a
 #     new/updated APK mid-session, which is exactly what this row would
 #     require.
+#     UPDATE (2026-08-19): see that same file's 2026-08-19 UPDATE - BrowserStack's
+#     Appium sessions (not Maestro) do support this via midSessionInstallApps/
+#     `mobile: installApp`. scripts/appium_scenarios.py's run_scenario_5() now
+#     exercises Update 16's real precondition (stage the V6 CCZ update,
+#     interrupt with a binary swap mid-stream) end-to-end as CI's "group-d"
+#     job, in addition to (not instead of) this Maestro flow's own
+#     verification-only coverage below.
 #
 # This flow covers the remaining "Automatable" steps that follow those:
 #   - Installation 1: install linked app V2 (Version 18) as a mobile worker -

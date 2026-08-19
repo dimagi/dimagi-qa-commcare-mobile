@@ -133,6 +133,44 @@ appId: org.commcare.dalvik
           timeout: 3000
       - tapOn:
           id: "org.commcare.dalvik:id/login_button"
+# UPDATE (2026-08-19), confirmed live (Android 16, builds
+# batch2-regressions-fix-v5/v6, both otherwise-unrelated flows failing at
+# this exact same point): a DIFFERENT error text - "Server Error" with a
+# "See Error Details" link, not "Bad Server Response" above - appeared
+# twice in a row on the login screen, same transient-server-hiccup class
+# of failure (still on LoginActivity, login_button still present/tappable)
+# but a different string this repo hadn't handled yet. Same bounded-retry
+# treatment as the "Bad Server Response" case above, for the same reason:
+# a real, source-backed retry rather than a workaround, fixed centrally
+# here since every flow that logs in shares this same exposure.
+- repeat:
+    times: 5
+    while:
+      visible:
+        text: "Server Error"
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - tapOn:
+          id: "org.commcare.dalvik:id/login_button"
+# UPDATE (2026-08-19, 2nd correction), confirmed live (build
+# batch2-regressions-fix-v11, during the same real HQ outage/recovery
+# window as the "Server Error" case above): a THIRD distinct string -
+# "Couldn't Reach Server. Please check your network connection" - a
+# device-side connectivity failure rather than a server-side error
+# response, but still landing on this same login screen with login_button
+# still present/tappable. Same bounded-retry treatment, for the same
+# reason: a real retry rather than a workaround, fixed centrally here.
+- repeat:
+    times: 5
+    while:
+      visible:
+        text: "Couldn't Reach Server"
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - tapOn:
+          id: "org.commcare.dalvik:id/login_button"
 # A first (or post-reinstall) login triggers a data restore/sync that shows
 # "Processing Data from Server" with a live progress counter (e.g.
 # "Completed: 4613/5807") - confirmed via a real BrowserStack failure whose

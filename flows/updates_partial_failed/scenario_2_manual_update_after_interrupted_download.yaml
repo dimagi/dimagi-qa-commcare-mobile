@@ -21,6 +21,15 @@ tags:
 # ADB-capable device-farm outside BrowserStack could interleave the two
 # installs with real timing control).
 #
+# UPDATE (2026-08-19): see scenario_1_staged_update_auto_apply.yaml's own
+# 2026-08-19 UPDATE for the full citation - BrowserStack's Appium sessions
+# (not Maestro) do support this via midSessionInstallApps/
+# `mobile: installApp`. scripts/appium_scenarios.py's run_scenario_2() now
+# exercises the real Setup precondition (interrupt the CCZ download early
+# enough that it does NOT auto-apply, then manually complete it) end-to-end
+# as CI's "group-d" job, in addition to (not instead of) this Maestro
+# flow's own verification-only coverage below.
+#
 # This flow covers the four "Automatable" verification steps that follow:
 #   - Update 4: log in and confirm the update did NOT auto-apply (app
 #     version should still read "Version 1").

@@ -41,6 +41,20 @@ tags:
 # ADB-capable device-farm infrastructure (outside BrowserStack App
 # Automate) could interleave the two installs with real timing control,
 # which is a genuine infrastructure change, not a flow-level fix.
+#
+# UPDATE (2026-08-19): that "fundamentally different infrastructure" now
+# exists in this repo - BrowserStack App Automate's APPIUM sessions (not
+# Maestro) support a genuine mid-session app upgrade via the
+# midSessionInstallApps capability + `mobile: installApp`, confirmed both
+# via BrowserStack's own docs and directly against this app's two real APKs
+# (resources/commcare_2.45_release.apk and the current release both share
+# an identical signing-certificate SHA-256 fingerprint, the requirement for
+# BrowserStack to treat it as an upgrade). scripts/run_appium_suite.py +
+# scripts/appium_scenarios.py's run_scenario_1() now exercises the REAL
+# Setup precondition end-to-end (stage the CCZ update, interrupt with a
+# binary swap mid-stream, land logged out) as CI's "group-d" job, in
+# addition to (not instead of) this Maestro flow's own verification-only
+# coverage below.
 # This flow covers the three "Automatable" verification steps that follow:
 #   - Update 1: log in and confirm the staged update auto-applied (app
 #     version should now read "Version 2").

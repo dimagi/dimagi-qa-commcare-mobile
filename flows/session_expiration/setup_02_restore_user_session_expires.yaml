@@ -51,19 +51,58 @@ tags:
 - swipe:
     start: "50%, 1%"
     end: "50%, 60%"
+# UPDATE, confirmed live (2026-08-19, Android 16/Samsung Galaxy S26, full
+# CI run 32178919171): the failure hierarchy dump showed a genuine
+# Android 16 OS-level onboarding overlay ("Swipe down from the top right
+# corner of the screen to open the quick settings panel. Swipe down from
+# anywhere else on the top of the screen to open the notification
+# panel.", "OK" button) covering the notification shade after this exact
+# top-edge swipe gesture - a first-time system coachmark, not app content,
+# same class of Android 16 overlay already fixed after clearState in
+# flows/common/install_app_by_code.yaml/install_app_as_web_user.yaml (see
+# those files' own UPDATE comments for the full citation). Dismiss it
+# defensively before asserting on the real notification text.
+- tapOn:
+    text: "OK"
+    optional: true
 - assertVisible:
     text: "(?i)Logged Into.*"
 - assertVisible:
     text: "Session Expires:.*"
-- tapOn:
-    text: "Session Expires:.*"
-- extendedWaitUntil:
-    visible:
-      id: "org.commcare.dalvik:id/edit_username"
-    timeout: 50000
+# UPDATE (2026-08-19, 2nd correction), confirmed live (build
+# batch2-regressions-fix-v1): the single tap+wait below failed - the
+# failure hierarchy dump showed we never actually left the notification
+# shade at all (still showing this SAME shade, now also carrying
+# CommCare's own "CommCare Login Expired"/"Click here to log back into
+# your session" notification, proving the real 45s session timeout had
+# elapsed while still sitting here) - the one tap on "Session Expires:.*"
+# didn't reliably bring the app to the foreground. Retries the tap
+# (matching either the original notification text or the "Login Expired"
+# one it can turn into once the session actually times out mid-wait)
+# instead of a single one-shot attempt, bounded generously past the real
+# 45s window.
+- repeat:
+    times: 4
+    while:
+      notVisible:
+        id: "org.commcare.dalvik:id/edit_username"
+    commands:
+      - tapOn:
+          text: "(?i)(Session Expires:.*|.*Login Expired.*)"
+          optional: true
+      - extendedWaitUntil:
+          visible:
+            id: "org.commcare.dalvik:id/edit_username"
+          timeout: 15000
+          optional: true
 - swipe:
     start: "50%, 1%"
     end: "50%, 60%"
+# Same defensive Android 16 onboarding-overlay dismiss as the UPDATE
+# (2026-08-19) comment above - see that for the full citation.
+- tapOn:
+    text: "OK"
+    optional: true
 - assertVisible:
     text: ".*Login Expire.*"
 - back

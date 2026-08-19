@@ -109,6 +109,31 @@ tags:
             text: "(?i)Download completed"
           timeout: 60000
           optional: true
+      # UPDATE (2026-08-19), confirmed live (Android 16/Samsung Galaxy S26,
+      # full CI run 32178919171): on this device, tapping video_button
+      # opens the video in Samsung's OWN full-screen video player app
+      # (com.samsung.android.video), not the inline VideoView the header
+      # documents for the device this flow was originally tuned against -
+      # confirmed via the failure hierarchy dump showing
+      # com.samsung.android.video:id/action_bar_root covering the entire
+      # [0,0][1080,2340] screen, with a first-launch "temporal zoom guide"
+      # tutorial overlay ("Touch and hold a video as it plays to see it in
+      # slow-mo.") blocking everything underneath, including
+      # nav_btn_next - explaining the FAILED "Tap on nav_btn_next" (it
+      # genuinely wasn't on screen at all, covered by a different app).
+      # Dismiss the tutorial's own close button if present, then back out
+      # of the external player - bounded and self-terminating (a no-op if
+      # the video ever does render inline on some other device/session).
+      - tapOn:
+          id: "com.samsung.android.video:id/temporal_zoom_guide_close_btn"
+          optional: true
+      - repeat:
+          times: 3
+          while:
+            visible:
+              id: "com.samsung.android.video:id/action_bar_root"
+          commands:
+            - back
       - assertNotVisible:
           id: "org.commcare.dalvik:id/video_button"
           optional: true
@@ -128,6 +153,18 @@ tags:
       text: "(?i)Download completed"
     timeout: 60000
     optional: true
+# Same Samsung-video-player dismissal as the UPDATE (2026-08-19) comment
+# in the repeat loop above - see that for the full citation.
+- tapOn:
+    id: "com.samsung.android.video:id/temporal_zoom_guide_close_btn"
+    optional: true
+- repeat:
+    times: 3
+    while:
+      visible:
+        id: "com.samsung.android.video:id/action_bar_root"
+    commands:
+      - back
 - assertNotVisible:
     id: "org.commcare.dalvik:id/video_button"
     optional: true

@@ -63,7 +63,13 @@ tags:
 - tapOn: "Basic Form Tests"
 - tapOn: "Basic Form"
 - inputText: "Geoservice 2 Auto Capture Location"
-- hideKeyboard
+# UPDATE, confirmed live (2026-08-19, Android 16, full CI run 32178919171):
+# dropped hideKeyboard - the failure hierarchy dump showed an unwanted
+# "Exit Form?" dialog, same hideKeyboard-falls-back-to-a-real-back-press
+# bug already fixed across this repo (nav_btn_finish lives in the top
+# toolbar, never covered by an open keyboard - see
+# flows/case_filters/fuzzy_search_01_03.yaml's own UPDATE for the full
+# citation).
 - extendedWaitUntil:
     visible:
       id: "org.commcare.dalvik:id/nav_btn_finish"

@@ -79,6 +79,35 @@ tags:
 # for this app; if the device pool changes, these percentages should be
 # re-measured the same way.
 #
+# UPDATE (2026-08-19), confirmed live (Android 16/Samsung Galaxy S26, full
+# CI run 32178919171): both "First"/"Second" required-select failures
+# ("Sorry, this response is required!") after the point-taps, with the
+# assertion after submission 1 landing back on this SAME screen. Root
+# cause found directly in the failure hierarchy dump's own element
+# bounds - this device's real screen is 1080x2340, not 1080x2400 (a
+# shorter status/nav chrome, not a guess). At the old y=35%/40% of 2400
+# (=840/960px), the First row tap now falls in the dead zone between the
+# "Choose:" header (ends y=818) and the First row's own radio bounds
+# (y=[834,930]), and the Second-row tap now falls just past the First
+# row's radios into the "required" warning banner instead of the Second
+# row's own bounds (y=[1118,1214]) - neither point lands on a real radio
+# button on this device. Re-measured directly from this same dump's own
+# RadioButton bounds instead of guessing: Yes/No columns center at
+# x=622/786 (57.6%/72.8% of 1080 - Don't-know unused, not re-measured),
+# First/Second row centers at y=882/1166 (37.7%/49.8% of 2340).
+#
+# UPDATE (2026-08-19, 2nd correction), confirmed live (build
+# batch2-regressions-fix-v1): First's new y=38% fixed correctly (no
+# "required" error this time), but Second's y=50% still triggered
+# "Sorry, this response is required!". Root cause: the y=49.8% figure
+# above was measured from a dump captured AFTER a failed submit attempt,
+# when BOTH First's and Second's own "required" warning banners were
+# already expanded on screen (each 169px tall, per that same dump's own
+# bounds), pushing Second's row down. At actual tap-time - before any
+# validation has run - neither warning exists yet, so Second's row sits
+# 169px HIGHER than that dump implied: real bounds ~[949,1045], center
+# y=997 (42.6% of 2340, not 49.8%).
+#
 # Every other question after this first screen is optional (verified against
 # every remaining <bind> in modules-0/forms-7.xml - none carry
 # required="true()"), including several conditionally-hidden follow-up
@@ -122,12 +151,14 @@ tags:
     timeout: 10000
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_next"
-# First = Yes (Yes column x~55%, First row y~35% - see header CAVEAT).
+# First = Yes (Yes column x~58%, First row y~38% - see header CAVEAT and
+# its 2026-08-19 UPDATE for the Android 16/S26 re-measurement).
 - tapOn:
-    point: "55%, 35%"
-# Second = Yes (Yes column x~55%, Second row y~40%).
+    point: "58%, 38%"
+# Second = Yes (Yes column x~58%, Second row y~43% - see header's
+# 2026-08-19 2nd-correction UPDATE for the no-warning-yet re-measurement).
 - tapOn:
-    point: "55%, 40%"
+    point: "58%, 43%"
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_next"
 # UPDATE, confirmed live (2026-08-08, real BrowserStack failure + user
@@ -210,12 +241,14 @@ tags:
     timeout: 10000
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_next"
-# First = No (No column x~70%, First row y~35% - see header CAVEAT).
+# First = No (No column x~73%, First row y~38% - see header CAVEAT and
+# its 2026-08-19 UPDATE for the Android 16/S26 re-measurement).
 - tapOn:
-    point: "70%, 35%"
-# Second = No (No column x~70%, Second row y~40%).
+    point: "73%, 38%"
+# Second = No (No column x~73%, Second row y~43% - see header's
+# 2026-08-19 2nd-correction UPDATE for the no-warning-yet re-measurement).
 - tapOn:
-    point: "70%, 40%"
+    point: "73%, 43%"
 - tapOn:
     id: "org.commcare.dalvik:id/nav_btn_next"
 # UPDATE, confirmed live (2026-08-08, real BrowserStack failure + user
