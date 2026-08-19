@@ -73,14 +73,68 @@ class AppiumBrowserStackClient:
             bstack_options["sessionName"] = session_name
         if mid_session_apps:
             bstack_options["midSessionInstallApps"] = mid_session_apps
+        # UPDATE (2026-08-19, 3rd correction), per direct user observation
+        # (confirmed independently via every saved hierarchy dump's own
+        # explicit width/height attributes, width > height throughout -
+        # not a notation ambiguity): the device has genuinely been in
+        # landscape this whole time. Neither the generic Appium
+        # `orientation` capability nor the WebDriver `driver.orientation`
+        # setter (both tried below/previously) actually took effect -
+        # BrowserStack has its OWN platform-specific capability for this
+        # (confirmed via their docs) that isn't the same generic Appium
+        # mechanism, placed alongside every other bstack:options entry
+        # here for consistency.
+        bstack_options["deviceOrientation"] = "portrait"
 
         options = UiAutomator2Options()
         options.platform_name = "Android"
         options.automation_name = "UiAutomator2"
         options.app = app_url
+        # UPDATE (2026-08-19), confirmed live via scripts/appium_smoke_test.py's
+        # real run + a user-supplied screenshot: a fresh install's first
+        # launch showed Android's runtime "Allow CommCare to send you
+        # notifications?" permission prompt covering the whole screen,
+        # blocking enter_app_location underneath it - a real Appium-vs-Maestro
+        # difference (per direct user observation): no Maestro flow in this
+        # entire repo has ever needed to handle this dialog, meaning
+        # BrowserStack's Maestro product apparently auto-grants runtime
+        # permissions by default, while its Appium product does not unless
+        # told to. auto_grant_permissions is a standard UiAutomator2Options
+        # capability for exactly this - grants every permission the app
+        # declares at install time, so the prompt never appears at all
+        # (root-cause fix, not a defensive dismiss-tap that could race).
+        options.auto_grant_permissions = True
+        # UPDATE (2026-08-19), confirmed live via a saved failure hierarchy
+        # dump (scripts/run_appium_suite.py's own _save_failure_evidence):
+        # at the exact moment "edit_profile_location" was never found, the
+        # dump showed width=2085/height=1080 with rotation="3" and the whole
+        # tree otherwise empty (displayed="false"). 2085 is neither
+        # portrait's 1080 nor landscape's 2340 - it's a value BETWEEN the
+        # two, meaning the device was actively mid-rotation-ANIMATION at
+        # that exact instant (most likely triggered by the on-screen
+        # keyboard opening/closing on this device), not settled into a
+        # stable landscape state. This app/test suite never accounts for
+        # any orientation but portrait anywhere else in this repo.
+        options.orientation = "PORTRAIT"
         options.set_capability("bstack:options", bstack_options)
 
-        return webdriver.Remote(command_executor=APPIUM_HUB_URL, options=options)
+        driver = webdriver.Remote(command_executor=APPIUM_HUB_URL, options=options)
+        # UPDATE (2026-08-19, 2nd correction): the orientation CAPABILITY
+        # above only sets the STARTING orientation at session launch - it
+        # doesn't stop the device's own auto-rotate sensor from firing a
+        # later in-session rotation (exactly what the mid-animation evidence
+        # above suggests happened). Tried disabling auto-rotate at the OS
+        # level via a real adb shell command next, but BrowserStack's
+        # managed Appium server has the "adb_shell" insecure feature
+        # disabled by default (confirmed live: UnknownError, "Potentially
+        # insecure feature 'adb_shell' has not been enabled") - not
+        # something a third-party client can enable on their managed
+        # server. Falls back to the standard, always-allowed WebDriver
+        # orientation SETTER (not a shell command) right after session
+        # start instead - reasserts portrait in case the capability alone
+        # wasn't enough.
+        driver.orientation = "PORTRAIT"
+        return driver
 
     @staticmethod
     def install_mid_session(driver, app_url):

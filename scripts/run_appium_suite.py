@@ -14,17 +14,21 @@ resources/commcare_2.45_release.apk (old) and the current release APK share
 an identical certificate SHA-256 fingerprint - so this genuinely applies
 here.
 
-This is intentionally a SEPARATE, additive path from scripts/run_suite.py's
-Maestro pipeline - it drives real Appium WebDriver sessions
-(scripts/appium_browserstack_client.py) through
-scripts/appium_scenarios.py's step ports of each scenario's Maestro
-counterpart, then writes a reports/latest_results.json in the exact
-report_generator.TestResult shape scripts/merge_reports.py already expects
-from every other matrix job's artifact - so this run's results fold into the
-same merged HTML report/Slack notification with no changes needed there.
+This drives real Appium WebDriver sessions
+(scripts/appium_browserstack_client.py) through scripts/appium_scenarios.py's
+step ports of each scenario's Maestro counterpart, then MERGES its results
+into whatever reports/latest_results.json a scripts/run_suite.py invocation
+earlier in the same job already wrote (see the merge logic near the bottom
+of main() - report_generator.generate_report() always overwrites that file,
+so this reads it first rather than clobbering the Maestro results). Meant to
+run as an EXTRA step inside an EXISTING run_suite.py matrix job whose tags
+include updates_partial_failed (see .github/workflows/maestro-browserstack.yml's
+own conditional step, gated the same way externalapp_tests' companion-app
+upload already is) - per direct user question, a whole separate CI job/
+artifact for just these 3 scenarios wasn't actually needed.
 
-Usage:
-    python scripts/run_appium_suite.py --build-name "QA-COMMCARE-MOBILE-group-d"
+Usage (standalone, e.g. for local testing):
+    python scripts/run_appium_suite.py --scenario scenario_1
     python scripts/run_appium_suite.py --release-tag commcare_2.64.0 --devices "Samsung Galaxy S26-16.0"
 """
 import argparse
@@ -61,6 +65,30 @@ def _split_device(devices_arg):
     return device_name, os_version
 
 
+def _save_failure_evidence(driver, name):
+    """Best-effort screenshot + page_source dump on failure, same "get real
+    evidence before guessing again" discipline this repo's own Maestro
+    hierarchy-dump investigations already use - Appium has no BrowserStack
+    dashboard command-log equivalent readily queryable here, so this is the
+    fastest way to see exactly what was on screen at the failure point."""
+    if driver is None:
+        return None
+    try:
+        out_dir = REPO_ROOT / "reports" / "appium_failures"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        stamp = int(time.time())
+        png_path = out_dir / f"{name}_{stamp}.png"
+        xml_path = out_dir / f"{name}_{stamp}.xml"
+        driver.get_screenshot_as_file(str(png_path))
+        xml_path.write_text(driver.page_source, encoding="utf-8")
+        print(f"  Failure evidence saved: {png_path}, {xml_path} "
+              f"(BrowserStack session id: {driver.session_id})")
+        return png_path
+    except Exception as evidence_exc:  # noqa: BLE001 - best-effort, never mask the real failure
+        print(f"  (couldn't capture failure evidence: {evidence_exc})")
+        return None
+
+
 def _run_one_scenario(bs, name, old_app_url, new_app_url, device, os_version, build_name, env, fn):
     driver = None
     start = time.monotonic()
@@ -79,6 +107,7 @@ def _run_one_scenario(bs, name, old_app_url, new_app_url, device, os_version, bu
             device=f"{device}-{os_version}",
         )
     except appium_scenarios.ScenarioFailure as exc:
+        _save_failure_evidence(driver, name)
         return report_generator.TestResult(
             name=f"updates_partial_failed/{name}_appium",
             workflow="updates_partial_failed",
@@ -89,6 +118,7 @@ def _run_one_scenario(bs, name, old_app_url, new_app_url, device, os_version, bu
             failed_step=f"{name}_appium.py - {exc.step_name}: {exc.original}",
         )
     except Exception as exc:  # noqa: BLE001 - session-level infra failure (upload/session-start/etc.)
+        _save_failure_evidence(driver, name)
         return report_generator.TestResult(
             name=f"updates_partial_failed/{name}_appium",
             workflow="updates_partial_failed",
@@ -110,11 +140,15 @@ def main():
     parser.add_argument("--devices", default="Samsung Galaxy S26-16.0",
                          help="'Device Name-OSVersion', same convention as run_suite.py's own --devices.")
     parser.add_argument("--project", default="QA COMMCARE MOBILE TESTS")
-    parser.add_argument("--build-name", default="QA-COMMCARE-MOBILE-group-d")
+    parser.add_argument("--build-name", default="QA-COMMCARE-MOBILE-appium")
+    parser.add_argument("--scenario", action="append", dest="scenarios", choices=SCENARIOS,
+                         help="Run only this scenario (repeatable). Defaults to all 3 - use this to "
+                              "verify one at a time, same philosophy as run_suite.py's own --flow.")
     args = parser.parse_args()
 
     load_dotenv(REPO_ROOT / ".env")
     device, os_version = _split_device(args.devices)
+    scenarios_to_run = args.scenarios or list(SCENARIOS)
 
     apk_path = args.apk
     apk_commcare_version = None
@@ -125,10 +159,21 @@ def main():
         download_apk.download(asset["browser_download_url"], apk_path)
         apk_commcare_version = release["tag_name"].removeprefix("commcare_")
 
+    # UPDATE (2026-08-19), confirmed live (3/3 identical failures, "Setting
+    # Up App / Locating application..." resetting to Welcome every time -
+    # not flaky, reproducible): this app code gets typed into the OLD 2.45
+    # binary FIRST (that's the whole point of this scenario), but was being
+    # resolved filtered by the NEW apk's version (apk_commcare_version, e.g.
+    # 2.64.0) - per hq_client.resolve_app_codes' own docstring,
+    # max_commcare_version must be "the actual CommCare APK version under
+    # test... a build newer than what's installed can never finish an
+    # online/Enter-Code install". The old 2.45 binary is what's actually
+    # performing this install, so that's the version that belongs here.
     print(f"Resolving install code for MOBILE_UPDATES_1_2 ...")
+    old_apk_commcare_version = "2.45"
     app_codes = hq_client_module.resolve_app_codes(
         {"MOBILE_UPDATES_1_2": APP_REGISTRY["MOBILE_UPDATES_1_2"]},
-        max_commcare_version=apk_commcare_version,
+        max_commcare_version=old_apk_commcare_version,
     )
     app_code = app_codes["APP_CODE_MOBILE_UPDATES_1_2"]
 
@@ -153,7 +198,7 @@ def main():
     }
 
     results = []
-    for name in SCENARIOS:
+    for name in scenarios_to_run:
         print(f"Running {name} (Appium, mid-session binary swap) ...")
         result = _run_one_scenario(
             bs, name, old_app_url, new_app_url, device, os_version, args.build_name,
@@ -166,7 +211,24 @@ def main():
         (REPO_ROOT / "reports").mkdir(exist_ok=True)
         (REPO_ROOT / "reports" / "apk_version.txt").write_text(apk_commcare_version, encoding="utf-8")
 
-    build_id = f"appium-group-d-{int(time.time())}"
+    # UPDATE (2026-08-19): this is meant to run as an EXTRA step inside an
+    # existing run_suite.py matrix job (see .github/workflows/
+    # maestro-browserstack.yml's own conditional, same pattern already used
+    # for externalapp_tests' companion-app upload), not a separate CI job -
+    # per direct user question, there was no real need for a whole new
+    # "group-d". report_generator.generate_report() always OVERWRITES
+    # reports/latest_results.json, though - if run_suite.py already wrote
+    # one earlier in the SAME job, overwriting it here would silently drop
+    # every Maestro result from that job's own artifact. Load and merge with
+    # whatever's already there first, same TestResult(**item) pattern
+    # scripts/merge_reports.py already uses to combine multiple artifacts.
+    existing_results_path = REPO_ROOT / "reports" / "latest_results.json"
+    if existing_results_path.exists():
+        import json
+        existing = json.loads(existing_results_path.read_text(encoding="utf-8"))
+        results = [report_generator.TestResult(**item) for item in existing] + results
+
+    build_id = f"appium-{int(time.time())}"
     report_path = report_generator.generate_report(build_id, results, enrich=False)
     print(f"Report written to {report_path}")
 

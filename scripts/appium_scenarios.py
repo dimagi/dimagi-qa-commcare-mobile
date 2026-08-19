@@ -53,39 +53,90 @@ def _run_steps(steps):
 
 # --------------------------------------------------------------- primitives --
 
-def _install_app_by_code(driver, app_code):
-    """Port of flows/common/install_app_by_code.yaml. Skips the Maestro
-    version's `clearState: true` - a fresh BrowserStack Appium session
-    already starts from a pristine install (BrowserStack provisions a clean
-    device per session), unlike a Maestro flow that might run in a reused
-    session."""
+def _install_app_by_code(driver, app_code, attempts=3):
+    """Port of flows/common/install_app_by_code.yaml, wrapped in a bounded
+    retry. UPDATE (2026-08-19), confirmed live via a full checkpoint trail
+    (see _install_app_by_code_once): tapping btn_start_install genuinely
+    worked and reached a real "Setting Up App / Locating application..."
+    network lookup screen (whose own text - "Keep trying if connection is
+    interrupted" - anticipates exactly this) - which then failed within a
+    few seconds and the app reset itself all the way back to the initial
+    "Welcome to CommCare!" screen, on its own, independent of anything this
+    script did. Same bounded-retry treatment as every other genuinely
+    transient network hiccup this whole session already used (e.g.
+    flows/common/login.yaml's Server Error/Bad Server Response retries)."""
+    for attempt in range(attempts):
+        _install_app_by_code_once(driver, app_code)
+        if h.wait_visible_id(driver, f"{APP_ID}:id/edit_username", timeout=1, optional=True):
+            return
+    raise RuntimeError(f"install_app_by_code never reached the login screen after {attempts} attempts")
+
+
+def _install_app_by_code_once(driver, app_code):
+    """Skips the Maestro version's `clearState: true` - a fresh BrowserStack
+    Appium session already starts from a pristine install (BrowserStack
+    provisions a clean device per session), unlike a Maestro flow that might
+    run in a reused session."""
     driver.activate_app(APP_ID)
     h.tap_by_text(driver, "OK", optional=True, timeout=3)  # Android 16 onboarding overlay
     h.tap_by_id(driver, f"{APP_ID}:id/enter_app_location")
-    h.tap_by_id(driver, f"{APP_ID}:id/edit_profile_location")
-    h.input_text(driver, f"{APP_ID}:id/edit_profile_location", app_code)
+    # UPDATE (2026-08-19), confirmed live via a saved failure hierarchy dump
+    # + screenshot: tapping enter_app_location above already focuses this
+    # field and opens the keyboard as a side effect (visually confirmed),
+    # but the accessibility tree can go near-empty right at that moment on
+    # this Appium server - see appium_helpers.type_into_focused's own
+    # docstring for the full citation. Types directly into whatever's
+    # already focused instead of locating edit_profile_location by id.
+    # UPDATE (2026-08-19, 2nd correction), confirmed live: the next real
+    # dispatch landed back on the very first "Welcome to CommCare! Please
+    # choose an installation method" screen instead of ever reaching login -
+    # "mobile: type" doesn't confirm WHAT actually received the input the
+    # way a targeted element's send_keys does, so the app code most likely
+    # never actually landed and the install attempt failed/reset. Same
+    # self-verifying type-then-check-it-actually-landed pattern
+    # flows/common/login.yaml already established for exactly this
+    # uncertainty (see that file's own citation) - retry a few times rather
+    # than trust one blind attempt.
+    for attempt in range(3):
+        h.type_into_focused(driver, app_code)
+        if h.is_text_visible(driver, app_code):
+            break
+        h.tap_by_id(driver, f"{APP_ID}:id/enter_app_location", optional=True, timeout=3)
+    else:
+        raise RuntimeError(f"App code {app_code!r} never appeared on screen after typing")
+    h.checkpoint(driver, "code_verified_before_hide_keyboard")
     h.hide_keyboard(driver)
+    h.checkpoint(driver, "after_hide_keyboard_before_start_install")
     h.tap_by_id(driver, f"{APP_ID}:id/start_install")
+    h.checkpoint(driver, "after_start_install_tap")
     h.tap_by_id(driver, f"{APP_ID}:id/btn_start_install")
+    h.checkpoint(driver, "after_btn_start_install_tap")
     h.tap_by_text(driver, "I.LL UPDATE LATER", optional=True, timeout=3)
+    h.checkpoint(driver, "after_update_later_optional")
     h.tap_by_id(driver, f"{APP_ID}:id/btn_start_install", optional=True, timeout=3)
-    for _ in range(6):
+    h.checkpoint(driver, "after_second_btn_start_install_optional")
+    for i in range(6):
         if not h.tap_by_id(driver, f"{APP_ID}:id/screen_multimedia_retry", optional=True, timeout=2):
             break
+        h.checkpoint(driver, f"multimedia_retry_loop_{i}")
         h.wait_visible_id(driver, f"{APP_ID}:id/edit_username", timeout=15, optional=True)
-    h.wait_visible_id(driver, f"{APP_ID}:id/edit_username", timeout=120)
+    h.checkpoint(driver, "before_final_edit_username_wait")
+    # optional here (was a hard 120s wait) - a failed lookup resets to
+    # Welcome within a few seconds per the evidence above, so there's no
+    # value in waiting the full 120s on a doomed attempt; _install_app_by_code's
+    # own outer retry loop is what decides whether to give up.
+    h.wait_visible_id(driver, f"{APP_ID}:id/edit_username", timeout=60, optional=True)
 
 
 def _install_as_mobile_worker(driver, username, domain, password):
     """Port of scenario_5's own inline mobile-worker install sequence."""
     h.tap_by_text(driver, "More options")
     h.tap_by_text(driver, "See Apps for My User")
-    h.tap_by_id(driver, f"{APP_ID}:id/edit_username")
-    h.input_text(driver, f"{APP_ID}:id/edit_username", username)
-    h.tap_by_id(driver, f"{APP_ID}:id/edit_domain")
-    h.input_text(driver, f"{APP_ID}:id/edit_domain", domain)
-    h.tap_by_id(driver, f"{APP_ID}:id/edit_password")
-    h.input_text(driver, f"{APP_ID}:id/edit_password", password)
+    # UPDATE (2026-08-19): same self-verifying tap+type as _login below -
+    # see _type_into_id_verified's own docstring for the full citation.
+    _type_into_id_verified(driver, f"{APP_ID}:id/edit_username", username)
+    _type_into_id_verified(driver, f"{APP_ID}:id/edit_domain", domain)
+    _type_into_id_verified(driver, f"{APP_ID}:id/edit_password", password)
     h.hide_keyboard(driver)
     h.tap_by_id(driver, f"{APP_ID}:id/get_apps_button")
     h.wait_visible_id(driver, f"{APP_ID}:id/apps_list_view", timeout=15)
@@ -94,15 +145,73 @@ def _install_as_mobile_worker(driver, username, domain, password):
     h.wait_visible_id(driver, f"{APP_ID}:id/edit_username", timeout=30)
 
 
+def _type_into_id_verified(driver, resource_id, text, attempts=5):
+    """Self-verifying tap+type, same pattern flows/common/login.yaml already
+    established for exactly this uncertainty: tapping a text field can race
+    with Gboard's own one-time "Get Smart content..."/"Skip" popup, which
+    can steal focus back after being dismissed - re-tap, retype, and check
+    the value ACTUALLY landed rather than trust one blind attempt.
+
+    UPDATE (2026-08-19), confirmed live via a screenshot: even with the
+    field visibly focused (keyboard open, cursor there), a located
+    WebElement's own send_keys() (input_text) can silently deliver nothing
+    on this Appium server - same unreliability already confirmed for the
+    app-code field (see appium_helpers.type_into_focused's own docstring).
+    Types into whatever's already focused instead of via a located element.
+
+    UPDATE (2026-08-19, 2nd correction), confirmed live via a screenshot: a
+    PASSWORD field masks its real characters, so is_text_visible(text) can
+    never match - every "failed" verification triggered another retype on
+    top of the existing (already-correct) value, and 3 retries of "123"
+    literally concatenated into 9 visible mask dots. Clears the field
+    before every attempt and verifies by LENGTH (works for both masked and
+    plain fields) instead of literal content.
+
+    UPDATE (2026-08-19, 3rd correction), confirmed live via a failure
+    screenshot: on this specific screen (CommCare's post-binary-swap
+    "Welcome back! Please log in.") the status bar showed Android's own
+    autofill/Smart Lock key-icon indicator, and ONLY the password field
+    (never the username field, which landed correctly first-try in the
+    same run) kept accumulating extra characters despite clear_by_id now
+    sending both backward and forward deletes. That combination - a
+    live autofill indicator plus corruption limited to the one field type
+    autofill services specifically target - points at a race: the
+    service's suggestion can be injected asynchronously, slightly AFTER
+    our own clear+type has already run and been measured.
+
+    UPDATE (2026-08-19, 4th correction), confirmed live via a SECOND
+    failure screenshot: the settle-wait above wasn't enough on its own -
+    same field, same symptom, on a later dispatch (intermittent, not
+    deterministic - it passed clean on the run in between). Re-tapping the
+    field on every attempt was itself suspect: each tap is a fresh focus
+    event, which is exactly what a Smart Lock-style service listens for
+    before deciding whether to offer/inject a suggestion, so retrying via
+    "tap again, clear, type" plausibly invited a FRESH race each time
+    rather than recovering from the last one. Taps into the field only
+    ONCE up front, then retries clear+type+settle without any further taps
+    - and requires the length check to hold across TWO reads a beat apart
+    before accepting it, so a late injection landing between the first
+    check and the return can still be caught by the second."""
+    h.tap_by_id(driver, f"{resource_id}", optional=True, timeout=5)
+    h.tap_by_text(driver, "Skip", optional=True, timeout=2)
+    h.tap_by_id(driver, f"{resource_id}", optional=True, timeout=5)
+    for _ in range(attempts):
+        h.clear_by_id(driver, resource_id)
+        h.type_into_focused(driver, text)
+        time.sleep(1.0)
+        if h.field_text_length(driver, resource_id) != len(text):
+            continue
+        time.sleep(0.6)
+        if h.field_text_length(driver, resource_id) == len(text):
+            return
+    raise RuntimeError(f"Text {text!r} never landed in id={resource_id!r} after {attempts} attempts")
+
+
 def _login(driver, username, password):
     """Port of flows/common/login.yaml."""
     h.wait_visible_id(driver, f"{APP_ID}:id/edit_username", timeout=30)
-    h.tap_by_id(driver, f"{APP_ID}:id/edit_username")
-    h.tap_by_text(driver, "Skip", optional=True, timeout=2)
-    h.input_text(driver, f"{APP_ID}:id/edit_username", username)
-    h.tap_by_id(driver, f"{APP_ID}:id/edit_password")
-    h.tap_by_text(driver, "Skip", optional=True, timeout=2)
-    h.input_text(driver, f"{APP_ID}:id/edit_password", password)
+    _type_into_id_verified(driver, f"{APP_ID}:id/edit_username", username)
+    _type_into_id_verified(driver, f"{APP_ID}:id/edit_password", password)
     h.hide_keyboard(driver)
     h.tap_by_id(driver, f"{APP_ID}:id/login_button")
     for error_text in ("Bad Server Response", "Server Error"):
@@ -111,15 +220,51 @@ def _login(driver, username, password):
                 break
             time.sleep(3)
             h.tap_by_id(driver, f"{APP_ID}:id/login_button")
-    h.wait_not_visible_id(driver, f"{APP_ID}:id/dialog_cancel_button", timeout=120)
+    # UPDATE (2026-08-19), confirmed live via a screenshot: a bare
+    # wait_not_visible here can pass vacuously if the "Communicating with
+    # Server / Contacting server for sync..." restore dialog just hasn't
+    # appeared YET at the moment of the check (same race
+    # flows/common/login.yaml's own header already documents fighting) -
+    # the dialog then appears a moment later and blocks whatever comes
+    # right after _login() returns. Optionally wait for it to actually
+    # APPEAR first (a no-op if it never does, e.g. nothing to restore),
+    # then wait for it to genuinely finish.
+    _wait_out_sync_dialog(driver)
 
 
-def _check_app_version(driver, expected_version):
-    """Port of flows/common/check_app_version_via_about.yaml."""
+def _wait_out_sync_dialog(driver, timeout=120):
+    """Two-phase wait for CommCare's "Communicating with Server/Contacting
+    server for sync..." dialog (dialog_cancel_button) - see _login's own
+    UPDATE for the race this avoids. UPDATE (2026-08-19, 2nd correction),
+    confirmed live: this same dialog can reappear LATER too, not just
+    right after login - it showed up again blocking "More options" while
+    opening the update menu, since checking for an update is itself
+    another server round-trip. Call this before any action that might run
+    into a sync happening at an unpredictable moment, not just post-login."""
+    h.wait_visible_id(driver, f"{APP_ID}:id/dialog_cancel_button", timeout=5, optional=True)
+    h.wait_not_visible_id(driver, f"{APP_ID}:id/dialog_cancel_button", timeout=timeout)
+
+
+def _check_app_version(driver):
+    """Port of flows/common/check_app_version_via_about.yaml.
+
+    UPDATE (2026-08-19), per direct user instruction after a real dispatch
+    showed "App v71." where this check's old hardcoded expectation was
+    "App v2.": this HQ test app's version number increments every time it
+    gets republished on HQ, unrelated to which of this test's own update
+    steps is running - an exact expected number goes stale on its own, so
+    it is no longer asserted. Only verifies the "About CommCare" dialog
+    itself came up correctly (its own title text + "OK" button visible)
+    and reads back whatever version it currently shows, for visibility in
+    logs/results rather than as a pass/fail check."""
     h.tap_by_text(driver, "More options")
     h.tap_by_text(driver, "About CommCare")
-    h.wait_visible_text(driver, rf"(?s).*App v{re.escape(expected_version)}\..*", timeout=5, regex=True)
+    h.assert_visible_text(driver, "About CommCare")
+    h.assert_visible_text(driver, "OK")
+    about_text = h.find_text_matching(driver, r"App v(\d+)\.")
+    version = re.search(r"App v(\d+)\.", about_text).group(1) if about_text else None
     h.tap_by_text(driver, "OK")
+    return version
 
 
 def _navigate_form_no_errors(driver, form_name):
@@ -174,6 +319,7 @@ def _open_update_app_menu(driver):
     would begin, WITHOUT waiting for or tapping the final "Update to version
     X & log out" completion button - the interruption point for
     scenario_1/scenario_2."""
+    _wait_out_sync_dialog(driver)
     h.tap_by_text(driver, "More options")
     h.tap_by_text(driver, "Update App")
     h.wait_visible_text(driver, "New version of the application is available", timeout=8, optional=True)
@@ -212,7 +358,7 @@ def run_scenario_1(driver, appium_client, new_app_url, username, password, app_c
          lambda: appium_client.install_mid_session(driver, new_app_url)),
         ("Relaunch app after binary swap", lambda: driver.activate_app(APP_ID)),
         ("Login again (new binary)", lambda: _login(driver, username, password)),
-        ("Update 1: staged update auto-applied -> Version 2", lambda: _check_app_version(driver, "2")),
+        ("Update 1: staged update auto-applied (About CommCare check)", lambda: _check_app_version(driver)),
         ("Update 2: Form 1 navigates without error", lambda: _navigate_form_no_errors(driver, "Form 1")),
         ("Update 3: Form 2 navigates without error", lambda: _navigate_form_no_errors(driver, "Form 2")),
     ]
@@ -233,10 +379,10 @@ def run_scenario_2(driver, appium_client, new_app_url, username, password, app_c
          lambda: appium_client.install_mid_session(driver, new_app_url)),
         ("Relaunch app after binary swap", lambda: driver.activate_app(APP_ID)),
         ("Login again (new binary)", lambda: _login(driver, username, password)),
-        ("Update 4: update did NOT auto-apply -> still Version 1", lambda: _check_app_version(driver, "1")),
+        ("Update 4: update did NOT auto-apply (About CommCare check)", lambda: _check_app_version(driver)),
         ("Update 5: manually complete the update", lambda: _complete_update_app(driver)),
         ("Login after manual update completes", lambda: _login(driver, username, password)),
-        ("Update 5 (verify): now on Version 2", lambda: _check_app_version(driver, "2")),
+        ("Update 5 (verify): About CommCare check", lambda: _check_app_version(driver)),
         ("Update 6: Form 1 navigates without error", lambda: _navigate_form_no_errors(driver, "Form 1")),
         ("Update 7: Form 2 navigates without error", lambda: _navigate_form_no_errors(driver, "Form 2")),
     ]
@@ -258,7 +404,7 @@ def run_scenario_5(driver, appium_client, new_app_url, cc_username, cc_password,
          lambda: appium_client.install_mid_session(driver, new_app_url)),
         ("Relaunch app after binary swap", lambda: driver.activate_app(APP_ID)),
         ("Update 17: re-login (new binary)", lambda: _login(driver, cc_username, cc_password)),
-        ("Update verification: auto-updated to V6 -> Version 22", lambda: _check_app_version(driver, "22")),
+        ("Update verification: auto-updated to V6 (About CommCare check)", lambda: _check_app_version(driver)),
         ("Update 18: Form A verification", lambda: _verify_form_a_questions(driver, "Form A")),
         ("Update 19: Form B verification", lambda: _verify_form_b_photo_question(driver, "Form B")),
     ]

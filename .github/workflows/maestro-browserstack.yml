@@ -177,47 +177,22 @@ jobs:
           fi
           python scripts/run_suite.py "${ARGS[@]}"
 
-      # No report-history cache restore/save here on purpose: each matrix
-      # job's own reports/history.json only reflects ITS slice of tags, not
-      # the full logical run, so it isn't meaningful on its own - the
-      # merge-reports job below is the only place the real persistent trend
-      # history gets read or written, from the properly COMBINED results.
-      - name: Upload HTML report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: maestro-report-${{ matrix.name }}
-          path: reports/
-          retention-days: 30
-
-  # Runs the 3 updates_partial_failed scenarios that genuinely need a
-  # mid-session CommCare binary swap (Maestro can't do this at all - see
-  # scripts/run_appium_suite.py's own module docstring for the full
-  # citation) via real Appium sessions against BrowserStack instead of
-  # Maestro. Additive to maestro-tests' own (less complete, but still real)
-  # coverage of these same 3 flows under the updates_partial_failed tag -
-  # not a replacement. Gated the same way those flows already are: any "All"
-  # dispatch, an explicit updates_partial_failed pick, or the nightly
-  # schedule trigger (which has no `tag` input at all, hence the empty-string
-  # check).
-  appium-tests:
-    needs: prepare
-    if: >-
-      github.event.inputs.tag == '' ||
-      github.event.inputs.tag == 'All' ||
-      github.event.inputs.tag == 'updates_partial_failed'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-
-      - name: Run Appium suite on BrowserStack (group-d)
+      # Runs the 3 updates_partial_failed scenarios that genuinely need a
+      # mid-session CommCare binary swap (Maestro can't do this at all - see
+      # scripts/run_appium_suite.py's own module docstring for the full
+      # citation) via real Appium sessions against BrowserStack instead of
+      # Maestro. Additive to run_suite.py's own (less complete, but still
+      # real) coverage of these same 3 flows above - not a replacement.
+      # UPDATE (2026-08-19), per direct user question: this used to be its
+      # own separate "appium-tests" job/artifact - folded into whichever
+      # matrix job's tags already include updates_partial_failed instead,
+      # same gating pattern as externalapp_tests' companion-app upload just
+      # above, since a whole extra job wasn't actually needed. Runs AFTER
+      # run_suite.py in this same job so run_appium_suite.py's own
+      # results-merge logic (see its own module docstring) has something to
+      # merge into rather than overwrite.
+      - name: Run Appium suite on BrowserStack (updates_partial_failed mid-session updates)
+        if: contains(matrix.tags, 'updates_partial_failed')
         env:
           BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
           BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
@@ -229,9 +204,9 @@ jobs:
           HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
           HQ_WEB_USER_PASSWORD: ${{ secrets.HQ_WEB_USER_PASSWORD }}
         run: |
-          # Same android_version-to-device mapping as maestro-tests above -
-          # kept as a separate copy rather than a shared step/composite
-          # action since it's 7 lines and this job already stands alone.
+          # Same android_version-to-device mapping as run_suite.py's own
+          # step above - kept as a separate copy rather than a shared step/
+          # composite action since it's 7 lines.
           declare -A ANDROID_DEVICE_MAP=(
             ["16.0"]="Samsung Galaxy S26"
             ["15.0"]="Samsung Galaxy S25"
@@ -246,23 +221,25 @@ jobs:
           if [ -z "$DEVICES" ]; then
             DEVICES="${ANDROID_DEVICE_MAP[$ANDROID_VERSION]}-$ANDROID_VERSION"
           fi
-          ARGS=(--devices "$DEVICES" --build-name "QA-COMMCARE-MOBILE-group-d")
+          ARGS=(--devices "$DEVICES" --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-appium")
           if [ -n "${{ github.event.inputs.release_tag }}" ]; then ARGS+=(--release-tag "${{ github.event.inputs.release_tag }}"); fi
           python scripts/run_appium_suite.py "${ARGS[@]}"
 
-      # Same artifact-name convention as maestro-tests' own "maestro-report-<name>"
-      # uploads - merge-reports' download-artifact glob (maestro-report-*)
-      # already matches this with no changes needed there.
-      - name: Upload Appium report
+      # No report-history cache restore/save here on purpose: each matrix
+      # job's own reports/history.json only reflects ITS slice of tags, not
+      # the full logical run, so it isn't meaningful on its own - the
+      # merge-reports job below is the only place the real persistent trend
+      # history gets read or written, from the properly COMBINED results.
+      - name: Upload HTML report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: maestro-report-group-d
+          name: maestro-report-${{ matrix.name }}
           path: reports/
           retention-days: 30
 
   merge-reports:
-    needs: [prepare, maestro-tests, appium-tests]
+    needs: [prepare, maestro-tests]
     if: always()
     runs-on: ubuntu-latest
     steps:
