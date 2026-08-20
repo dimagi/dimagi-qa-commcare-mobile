@@ -198,14 +198,26 @@ def main():
         print("HQ: set forced prompt settings (scenario_2) ...")
         hq_client.set_prompt_update_settings(app_id, app_prompt="forced", apk_prompt="on")
 
-    # Resolved AFTER Setup 2 above, so it targets whatever's now the
-    # current top RELEASED build (the "prior" build) - same
-    # max_commcare_version-aware resolution every other flow's install
-    # code already goes through.
-    print("Resolving install code for BASIC_TESTS ...")
+    # UPDATE (2026-08-20), confirmed live via a real dispatch: calling
+    # resolve_app_codes with the plain (domain, app_id) 2-tuple resolves
+    # to the app's TOP build regardless of Setup 2 above (per
+    # HQClient.get_app_install_code's own docstring: with no saved_app_id
+    # override it picks "the app's single most recent build (whether or
+    # not it's released)"), and that call's own release_first=True default
+    # then RE-RELEASES that top build as a side effect of generating the
+    # code - silently undoing Setup 2's "mark latest In Test" a moment
+    # after we set it. The device ended up installing version 1141 (the
+    # latest) instead of the intended prior/released build. Pins to
+    # prior_build_id explicitly instead (a 3-tuple, same mechanism
+    # scripts/app_registry.py's RU_TEST_ONE/TWO/THREE entries already use
+    # for "a specific, already-cut build a flow must address by name, not
+    # whatever's newest today" - see resolve_app_codes' own docstring).
+    # release_first=True still fires on the pinned build, but that's a
+    # harmless no-op here since Setup 2 already released it.
+    print("Resolving install code for BASIC_TESTS (pinned to the prior build) ...")
+    domain = APP_REGISTRY["BASIC_TESTS"][0]
     app_codes = hq_client_module.resolve_app_codes(
-        {"BASIC_TESTS": APP_REGISTRY["BASIC_TESTS"]},
-        max_commcare_version=apk_commcare_version,
+        {"BASIC_TESTS": (domain, app_id, prior_build_id)},
     )
     app_code = app_codes["APP_CODE_BASIC_TESTS"]
 
@@ -224,11 +236,30 @@ def main():
     }
 
     results = []
-    for name in scenarios_to_run:
-        print(f"Running {name} (Appium, mid-session HQ action) ...")
-        result = _run_one_scenario(bs, name, app_url, device, os_version, args.build_name, scenario_fns[name])
-        print(f"  {name}: {result.status}" + (f" - {result.failed_step}" if result.status == "failed" else ""))
-        results.append(result)
+    try:
+        for name in scenarios_to_run:
+            print(f"Running {name} (Appium, mid-session HQ action) ...")
+            result = _run_one_scenario(bs, name, app_url, device, os_version, args.build_name, scenario_fns[name])
+            print(f"  {name}: {result.status}" + (f" - {result.failed_step}" if result.status == "failed" else ""))
+            results.append(result)
+    finally:
+        # UPDATE (2026-08-20), per direct user instruction: Setup 2/3 above
+        # change PERSISTENT, SHARED HQ state on "[Master] Basic Tests" - an
+        # app used by dozens of unrelated flows across this whole repo, not
+        # something scoped to just this test run. Leaving Prompt Updates
+        # on (or the latest build stuck "In Test", if a scenario failed
+        # before its own mid-flow release step got to run) would affect
+        # every one of those other flows too. Always restore both,
+        # regardless of whether the scenarios above passed, failed, or
+        # raised - this is cleanup, not part of the test result itself, so
+        # failures here are logged, not allowed to mask/replace whatever
+        # the actual scenario results were.
+        try:
+            print("Cleanup: restoring latest build to Released and Prompt Updates to Off ...")
+            hq_client.mark_build_status(app_id, latest_build_id, is_released=True)
+            hq_client.set_prompt_update_settings(app_id, app_prompt="off", apk_prompt="off")
+        except Exception as cleanup_exc:  # noqa: BLE001 - best-effort, never mask the real scenario results
+            print(f"  (cleanup failed, may need manual fixup on HQ: {cleanup_exc})")
 
     # UPDATE (2026-08-20), same fix as scripts/run_suite.py's own UPDATE
     # comment: a custom --apk has no release tag, so apk_commcare_version

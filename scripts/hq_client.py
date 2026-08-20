@@ -342,14 +342,30 @@ class HQClient:
         """
         Configure the "Manage Update Settings" tab (Prompt Updates to App/CommCare
         = off/on/forced, and which build version to prompt towards).
-        POST /a/<domain>/apps/update_prompts/<app_id>/
+        POST /a/<domain>/apps/view/<app_id>/update_prompts/
         Source: corehq/apps/app_manager/views/settings.py:PromptSettingsUpdateView
                 corehq/apps/app_manager/forms.py:PromptUpdateSettingsForm
+
+        UPDATE (2026-08-20), confirmed live (first real dispatch of this
+        method - every prior hq_setup/prompted_updates/*.json call site had
+        an unfilled placeholder app_id until today, so this was never
+        actually exercised before): the original URL here
+        ("update_prompts/<app_id>/") 404'd. Checked commcare-hq's real
+        corehq/apps/app_manager/urls.py directly - `update_prompts/$` is
+        registered INSIDE `app_urls`, and that whole list is included via
+        `url(r'^view/(?P<app_id>[\\w-]+)/', include(app_urls))` - the exact
+        same `view/<app_id>/` prefix mark_build_status's own (already
+        correct, already confirmed working) URL uses for `releases/release/
+        <saved_app_id>/`, which lives in that same app_urls list. Fixed to
+        match. (create_new_build's `save/<app_id>/` and
+        set_custom_properties's `edit_commcare_profile/<app_id>/` are
+        registered separately, NOT inside app_urls - confirmed those two
+        did not need this same fix.)
         app_prompt/apk_prompt must be one of "off", "on", "forced".
         """
         assert app_prompt in ("off", "on", "forced")
         assert apk_prompt in ("off", "on", "forced")
-        url = self._apps_url(f"update_prompts/{app_id}/")
+        url = self._apps_url(f"view/{app_id}/update_prompts/")
         resp = self.session.post(
             url,
             data={

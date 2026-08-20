@@ -236,29 +236,46 @@ def _login(driver, username, password):
                 break
             time.sleep(3)
             h.tap_by_id(driver, f"{APP_ID}:id/login_button")
-    # UPDATE (2026-08-19), confirmed live via a screenshot: a bare
-    # wait_not_visible here can pass vacuously if the "Communicating with
-    # Server / Contacting server for sync..." restore dialog just hasn't
-    # appeared YET at the moment of the check (same race
-    # flows/common/login.yaml's own header already documents fighting) -
-    # the dialog then appears a moment later and blocks whatever comes
-    # right after _login() returns. Optionally wait for it to actually
-    # APPEAR first (a no-op if it never does, e.g. nothing to restore),
-    # then wait for it to genuinely finish.
-    _wait_out_sync_dialog(driver)
+    # UPDATE (2026-08-19/20), confirmed live across 3 separate real
+    # dispatches that CommCare shows several DIFFERENT network-progress
+    # dialogs depending on context - not one dialog with one selector:
+    # dialog_cancel_button (a real Cancel button, the restore/sync dialog
+    # flows/common/login.yaml's own header documents), "Logging in" (no
+    # button at all - a first-ever login right after a fresh
+    # install_app_by_code), and "Communicating with Server"/"Requesting
+    # Data..." (a "STOP" button - a later login needing a full data
+    # pull). A bare wait_not_visible on any ONE of these can pass
+    # vacuously if that particular dialog hasn't appeared yet while a
+    # DIFFERENT one is about to, so whatever runs right after _login()
+    # returns can still get blocked. See _wait_out_progress_dialogs.
+    _wait_out_progress_dialogs(driver)
 
 
-def _wait_out_sync_dialog(driver, timeout=120):
-    """Two-phase wait for CommCare's "Communicating with Server/Contacting
-    server for sync..." dialog (dialog_cancel_button) - see _login's own
-    UPDATE for the race this avoids. UPDATE (2026-08-19, 2nd correction),
-    confirmed live: this same dialog can reappear LATER too, not just
-    right after login - it showed up again blocking "More options" while
-    opening the update menu, since checking for an update is itself
-    another server round-trip. Call this before any action that might run
-    into a sync happening at an unpredictable moment, not just post-login."""
-    h.wait_visible_id(driver, f"{APP_ID}:id/dialog_cancel_button", timeout=5, optional=True)
-    h.wait_not_visible_id(driver, f"{APP_ID}:id/dialog_cancel_button", timeout=timeout)
+_PROGRESS_DIALOG_TEXTS = ("Logging in", "Communicating with Server", "Requesting Data")
+
+
+def _wait_out_progress_dialogs(driver, timeout=120):
+    """Waits out ANY of CommCare's several distinct network-progress
+    dialogs together (see _login's own UPDATE for the full citation of
+    which ones and why a single-dialog wait isn't enough) - loops
+    checking every known signature on each pass rather than waiting for
+    one then returning, so a dialog that changes shape mid-wait (e.g.
+    "Logging in" hands off to "Communicating with Server" without the
+    screen ever going fully clear in between) doesn't slip through a
+    single-shot check between two sequential waits. Call this before any
+    action that might run into a sync happening at an unpredictable
+    moment, not just post-login - confirmed live it can also reappear
+    later, e.g. blocking "More options" while opening the update menu,
+    since checking for an update is itself another server round-trip."""
+    time.sleep(2)  # give a dialog that hasn't appeared YET a moment to do so
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        showing = h.wait_visible_id(driver, f"{APP_ID}:id/dialog_cancel_button", timeout=0.1, optional=True)
+        showing = showing or any(h.is_text_visible(driver, t) for t in _PROGRESS_DIALOG_TEXTS)
+        if not showing:
+            return
+        time.sleep(2)
+    raise TimeoutError(f"A network-progress dialog never cleared within {timeout}s")
 
 
 def _logout(driver):
@@ -345,7 +362,7 @@ def _open_update_app_menu(driver):
     would begin, WITHOUT waiting for or tapping the final "Update to version
     X & log out" completion button - the interruption point for
     scenario_1/scenario_2."""
-    _wait_out_sync_dialog(driver)
+    _wait_out_progress_dialogs(driver)
     h.tap_by_text(driver, "More options")
     h.tap_by_text(driver, "Update App")
     h.wait_visible_text(driver, "New version of the application is available", timeout=8, optional=True)
@@ -475,7 +492,7 @@ def run_prompted_update_scenario_1(driver, hq_client, app_id, latest_build_id, u
     steps = [
         ("Install app by code", lambda: _install_app_by_code(driver, app_code)),
         ("Login (before release)", lambda: _login(driver, username, password)),
-        ("Assert Start visible", lambda: h.assert_visible_text(driver, "Start")),
+        ("Assert Start visible", lambda: h.wait_visible_id(driver, f"{APP_ID}:id/home_gridview_buttons", timeout=15)),
         ("Logout", lambda: _logout(driver)),
         ("HQ: mark latest build Released",
          lambda: hq_client.mark_build_status(app_id, latest_build_id, is_released=True)),
@@ -484,7 +501,7 @@ def run_prompted_update_scenario_1(driver, hq_client, app_id, latest_build_id, u
         ("Relogin (confirm no more prompt)", lambda: _login(driver, username, password)),
         ("Assert no more prompt",
          lambda: h.assert_not_visible_text(driver, "New version of the application is available")),
-        ("Assert Start visible", lambda: h.assert_visible_text(driver, "Start")),
+        ("Assert Start visible", lambda: h.wait_visible_id(driver, f"{APP_ID}:id/home_gridview_buttons", timeout=15)),
     ]
     return _run_steps(steps)
 
@@ -502,7 +519,7 @@ def run_prompted_update_scenario_2(driver, hq_client, app_id, latest_build_id, u
     steps = [
         ("Install app by code", lambda: _install_app_by_code(driver, app_code)),
         ("Login (before release, expect no blocker)", lambda: _login(driver, username, password)),
-        ("Assert Start visible", lambda: h.assert_visible_text(driver, "Start")),
+        ("Assert Start visible", lambda: h.wait_visible_id(driver, f"{APP_ID}:id/home_gridview_buttons", timeout=15)),
         ("Assert no forced blocker yet",
          lambda: h.assert_not_visible_text(driver, "New version of the application is required")),
         ("Logout", lambda: _logout(driver)),
@@ -524,6 +541,6 @@ def run_prompted_update_scenario_2(driver, hq_client, app_id, latest_build_id, u
          lambda: h.assert_not_visible_text(driver, "New version of the application is required")),
         ("Assert no optional prompt",
          lambda: h.assert_not_visible_text(driver, "New version of the application is available")),
-        ("Assert Start visible", lambda: h.assert_visible_text(driver, "Start")),
+        ("Assert Start visible", lambda: h.wait_visible_id(driver, f"{APP_ID}:id/home_gridview_buttons", timeout=15)),
     ]
     return _run_steps(steps)
