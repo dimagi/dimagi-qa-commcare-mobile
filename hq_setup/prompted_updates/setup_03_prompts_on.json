@@ -1,9 +1,9 @@
 {
-  "_comment": "Master Mobile Plan (2026) > Prompted Updates > Setup 3 ('Set Prompt Updates to CommCare/App = On'). Run once via `python scripts/hq_client.py hq_setup/prompted_updates/setup_03_prompts_on.json` after Setup 2, before scenario_01's flow. Toggles the 'Manage Update Settings' tab's Prompt Updates to CommCare (apk_prompt) and Prompt Updates to App (app_prompt) both to 'on' - the non-forced/optional prompt mode. apk_version/app_version are left as set_prompt_update_settings()'s defaults (LATEST_APK_VALUE='latest', LATEST_APP_VALUE=0 in scripts/hq_client.py), i.e. prompt towards whatever is currently the latest released build/version - see corehq/apps/app_manager/views/settings.py:PromptSettingsUpdateView. app_id is a placeholder - confirm the current 'Prompted Updates' app id on the qateam domain before relying on this.",
+  "_comment": "Master Mobile Plan (2026) > Prompted Updates > Setup 3 ('Set Prompt Updates to CommCare/App = On'). Run once via `python scripts/hq_client.py hq_setup/prompted_updates/setup_03_prompts_on.json` after Setup 2, before scenario_01's flow. Toggles the 'Manage Update Settings' tab's Prompt Updates to CommCare (apk_prompt) and Prompt Updates to App (app_prompt) both to 'on' - the non-forced/optional prompt mode. apk_version/app_version are left as set_prompt_update_settings()'s defaults (LATEST_APK_VALUE='latest', LATEST_APP_VALUE=0 in scripts/hq_client.py), i.e. prompt towards whatever is currently the latest released build/version - see corehq/apps/app_manager/views/settings.py:PromptSettingsUpdateView. UPDATE (2026-08-20): app_id filled in - 'cdfa6c85eb594b23b0c08729cd2beff1' ('[Master] Basic Tests'), confirmed via a user-supplied screenshot of this exact app's Manage Update Settings tab and recording of the full setup+scenario_01 sequence.",
   "actions": [
     {
       "type": "set_prompt_update_settings",
-      "app_id": "REPLACE_WITH_PROMPTED_UPDATES_APP_ID",
+      "app_id": "cdfa6c85eb594b23b0c08729cd2beff1",
       "app_prompt": "on",
       "apk_prompt": "on"
     }

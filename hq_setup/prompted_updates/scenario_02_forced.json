@@ -1,16 +1,16 @@
 {
-  "_comment": "Master Mobile Plan (2026) > Prompted Updates > Prompted Update Scenario 2 ('Forced CCZ update blocker screen'). NOT a single atomic pre-step - the two actions below must straddle an on-device login, so this file is run in TWO passes against flows/prompted_updates/scenario_02_forced_ccz_update.yaml (same 'run between the halves' pattern as hq_setup/recovery_measures/reinstall_update_app_flow.json): (1) run set_prompt_update_settings BEFORE the flow's first login (so that first login, against the still-In-Test latest build, shows no blocker); (2) after the flow's first login/assert checkpoint, run mark_build_status BEFORE the flow's relogin (marking latest Released is what actually triggers the forced 'New version of the application is required' blocker on that relogin). In practice: comment out / split the actions list per pass, or extend scripts/run_suite.py to pause here - see the flow file's own '=== HQ pre-step runs here ===' markers for exactly where each action belongs. ASSUMES the device has already been uninstalled and reinstalled to the prior released version (harness-level, out of hq_client.py's scope) and Setup 2/3 have already run. app_id/saved_app_id are placeholders - confirm current ids on the qateam domain before relying on this.",
+  "_comment": "Master Mobile Plan (2026) > Prompted Updates > Prompted Update Scenario 2 ('Forced CCZ update blocker screen'). NOT a single atomic pre-step - the two actions below must straddle an on-device login, so this file is run in TWO passes against flows/prompted_updates/scenario_02_forced_ccz_update.yaml (same 'run between the halves' pattern as hq_setup/recovery_measures/reinstall_update_app_flow.json): (1) run set_prompt_update_settings BEFORE the flow's first login (so that first login, against the still-In-Test latest build, shows no blocker); (2) after the flow's first login/assert checkpoint, run mark_build_status BEFORE the flow's relogin (marking latest Released is what actually triggers the forced 'New version of the application is required' blocker on that relogin). In practice: comment out / split the actions list per pass, or extend scripts/run_suite.py to pause here - see the flow file's own '=== HQ pre-step runs here ===' markers for exactly where each action belongs. ASSUMES the device has already been uninstalled and reinstalled to the prior released version (harness-level, out of hq_client.py's scope) and Setup 2/3 have already run. UPDATE (2026-08-20): app_id/saved_app_id filled in (same app/build as setup_02_mark_in_test.json's own UPDATE comment - see that file for the full citation). Confirmed live via a user-supplied recording of the full manual sequence (Setup 2's 'mark top two In Test, then 2nd-most Released' -> install the 2nd-most build -> this file's forced-prompt setting -> mark latest Released -> relogin) that the forced blocker DOES appear, but not always immediately - the recording notes it can take multiple relogin attempts or up to ~3 minutes before it shows, i.e. some server-side propagation delay after mark_build_status. Any flow/automation driving this relogin should retry/wait accordingly rather than assert on a single immediate attempt.",
   "actions": [
     {
       "type": "set_prompt_update_settings",
-      "app_id": "REPLACE_WITH_PROMPTED_UPDATES_APP_ID",
+      "app_id": "cdfa6c85eb594b23b0c08729cd2beff1",
       "app_prompt": "forced",
       "apk_prompt": "on"
     },
     {
       "type": "mark_build_status",
-      "app_id": "REPLACE_WITH_PROMPTED_UPDATES_APP_ID",
-      "saved_app_id": "REPLACE_WITH_LATEST_BUILD_ID",
+      "app_id": "cdfa6c85eb594b23b0c08729cd2beff1",
+      "saved_app_id": "c5e73a9735154c4fafa87667a2666f69",
       "is_released": true
     }
   ]
