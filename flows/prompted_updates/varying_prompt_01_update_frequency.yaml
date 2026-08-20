@@ -8,7 +8,14 @@ tags:
 # varying_prompt_setup.json): custom properties num-views-before-reducing-frequency=3,
 # reduced-show-frequency=4, regular-show-frequency=1, and build "3.4,1" released.
 #
-# Prepends install_app_as_web_user.yaml (APP_NAME: ".*Basic Tests$") -
+# UPDATE (2026-08-20), confirmed via a user-supplied recording of this
+# exact flow: was installing APP_CODE_BASIC_TESTS (the wrong app) - the
+# prompt shown in that recording fires on "Case Managements!", the app
+# varying_prompt_setup.json's custom frequency properties actually target.
+# Fixed to install APP_CODE_CASE_MANAGEMENTS instead - see
+# scripts/app_registry.py's CASE_MANAGEMENTS entry for the full citation.
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: ".*Case Managements.*") -
 # a fresh BrowserStack session has no app installed until this runs; see
 # DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
 # null. Only needed once, before the first login below - the later
@@ -16,7 +23,7 @@ tags:
 - runFlow:
     file: ../common/install_app_by_code.yaml
     env:
-      APP_CODE: ${APP_CODE_BASIC_TESTS}
+      APP_CODE: ${APP_CODE_CASE_MANAGEMENTS}
 - runFlow:
     file: ../common/login.yaml
     env:

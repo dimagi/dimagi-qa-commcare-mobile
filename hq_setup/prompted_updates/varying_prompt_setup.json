@@ -1,9 +1,9 @@
 {
-  "_comment": "Master Mobile Plan (2026) > Prompted Updates > Varying Prompt Setup 1 & 2. Run once via `python scripts/hq_client.py hq_setup/prompted_updates/varying_prompt_setup.json` before running the varying_prompt_* flows. app_id below is the 'Case Management' app from the qateam domain per the sheet's linked domain (https://www.commcarehq.org/a/qateam/apps/view/<app_id>/) - confirm it's still current before relying on this, app ids get recreated between QA cycles.",
+  "_comment": "Master Mobile Plan (2026) > Prompted Updates > Varying Prompt Setup 1 & 2. Run once via `python scripts/hq_client.py hq_setup/prompted_updates/varying_prompt_setup.json` before running the varying_prompt_* flows. UPDATE (2026-08-20): app_id filled in - 'ca82bb0c5cc043a781d96437ee83944b', confirmed via a direct user-supplied link and HQClient.list_releases (name == 'Case Managements!'). See scripts/app_registry.py's own CASE_MANAGEMENTS entry for the same id/citation - the varying_prompt_01/03/04/05 flows were installing the WRONG app (APP_CODE_BASIC_TESTS) until this same fix; confirm this id is still current before relying on it if it's been a while, since build ids get recreated between QA cycles.",
   "actions": [
     {
       "type": "set_custom_properties",
-      "app_id": "REPLACE_WITH_CASE_MANAGEMENT_APP_ID",
+      "app_id": "ca82bb0c5cc043a781d96437ee83944b",
       "properties": {
         "num-views-before-reducing-frequency": "3",
         "reduced-show-frequency": "4",
@@ -12,12 +12,12 @@
     },
     {
       "type": "create_new_build",
-      "app_id": "REPLACE_WITH_CASE_MANAGEMENT_APP_ID",
+      "app_id": "ca82bb0c5cc043a781d96437ee83944b",
       "comment": "3.4,1"
     },
     {
       "type": "mark_build_status",
-      "app_id": "REPLACE_WITH_CASE_MANAGEMENT_APP_ID",
+      "app_id": "ca82bb0c5cc043a781d96437ee83944b",
       "saved_app_id": "$LAST_BUILD_ID",
       "is_released": true
     }

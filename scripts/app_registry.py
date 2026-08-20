@@ -23,6 +23,16 @@ per app and risk missing the next one.
 
 APP_REGISTRY = {
     "BASIC_TESTS": ("qateam", "cdfa6c85eb594b23b0c08729cd2beff1"),
+    # UPDATE (2026-08-20), per direct user-supplied link, confirmed live via
+    # HQClient.list_releases (name == "Case Managements!"): the
+    # prompted_updates varying_prompt_01/03/04/05 flows were installing
+    # APP_CODE_BASIC_TESTS - the wrong app - while
+    # hq_setup/prompted_updates/varying_prompt_setup.json's custom
+    # properties (num-views-before-reducing-frequency etc.) were always
+    # set on THIS app instead. Every one of those flows' own recordings
+    # showed the update prompt firing on "Case Managements!", not "Basic
+    # Tests" - confirming the mismatch, not just the missing id.
+    "CASE_MANAGEMENTS": ("qateam", "ca82bb0c5cc043a781d96437ee83944b"),
     "MULTIMEDIA": ("qateam", "4df9b7f7e66740a2bd9e02371af832b1"),
     "RIGHT_TO_LEFT": ("qateam", "1abba0dead4daede49abc56c04e56ae0"),
     "DATE_WIDGETS": ("qateam", "02a769c498fa428f89978b61e2846317"),

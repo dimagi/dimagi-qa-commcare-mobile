@@ -9,7 +9,12 @@ tags:
 # then verifies the prompt stays suppressed for 3 more logins and reappears
 # on the 4th.
 #
-# Prepends install_app_as_web_user.yaml (APP_NAME: ".*Basic Tests$") -
+# UPDATE (2026-08-20), same app-code fix as varying_prompt_01_update_frequency.yaml
+# - see that file's own UPDATE comment for the full citation (was
+# installing the wrong app; the actual prompt fires on "Case
+# Managements!").
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: ".*Case Managements.*") -
 # a fresh BrowserStack session has no app installed until this runs; see
 # DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
 # null. Only needed once, before the first login below - the later
@@ -17,7 +22,7 @@ tags:
 - runFlow:
     file: ../common/install_app_by_code.yaml
     env:
-      APP_CODE: ${APP_CODE_BASIC_TESTS}
+      APP_CODE: ${APP_CODE_CASE_MANAGEMENTS}
 - repeat:
     times: 3
     commands:
