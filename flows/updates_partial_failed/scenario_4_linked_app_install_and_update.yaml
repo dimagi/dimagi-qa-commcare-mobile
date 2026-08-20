@@ -46,16 +46,23 @@ tags:
 - assertVisible: "See Apps for My User"
 
 # --- Installation 2: install the linked app (V2) as a mobile worker. ---
+# UPDATE (2026-08-20), per direct user correction (confirmed via a
+# screenshot of this exact login screen): "Mobile2.47_test4_5_linked_app"
+# lives under a DIFFERENT HQ domain ("let-sdoit") than this repo's usual
+# HQ_MOBILE_WORKER_USERNAME/HQ_DOMAIN (qateam's "mobile_maestro") - that's
+# also why scrollUntilVisible below could never have found it: it's not
+# in the qateam app list at all, no matter how far scrolled. Hardcoded to
+# this scenario's own real credentials rather than the shared env vars.
 - tapOn: "See Apps for My User"
 - tapOn:
     id: "org.commcare.dalvik:id/edit_username"
-- inputText: "${HQ_MOBILE_WORKER_USERNAME}"
+- inputText: "test1"
 - tapOn:
     id: "org.commcare.dalvik:id/edit_domain"
-- inputText: "${HQ_DOMAIN}"
+- inputText: "let-sdoit"
 - tapOn:
     id: "org.commcare.dalvik:id/edit_password"
-- inputText: "${HQ_MOBILE_WORKER_PASSWORD}"
+- inputText: "123"
 - hideKeyboard
 - tapOn:
     id: "org.commcare.dalvik:id/get_apps_button"
@@ -63,8 +70,29 @@ tags:
     visible:
       id: "org.commcare.dalvik:id/apps_list_view"
     timeout: 60000
-- tapOn:
-    id: "org.commcare.dalvik:id/apps_list_view"
+# UPDATE (2026-08-20, 2nd correction), confirmed live via a real CI
+# failure + a user-supplied screen recording: tapping the bare
+# apps_list_view id (this flow's original approach, and NOT what
+# flows/common/install_app_as_web_user.yaml's own already-correct pattern
+# does) taps whatever row happens to be at the container's default point,
+# not the intended app - the failure screenshot showed the flow had
+# landed on a completely unrelated app ("[KD Copy Master] Basic Tests1").
+# apps_list_view is a SCROLLABLE, alphabetically-sorted list (per
+# InstallFromListActivity.java, same citation as that file's own FOURTH
+# CAVEAT). Selects by name with scrollUntilVisible instead of the bare
+# list tap, same proven pattern as that file.
+# UPDATE (2026-08-20, 3rd correction), per direct user correction: the
+# real on-screen app name is "Mobile2.47_test4_5_linked_app" in full (this
+# repo's own install_app_as_web_user.yaml SEVENTH CAVEAT comment only
+# quoted a truncated "Mobile2.47_test4_5" as an alphabetical landmark, not
+# a complete/exact name) - matches the login-domain correction above (both
+# came from the same user-supplied evidence for this exact app).
+- scrollUntilVisible:
+    element:
+      text: "Mobile2.47_test4_5_linked_app"
+    direction: DOWN
+    timeout: 60000
+- tapOn: "Mobile2.47_test4_5_linked_app"
 # UPDATE (2026-08-20), confirmed live via a real CI failure (group-b,
 # "Tap on id: install_app_button FAILED"): this is the exact same
 # false-negative flows/install/install_07_install_as_mobile_user.yaml's
