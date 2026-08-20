@@ -59,16 +59,36 @@ tags:
 - hideKeyboard
 - tapOn:
     id: "org.commcare.dalvik:id/get_apps_button"
-- assertVisible:
-    id: "org.commcare.dalvik:id/apps_list_view"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/apps_list_view"
+    timeout: 60000
 - tapOn:
     id: "org.commcare.dalvik:id/apps_list_view"
+# UPDATE (2026-08-20), confirmed live via a real CI failure (group-b,
+# "Tap on id: install_app_button FAILED"): this is the exact same
+# false-negative flows/install/install_07_install_as_mobile_user.yaml's
+# own extensive history already diagnosed and fixed on this identical
+# apps_list_view -> install_app_button sequence - the heavy native
+# "Setting Up App" dialog that follows can take over the screen before
+# Maestro's own hierarchy-change check resolves, so it self-reports the
+# tap as FAILED even though the install genuinely proceeds. Ported that
+# file's own proven fix (optional tap, no retry-on-no-change, then wait
+# on "Setting Up App" and the real success gate - a fresh login screen -
+# instead of trusting the tap's own reported status) rather than
+# reinventing it.
 - tapOn:
     id: "org.commcare.dalvik:id/install_app_button"
+    retryTapIfNoChange: false
+    optional: true
+- extendedWaitUntil:
+    visible: "Setting Up App"
+    timeout: 60000
+    optional: true
 - extendedWaitUntil:
     visible:
       id: "org.commcare.dalvik:id/edit_username"
-    timeout: 30000
+    timeout: 120000
 
 - runFlow:
     file: ../common/login.yaml
