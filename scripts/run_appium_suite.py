@@ -207,9 +207,15 @@ def main():
         print(f"  {name}: {result.status}" + (f" - {result.failed_step}" if result.status == "failed" else ""))
         results.append(result)
 
-    if apk_commcare_version:
-        (REPO_ROOT / "reports").mkdir(exist_ok=True)
-        (REPO_ROOT / "reports" / "apk_version.txt").write_text(apk_commcare_version, encoding="utf-8")
+    # UPDATE (2026-08-20), same fix as scripts/run_suite.py's own UPDATE
+    # comment: a custom --apk has no release tag, so apk_commcare_version
+    # stays None and this used to skip writing reports/apk_version.txt
+    # entirely - the Slack notification then had no APK version/source
+    # line at all, silently. Falls back to the (new) APK's own filename.
+    (REPO_ROOT / "reports").mkdir(exist_ok=True)
+    (REPO_ROOT / "reports" / "apk_version.txt").write_text(
+        apk_commcare_version or f"{pathlib.Path(apk_path).name} (custom)", encoding="utf-8",
+    )
 
     # UPDATE (2026-08-19): this is meant to run as an EXTRA step inside an
     # existing run_suite.py matrix job (see .github/workflows/

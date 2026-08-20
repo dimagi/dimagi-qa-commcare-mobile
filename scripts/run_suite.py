@@ -530,6 +530,7 @@ def main():
 
     apk_path = args.apk
     apk_commcare_version = None
+    REPORTS_DIR = REPO_ROOT / "reports"
     if not apk_path:
         release, asset = download_apk.resolve(args.release_tag)
         apk_path = f"apks/{asset['name']}"
@@ -539,9 +540,21 @@ def main():
         # both get_app_install_code's max_commcare_version comparison and the
         # Slack notification (reports/apk_version.txt) get a bare "2.63.4".
         apk_commcare_version = release["tag_name"].removeprefix("commcare_")
-        REPORTS_DIR = REPO_ROOT / "reports"
         REPORTS_DIR.mkdir(exist_ok=True)
         (REPORTS_DIR / "apk_version.txt").write_text(apk_commcare_version, encoding="utf-8")
+    else:
+        # UPDATE (2026-08-20), per direct user question: a custom --apk
+        # (e.g. the CI workflow's apk_source dropdown picking a committed
+        # resources/*.apk instead of a GitHub release) skipped this whole
+        # branch entirely, so reports/apk_version.txt never got written and
+        # the Slack notification silently had no APK version/source line at
+        # all - not that it was wrong, just entirely absent. Records the
+        # APK's own filename instead of a release tag (there isn't one) so
+        # the notification still shows SOMETHING recognizable.
+        REPORTS_DIR.mkdir(exist_ok=True)
+        (REPORTS_DIR / "apk_version.txt").write_text(
+            f"{pathlib.Path(apk_path).name} (custom)", encoding="utf-8",
+        )
 
     flow_files = select_flow_files(tags=args.tags, explicit_flows=args.flows)
     if not flow_files:
