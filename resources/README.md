@@ -41,7 +41,7 @@ re-downloads regardless.
 | External App Fixture Test | (sansar domain - see `hq_setup/externalapp_tests/`) | committed (8KB) |
 | Rate limited submission app | (see `flows/common/submit_only_form.yaml`'s citation) | committed (4KB) |
 | Performance Testing | - | committed (14.5MB, under the limit) |
-| Advanced Settings / cache and index configuration / Conditional Enum in Case List / Date Widgets / Graphing / Large App / Other / Session Expiration Test | - | committed (all <60KB) |
+| Advanced Settings / Conditional Enum in Case List / Date Widgets / Other / Session Expiration Test | - | committed (all <60KB) |
 
 ## How the download actually works (for anyone extending `hq_client.py`)
 

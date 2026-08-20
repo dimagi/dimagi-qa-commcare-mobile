@@ -17,6 +17,13 @@ flows.zip
 # the way resources/README.md's CCZs are - see flows/externalapp_tests/README.md.
 !resources/Mobile API Testing App-release.apk
 
+# Exception: a commcare-android build not yet published as a GitHub release
+# (~41MB, committed anyway per direct user decision) - lets
+# scripts/run_suite.py/run_appium_suite.py's --apk (and the CI workflow's
+# apk_path input) test it directly instead of the normal
+# latest-release/--release-tag download path.
+!resources/app-commcare-release-Android16.apk
+
 # BrowserStack / run artifacts
 artifacts/
 *.log

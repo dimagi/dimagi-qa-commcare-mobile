@@ -31,9 +31,19 @@ on:
           - updates_2_49
           - updates_partial_failed
       release_tag:
-        description: "commcare-android GitHub release tag to test (e.g. commcare_2.63.4). Leave blank for latest."
+        description: "commcare-android GitHub release tag to test (e.g. commcare_2.63.4). Leave blank for latest. Ignored unless apk_source below is left as 'GitHub Releases'."
         required: false
         default: ""
+      apk_source:
+        description: "APK to test. 'GitHub Releases' uses release_tag above (or latest if blank) - the normal path. Any other option tests that committed resources/*.apk file directly instead (e.g. a build not yet published as a release). NOTE: this list is a static snapshot - a newly-added resources/*.apk needs a matching option added here by hand, workflow_dispatch choices can't be generated from the repo at trigger time."
+        required: false
+        type: choice
+        default: "GitHub Releases"
+        options:
+          - "GitHub Releases"
+          - "resources/app-commcare-release-Android16.apk"
+          - "resources/commcare_2.45_release.apk"
+          - "resources/Mobile API Testing App-release.apk"
       android_version:
         description: "Android version to test on (maps to a Samsung Galaxy flagship BrowserStack has real devices for at that version). Ignored if 'devices' below is also set."
         required: false
@@ -167,7 +177,16 @@ jobs:
           # genuinely flaky test had no chance to recheck here before today.
           ARGS=(--devices "$DEVICES" --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}" --retry-failed)
           for T in ${{ matrix.tags }}; do ARGS+=(--tag "$T"); done
-          if [ -n "${{ github.event.inputs.release_tag }}" ]; then ARGS+=(--release-tag "${{ github.event.inputs.release_tag }}"); fi
+          # apk_source picks between the normal GitHub-release path and a
+          # committed resources/*.apk (e.g. a build not yet published as a
+          # release) - matches scripts/run_suite.py's own --apk-over-
+          # --release-tag precedence.
+          APK_SOURCE="${{ github.event.inputs.apk_source || 'GitHub Releases' }}"
+          if [ "$APK_SOURCE" != "GitHub Releases" ]; then
+            ARGS+=(--apk "$APK_SOURCE")
+          elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
+            ARGS+=(--release-tag "${{ github.event.inputs.release_tag }}")
+          fi
           if [ -n "${{ github.event.inputs.hq_setup }}" ]; then ARGS+=(--hq-setup "${{ github.event.inputs.hq_setup }}"); fi
           # externalapp_tests needs its companion app pre-installed alongside the main app -
           # see flows/externalapp_tests/README.md. Only pass it for jobs actually running that
@@ -222,7 +241,14 @@ jobs:
             DEVICES="${ANDROID_DEVICE_MAP[$ANDROID_VERSION]}-$ANDROID_VERSION"
           fi
           ARGS=(--devices "$DEVICES" --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-appium")
-          if [ -n "${{ github.event.inputs.release_tag }}" ]; then ARGS+=(--release-tag "${{ github.event.inputs.release_tag }}"); fi
+          # Same apk_source precedence as the Maestro step above - the "new"
+          # binary in the mid-session update swap.
+          APK_SOURCE="${{ github.event.inputs.apk_source || 'GitHub Releases' }}"
+          if [ "$APK_SOURCE" != "GitHub Releases" ]; then
+            ARGS+=(--apk "$APK_SOURCE")
+          elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
+            ARGS+=(--release-tag "${{ github.event.inputs.release_tag }}")
+          fi
           python scripts/run_appium_suite.py "${ARGS[@]}"
 
       # No report-history cache restore/save here on purpose: each matrix
