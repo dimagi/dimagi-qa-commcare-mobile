@@ -35,8 +35,9 @@ artifacts/
 reports/*
 !reports/history.json
 
-# QA app CCZs over/near GitHub's 100MB push limit - fetched on demand via
-# scripts/fetch_large_ccz.py instead of committed. See resources/README.md.
-resources/qateam - Multimedia*.ccz
-resources/qateam - Right to Left Tests!*.ccz
-resources/qateam - Mobile Updates - Test 1_2!*.ccz
+# QA app CCZs - every app this repo tests installs via a dynamic HQ app
+# code at run time (see resources/README.md), never a sideloaded local CCZ,
+# so none of these are ever committed - download on demand (e.g. via
+# scripts/fetch_large_ccz.py or HQClient.download_ccz) if you need one to
+# inspect while writing/fixing a flow's selectors.
+*.ccz
