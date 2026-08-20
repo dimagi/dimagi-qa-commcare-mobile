@@ -251,6 +251,49 @@ jobs:
           fi
           python scripts/run_appium_suite.py "${ARGS[@]}"
 
+      # Runs prompted_updates' scenario_1 (optional CCZ update) and
+      # scenario_2 (forced CCZ update) - the 2 flows whose HQ pre-step
+      # (mark_build_status) must fire BETWEEN an on-device logout and the
+      # next login, which a Maestro build has no way to do mid-execution -
+      # see scripts/run_appium_prompted_updates_suite.py's own module
+      # docstring for the full citation. Same fold-into-the-matrix-job
+      # pattern as the updates_partial_failed Appium step above (per the
+      # same direct user question that led to that one).
+      - name: Run Appium suite on BrowserStack (prompted_updates mid-flow HQ actions)
+        if: contains(matrix.tags, 'prompted_updates')
+        env:
+          BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
+          BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
+          CC_TEST_USERNAME: ${{ secrets.CC_TEST_USERNAME }}
+          CC_TEST_PASSWORD: ${{ secrets.CC_TEST_PASSWORD }}
+          HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
+          HQ_WEB_USER_PASSWORD: ${{ secrets.HQ_WEB_USER_PASSWORD }}
+        run: |
+          # Same android_version-to-device mapping and apk_source
+          # precedence as the two Appium steps above.
+          declare -A ANDROID_DEVICE_MAP=(
+            ["16.0"]="Samsung Galaxy S26"
+            ["15.0"]="Samsung Galaxy S25"
+            ["14.0"]="Samsung Galaxy S24"
+            ["13.0"]="Samsung Galaxy S23"
+            ["12.0"]="Samsung Galaxy S22"
+            ["11.0"]="Samsung Galaxy S21"
+            ["10.0"]="Samsung Galaxy S20"
+          )
+          ANDROID_VERSION="${{ github.event.inputs.android_version || '16.0' }}"
+          DEVICES="${{ github.event.inputs.devices }}"
+          if [ -z "$DEVICES" ]; then
+            DEVICES="${ANDROID_DEVICE_MAP[$ANDROID_VERSION]}-$ANDROID_VERSION"
+          fi
+          ARGS=(--devices "$DEVICES" --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-prompted-updates-appium")
+          APK_SOURCE="${{ github.event.inputs.apk_source || 'GitHub Releases' }}"
+          if [ "$APK_SOURCE" != "GitHub Releases" ]; then
+            ARGS+=(--apk "$APK_SOURCE")
+          elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
+            ARGS+=(--release-tag "${{ github.event.inputs.release_tag }}")
+          fi
+          python scripts/run_appium_prompted_updates_suite.py "${ARGS[@]}"
+
       # No report-history cache restore/save here on purpose: each matrix
       # job's own reports/history.json only reflects ITS slice of tags, not
       # the full logical run, so it isn't meaningful on its own - the

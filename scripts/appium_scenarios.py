@@ -1,15 +1,31 @@
 """
-Appium implementations of updates_partial_failed's scenario_1, scenario_2,
-and scenario_5 - the 3 flows whose Setup step needs a mid-session CommCare
-binary swap, which Maestro cannot do (see scripts/run_appium_suite.py's own
-module docstring for the full citation/rationale). Each function here ports
-that scenario's ALREADY-automated Maestro verification steps 1:1 (same
-resource-ids/text, catalogued directly from flows/common/login.yaml,
+Appium implementations of Maestro-impossible scenarios, split by WHY Maestro
+can't do them:
+
+- updates_partial_failed's scenario_1, scenario_2, scenario_5: need a
+  mid-session CommCare BINARY swap (see scripts/run_appium_suite.py's own
+  module docstring for the full citation/rationale).
+- prompted_updates' scenario_1 (optional CCZ update) and scenario_2 (forced
+  CCZ update): need an HQ-side action (mark_build_status/
+  set_prompt_update_settings) to fire BETWEEN an on-device logout and the
+  next login, on the SAME device/app state - a Maestro build runs its whole
+  "execute" list server-side with no external control point mid-build (see
+  hq_setup/prompted_updates/scenario_02_forced.json's own header for where
+  this was first flagged as needing "extend scripts/run_suite.py to pause
+  here"). An Appium session is driven by a persistent Python process
+  instead, so it can freely call HQClient methods directly between UI
+  actions on that same live session - see
+  scripts/run_appium_prompted_updates_suite.py.
+
+Each function here ports that scenario's ALREADY-automated Maestro
+verification steps 1:1 (same resource-ids/text, catalogued directly from
+flows/common/login.yaml, flows/common/logout.yaml,
 check_app_version_via_about.yaml, navigate_form_no_errors.yaml,
 update_app_via_menu.yaml, verify_form_a_questions.yaml,
 verify_form_b_photo_question.yaml, and each scenario_*.yaml's own inline
-steps) onto scripts/appium_helpers.py's primitives, and adds the genuinely
-new part: the real mid-session install via AppiumBrowserStackClient.
+steps) onto scripts/appium_helpers.py's primitives, plus whichever
+genuinely-new mechanism (mid-session install, or a direct HQClient call)
+Maestro itself has no way to reach.
 
 GENERIC/BEST-EFFORT (matching this repo's own convention for exactly this
 kind of gap): "interrupt mid-stream" is tied to an OBSERVABLE UI signal -
@@ -245,6 +261,16 @@ def _wait_out_sync_dialog(driver, timeout=120):
     h.wait_not_visible_id(driver, f"{APP_ID}:id/dialog_cancel_button", timeout=timeout)
 
 
+def _logout(driver):
+    """Port of flows/common/logout.yaml - the "Log out of CommCare" tile
+    can need several swipes up the home NestedScrollView to scroll into
+    view (same citation as that file's own header, InstrumentationUtility.kt
+    -> logout())."""
+    for _ in range(4):
+        h.swipe_up_on(driver, f"{APP_ID}:id/nsv_home_screen", optional=True)
+    h.tap_by_text(driver, "Log out of CommCare")
+
+
 def _check_app_version(driver):
     """Port of flows/common/check_app_version_via_about.yaml.
 
@@ -407,5 +433,97 @@ def run_scenario_5(driver, appium_client, new_app_url, cc_username, cc_password,
         ("Update verification: auto-updated to V6 (About CommCare check)", lambda: _check_app_version(driver)),
         ("Update 18: Form A verification", lambda: _verify_form_a_questions(driver, "Form A")),
         ("Update 19: Form B verification", lambda: _verify_form_b_photo_question(driver, "Form B")),
+    ]
+    return _run_steps(steps)
+
+
+# ------------------------------------------------- prompted_updates scenarios --
+
+def _login_and_wait_for_forced_blocker(driver, username, password, attempts=4, wait_seconds=45):
+    """Port of prompted_updates scenario_02's relogin step, hardened per a
+    user-supplied recording of the real manual sequence: the forced
+    "New version of the application is required" blocker does NOT always
+    appear on the very next login after mark_build_status - the recording
+    showed it can take multiple relogin attempts or up to ~3 minutes
+    (presumably server-side propagation delay on HQ's end), not a fixed
+    instant. Retries login + a bounded wait rather than asserting on one
+    immediate attempt; attempts=4 * wait_seconds=45 ~= 3 minutes total,
+    matching that recording's own guidance."""
+    for attempt in range(attempts):
+        _login(driver, username, password)
+        if h.wait_visible_text(driver, "New version of the application is required",
+                                timeout=wait_seconds, optional=True):
+            return
+        if attempt < attempts - 1:
+            _logout(driver)
+    raise RuntimeError(
+        f"Forced update blocker never appeared after {attempts} relogin attempts "
+        f"({attempts * wait_seconds}s total)"
+    )
+
+
+def run_prompted_update_scenario_1(driver, hq_client, app_id, latest_build_id, username, password, app_code):
+    """Prompted Updates Scenario 1: optional CCZ update end-to-end. Port of
+    flows/prompted_updates/scenario_01_optional_ccz_update.yaml, with the
+    genuinely-new part being the mark_build_status call fired directly
+    against HQClient between the flow's own logout and re-login - see this
+    module's own docstring for why Maestro can't do that mid-build.
+    ASSUMES Setup 2/3 (mark latest build In Test + prior Released, Prompt
+    Updates to CommCare/App = On) have already run - same precondition the
+    Maestro flow itself documents, see hq_setup/prompted_updates/
+    setup_02_mark_in_test.json and setup_03_prompts_on.json."""
+    steps = [
+        ("Install app by code", lambda: _install_app_by_code(driver, app_code)),
+        ("Login (before release)", lambda: _login(driver, username, password)),
+        ("Assert Start visible", lambda: h.assert_visible_text(driver, "Start")),
+        ("Logout", lambda: _logout(driver)),
+        ("HQ: mark latest build Released",
+         lambda: hq_client.mark_build_status(app_id, latest_build_id, is_released=True)),
+        ("Login (expect optional prompt)", lambda: _login(driver, username, password)),
+        ("Update via menu: confirm prompt, complete update", lambda: _complete_update_app(driver)),
+        ("Relogin (confirm no more prompt)", lambda: _login(driver, username, password)),
+        ("Assert no more prompt",
+         lambda: h.assert_not_visible_text(driver, "New version of the application is available")),
+        ("Assert Start visible", lambda: h.assert_visible_text(driver, "Start")),
+    ]
+    return _run_steps(steps)
+
+
+def run_prompted_update_scenario_2(driver, hq_client, app_id, latest_build_id, username, password, app_code):
+    """Prompted Updates Scenario 2: forced CCZ update blocker screen. Port
+    of flows/prompted_updates/scenario_02_forced_ccz_update.yaml. Same
+    mid-session-HQ-action mechanism as scenario_1 above. ASSUMES Setup 2
+    (mark latest build In Test + prior Released) AND the forced
+    set_prompt_update_settings call have already run - both belong BEFORE
+    this scenario's first login, i.e. before the Appium session even
+    starts, so the caller (scripts/run_appium_prompted_updates_suite.py)
+    runs them, not this function - see hq_setup/prompted_updates/
+    setup_02_mark_in_test.json and scenario_02_forced.json."""
+    steps = [
+        ("Install app by code", lambda: _install_app_by_code(driver, app_code)),
+        ("Login (before release, expect no blocker)", lambda: _login(driver, username, password)),
+        ("Assert Start visible", lambda: h.assert_visible_text(driver, "Start")),
+        ("Assert no forced blocker yet",
+         lambda: h.assert_not_visible_text(driver, "New version of the application is required")),
+        ("Logout", lambda: _logout(driver)),
+        ("HQ: mark latest build Released",
+         lambda: hq_client.mark_build_status(app_id, latest_build_id, is_released=True)),
+        ("Relogin until forced blocker appears",
+         lambda: _login_and_wait_for_forced_blocker(driver, username, password)),
+        ("Back press is a no-op in force mode", lambda: h.back(driver)),
+        ("Blocker still visible after Back",
+         lambda: h.assert_visible_text(driver, "New version of the application is required")),
+        ("Tap Update to the Latest App Version",
+         lambda: h.tap_by_text(driver, "Update to the Latest App Version")),
+        ("Wait for Update to version X & log out",
+         lambda: h.wait_visible_text(driver, r"Update to version.*log out", timeout=30, regex=True)),
+        ("Tap Update to version X & log out",
+         lambda: h.tap_by_text(driver, r"Update to version.*log out", regex=True)),
+        ("Relogin (confirm no more prompt)", lambda: _login(driver, username, password)),
+        ("Assert no forced blocker",
+         lambda: h.assert_not_visible_text(driver, "New version of the application is required")),
+        ("Assert no optional prompt",
+         lambda: h.assert_not_visible_text(driver, "New version of the application is available")),
+        ("Assert Start visible", lambda: h.assert_visible_text(driver, "Start")),
     ]
     return _run_steps(steps)

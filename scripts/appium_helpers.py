@@ -283,3 +283,23 @@ def hide_keyboard(driver):
 
 def back(driver):
     driver.back()
+
+
+def swipe_up_on(driver, resource_id, percent=0.75, optional=False):
+    """Port of Maestro's `swipe: direction: UP, id: <resource_id>` -
+    scrolls a scrollable element (e.g. flows/common/logout.yaml's
+    nsv_home_screen) up by `percent` of its own height, via UiAutomator2's
+    documented `mobile: swipeGesture` element-relative form (no raw
+    coordinate math needed). No-op (returns False) if the element isn't
+    found and optional=True; raises otherwise."""
+    els = driver.find_elements(AppiumBy.ID, resource_id)
+    if not els:
+        if optional:
+            return False
+        raise RuntimeError(f"swipe_up_on: id={resource_id!r} not found")
+    driver.execute_script("mobile: swipeGesture", {
+        "elementId": els[0].id,
+        "direction": "up",
+        "percent": percent,
+    })
+    return True
