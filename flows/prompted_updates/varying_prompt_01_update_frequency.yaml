@@ -15,7 +15,7 @@ tags:
 # UPDATE (2026-08-20), per direct user instruction: installs the EXISTING
 # build carrying release note "3.4,1" (v230, per the test plan's own step 1)
 # rather than a build hq_setup creates fresh - see scripts/app_registry.py's
-# CASE_MANAGEMENTS_VARYING_PROMPT entry for the full citation.
+# CASE_MGMT_VP entry for the full citation.
 #
 # Prepends install_app_as_web_user.yaml (APP_NAME: ".*Case Managements.*") -
 # a fresh BrowserStack session has no app installed until this runs; see
@@ -25,7 +25,7 @@ tags:
 - runFlow:
     file: ../common/install_app_by_code.yaml
     env:
-      APP_CODE: ${APP_CODE_CASE_MANAGEMENTS_VARYING_PROMPT}
+      APP_CODE: ${APP_CODE_CASE_MGMT_VP}
 - runFlow:
     file: ../common/login.yaml
     env:

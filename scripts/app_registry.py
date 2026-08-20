@@ -47,7 +47,7 @@ APP_REGISTRY = {
     # SEPARATE, unpinned CASE_MANAGEMENTS entry above stays as-is for
     # flows/form_submissions/save_to_case_01_03... which wants the current
     # top build, not this specific historical one.
-    "CASE_MANAGEMENTS_VARYING_PROMPT": (
+    "CASE_MGMT_VP": (
         "qateam", "ca82bb0c5cc043a781d96437ee83944b", "2216dbc11efb4b3dabd095e1727dd53e",
     ),
     "MULTIMEDIA": ("qateam", "4df9b7f7e66740a2bd9e02371af832b1"),

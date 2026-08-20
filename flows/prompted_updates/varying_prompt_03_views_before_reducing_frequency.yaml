@@ -21,7 +21,7 @@ tags:
 - runFlow:
     file: ../common/install_app_by_code.yaml
     env:
-      APP_CODE: ${APP_CODE_CASE_MANAGEMENTS_VARYING_PROMPT}
+      APP_CODE: ${APP_CODE_CASE_MGMT_VP}
 - repeat:
     times: 3
     commands:

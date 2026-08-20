@@ -609,7 +609,7 @@ def main():
         selected_text = "\n".join(f.read_text(encoding="utf-8") for f in flow_files)
         # UPDATE (2026-08-20), confirmed live: a plain substring check false-
         # matched APP_CODE_CASE_MANAGEMENTS inside the LONGER
-        # APP_CODE_CASE_MANAGEMENTS_VARYING_PROMPT (a real env var this repo
+        # APP_CODE_CASE_MGMT_VP (a real env var this repo
         # now uses), pulling in an extra unneeded key - a word-boundary-style
         # check (no further identifier char immediately after) avoids that.
         needed_keys = {key for key in APP_REGISTRY if re.search(rf"APP_CODE_{re.escape(key)}(?!\w)", selected_text)}
@@ -624,7 +624,7 @@ def main():
             # Pins to the PRE-hq_setup build when one was captured above,
             # instead of racing hq_setup's own newly-created/released build.
             # A registry entry that's ALREADY pinned (a 3-tuple, e.g.
-            # RU_TEST_ONE/TWO/THREE, CASE_MANAGEMENTS_VARYING_PROMPT - or a
+            # RU_TEST_ONE/TWO/THREE, CASE_MGMT_VP - or a
             # 4-tuple with a trailing release_first override, e.g.
             # MOBILE2_47) is left untouched - it's pinned to an exact build
             # on purpose. UPDATE (2026-08-21): was `== 3`, which crashed on
