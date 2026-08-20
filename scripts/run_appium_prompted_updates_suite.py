@@ -110,13 +110,36 @@ def _resolve_top_two_builds(hq_client, app_id):
     return releases[0]["_id"], releases[1]["_id"]
 
 
+def _set_browserstack_session_status(driver, result):
+    """Same fix as scripts/run_appium_suite.py's own copy (kept as a
+    separate copy rather than a shared import, same reasoning as this
+    file's own _save_failure_evidence citation) - per direct user-supplied
+    BrowserStack guidance: a raw Appium session has no built-in pass/fail
+    signal the way a Maestro build does, so BrowserStack's own dashboard
+    can otherwise show something that doesn't match this script's own
+    TestResult. Best-effort: never let a failure here mask the real result
+    already determined above."""
+    try:
+        status = "passed" if result.status == "passed" else "failed"
+        reason = (result.failed_step or result.error or "")[:255]
+        driver.execute_script(
+            "browserstack_executor: " + json.dumps({
+                "action": "setSessionStatus",
+                "arguments": {"status": status, "reason": reason},
+            })
+        )
+    except Exception:  # noqa: BLE001 - best-effort, never mask the real result
+        pass
+
+
 def _run_one_scenario(bs, name, app_url, device, os_version, build_name, fn):
     driver = None
+    result = None
     start = time.monotonic()
     try:
         driver = bs.start_session(app_url, device, os_version, build_name=build_name, session_name=name)
         fn(driver)
-        return report_generator.TestResult(
+        result = report_generator.TestResult(
             name=f"prompted_updates/{name}_appium",
             workflow="prompted_updates",
             status="passed",
@@ -125,7 +148,7 @@ def _run_one_scenario(bs, name, app_url, device, os_version, build_name, fn):
         )
     except appium_scenarios.ScenarioFailure as exc:
         _save_failure_evidence(driver, name)
-        return report_generator.TestResult(
+        result = report_generator.TestResult(
             name=f"prompted_updates/{name}_appium",
             workflow="prompted_updates",
             status="failed",
@@ -136,7 +159,7 @@ def _run_one_scenario(bs, name, app_url, device, os_version, build_name, fn):
         )
     except Exception as exc:  # noqa: BLE001 - session-level infra failure (upload/session-start/HQ call/etc.)
         _save_failure_evidence(driver, name)
-        return report_generator.TestResult(
+        result = report_generator.TestResult(
             name=f"prompted_updates/{name}_appium",
             workflow="prompted_updates",
             status="failed",
@@ -147,7 +170,10 @@ def _run_one_scenario(bs, name, app_url, device, os_version, build_name, fn):
         )
     finally:
         if driver is not None:
+            if result is not None:
+                _set_browserstack_session_status(driver, result)
             driver.quit()
+    return result
 
 
 def main():
@@ -272,11 +298,16 @@ def main():
     )
 
     # Same merge-not-overwrite pattern as run_appium_suite.py's own
-    # main() - see that file's own UPDATE comment for the full citation.
+    # main() - see that file's own UPDATE comment for the full citation,
+    # including the 2026-08-21 fix (replace-by-name instead of blind
+    # concatenation) that stops a stale local rerun's FAILED entry from
+    # lingering next to the current run's own PASSED result.
     existing_results_path = REPO_ROOT / "reports" / "latest_results.json"
     if existing_results_path.exists():
         existing = json.loads(existing_results_path.read_text(encoding="utf-8"))
-        results = [report_generator.TestResult(**item) for item in existing] + results
+        new_names = {r.name for r in results}
+        results = [report_generator.TestResult(**item) for item in existing
+                   if item["name"] not in new_names] + results
 
     build_id = f"appium-prompted-updates-{int(time.time())}"
     report_path = report_generator.generate_report(build_id, results, enrich=False)

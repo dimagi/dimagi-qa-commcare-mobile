@@ -1,24 +1,16 @@
 {
-  "_comment": "Master Mobile Plan (2026) > Prompted Updates > Varying Prompt Setup 1 & 2. Run once via `python scripts/hq_client.py hq_setup/prompted_updates/varying_prompt_setup.json` before running the varying_prompt_* flows. UPDATE (2026-08-20): app_id filled in - 'ca82bb0c5cc043a781d96437ee83944b', confirmed via a direct user-supplied link and HQClient.list_releases (name == 'Case Managements!'). See scripts/app_registry.py's own CASE_MANAGEMENTS entry for the same id/citation - the varying_prompt_01/03/04/05 flows were installing the WRONG app (APP_CODE_BASIC_TESTS) until this same fix; confirm this id is still current before relying on it if it's been a while, since build ids get recreated between QA cycles.",
+  "_comment": "Master Mobile Plan (2026) > Prompted Updates > Varying Prompt Setup 1 & 2. Run once via `python scripts/hq_client.py hq_setup/prompted_updates/varying_prompt_setup.json` before running the varying_prompt_* flows. UPDATE (2026-08-20), per direct user instruction ('we do not need to create new builds, Existing builds are present. Just check their release note as per the testcase requirement and make it Release. Then get the app code for installation.'): dropped the earlier set_custom_properties/create_new_build actions, which were minting a brand-new '3.4,1'-commented build on every single dispatch (confirmed live via HQ - v233/v234 created today alone) instead of reusing what's already there - and per a further direct instruction, builds authored by 'Maestro testuser' (v233/v234/v235) must never be selected/relied on going forward (the user can't delete them). Now just releases the two EXISTING builds this scenario needs, confirmed live via HQClient.list_releases (name == 'Case Managements!', both authored by Sameena Shaik, both CommCare 2.64.0 matching the test APK): v230 (id 2216dbc11efb4b3dabd095e1727dd53e, build_comment '3.4.1  - 2.64' - the one the test plan's step 1 says to install, see scripts/app_registry.py's CASE_MANAGEMENTS_VARYING_PROMPT entry) and v232 (id 26cbd55772994e7d94d11d478e788ab1, build_comment '3.4.2 -2.64' - the next build up, released alongside it so a pending update genuinely exists for the device on v230 to detect). Re-verify these ids are still current before relying on them if it's been a while, since HQ's build list can change between QA cycles.",
   "actions": [
     {
-      "type": "set_custom_properties",
+      "type": "mark_build_status",
       "app_id": "ca82bb0c5cc043a781d96437ee83944b",
-      "properties": {
-        "num-views-before-reducing-frequency": "3",
-        "reduced-show-frequency": "4",
-        "regular-show-frequency": "1"
-      }
-    },
-    {
-      "type": "create_new_build",
-      "app_id": "ca82bb0c5cc043a781d96437ee83944b",
-      "comment": "3.4,1"
+      "saved_app_id": "2216dbc11efb4b3dabd095e1727dd53e",
+      "is_released": true
     },
     {
       "type": "mark_build_status",
       "app_id": "ca82bb0c5cc043a781d96437ee83944b",
-      "saved_app_id": "$LAST_BUILD_ID",
+      "saved_app_id": "26cbd55772994e7d94d11d478e788ab1",
       "is_released": true
     }
   ]

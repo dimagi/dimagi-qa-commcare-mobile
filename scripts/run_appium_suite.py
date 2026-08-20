@@ -32,6 +32,7 @@ Usage (standalone, e.g. for local testing):
     python scripts/run_appium_suite.py --release-tag commcare_2.64.0 --devices "Samsung Galaxy S26-16.0"
 """
 import argparse
+import json
 import os
 import pathlib
 import sys
@@ -89,8 +90,32 @@ def _save_failure_evidence(driver, name):
         return None
 
 
+def _set_browserstack_session_status(driver, result):
+    """UPDATE (2026-08-21), per direct user-supplied BrowserStack guidance:
+    unlike a Maestro build (where BrowserStack itself tracks pass/fail from
+    the flow's own assertions), a raw Appium session has no built-in signal
+    of whether OUR test logic considered the run a pass or fail - without
+    this, BrowserStack's own dashboard/session-status field can show
+    something that doesn't match this script's own TestResult, even though
+    that mismatch never affected THIS repo's own report/exit-code logic
+    (that's tracked independently in Python). Best-effort: never let a
+    failure here mask the real result already determined above."""
+    try:
+        status = "passed" if result.status == "passed" else "failed"
+        reason = (result.failed_step or result.error or "")[:255]
+        driver.execute_script(
+            "browserstack_executor: " + json.dumps({
+                "action": "setSessionStatus",
+                "arguments": {"status": status, "reason": reason},
+            })
+        )
+    except Exception:  # noqa: BLE001 - best-effort, never mask the real result
+        pass
+
+
 def _run_one_scenario(bs, name, old_app_url, new_app_url, device, os_version, build_name, env, fn):
     driver = None
+    result = None
     start = time.monotonic()
     try:
         driver = bs.start_session(
@@ -99,7 +124,7 @@ def _run_one_scenario(bs, name, old_app_url, new_app_url, device, os_version, bu
             mid_session_apps=[new_app_url],
         )
         fn(driver)
-        return report_generator.TestResult(
+        result = report_generator.TestResult(
             name=f"updates_partial_failed/{name}_appium",
             workflow="updates_partial_failed",
             status="passed",
@@ -108,7 +133,7 @@ def _run_one_scenario(bs, name, old_app_url, new_app_url, device, os_version, bu
         )
     except appium_scenarios.ScenarioFailure as exc:
         _save_failure_evidence(driver, name)
-        return report_generator.TestResult(
+        result = report_generator.TestResult(
             name=f"updates_partial_failed/{name}_appium",
             workflow="updates_partial_failed",
             status="failed",
@@ -119,7 +144,7 @@ def _run_one_scenario(bs, name, old_app_url, new_app_url, device, os_version, bu
         )
     except Exception as exc:  # noqa: BLE001 - session-level infra failure (upload/session-start/etc.)
         _save_failure_evidence(driver, name)
-        return report_generator.TestResult(
+        result = report_generator.TestResult(
             name=f"updates_partial_failed/{name}_appium",
             workflow="updates_partial_failed",
             status="failed",
@@ -130,7 +155,10 @@ def _run_one_scenario(bs, name, old_app_url, new_app_url, device, os_version, bu
         )
     finally:
         if driver is not None:
+            if result is not None:
+                _set_browserstack_session_status(driver, result)
             driver.quit()
+    return result
 
 
 def main():
@@ -169,13 +197,39 @@ def main():
     # test... a build newer than what's installed can never finish an
     # online/Enter-Code install". The old 2.45 binary is what's actually
     # performing this install, so that's the version that belongs here.
-    print(f"Resolving install code for MOBILE_UPDATES_1_2 ...")
-    old_apk_commcare_version = "2.45"
-    app_codes = hq_client_module.resolve_app_codes(
-        {"MOBILE_UPDATES_1_2": APP_REGISTRY["MOBILE_UPDATES_1_2"]},
-        max_commcare_version=old_apk_commcare_version,
+    #
+    # UPDATE (2026-08-21), per direct user correction with a real-device
+    # recording: max_commcare_version filtering alone picks the NEWEST
+    # build under that ceiling, which (confirmed live via
+    # HQClient.list_releases) is v71 - already named "Mobile Updates - Test
+    # 1_2!". The real scenario installs "Mobile Updates - Test 1" FIRST
+    # (a build literally named/commented "Version 1"), and only ends up on
+    # "Test 1_2!" AFTER the update - so this needs to pin to that specific
+    # OLDER "Version 1" build, not just any build under the version
+    # ceiling.
+    #
+    # v26 (comment "Version 1", CC 2.45.0 - matching the old APK under test
+    # here) looked like the natural pick, but marking it Released failed
+    # live with a real HQ platform error: "The mobile UCR restore version
+    # for v26 needs to be updated to V2.0" - an app-level HQ migration
+    # blocker (see the linked migration guide in that error), not something
+    # this script can push through, and not specific to this one build (its
+    # own record already reports mobile_ucr_restore_version=2.0). Per
+    # direct user decision, uses v66 instead ("2.55 - Version 1", CC
+    # 2.41.1, confirmed via list_releases to ALREADY be is_released=True)
+    # and calls get_app_install_code directly with release_first=False
+    # (bypassing resolve_app_codes' pinned-entry path, which always calls
+    # mark_build_status regardless of current status - see its own
+    # already_released=None comment for pinned entries) so this never
+    # attempts the same blocked release call at all.
+    print("Resolving install code for MOBILE_UPDATES_1_2 (pinned to the already-released 'Test 1' Version 1 build) ...")
+    domain = APP_REGISTRY["MOBILE_UPDATES_1_2"][0]
+    mobile_updates_app_id = APP_REGISTRY["MOBILE_UPDATES_1_2"][1]
+    v1_build_id = "969f2df0118b4619ac386f123c58edd3"  # v66, "2.55 - Version 1", "Mobile Updates - Test 1", CC 2.41.1
+    hq_client = hq_client_module.HQClient(domain=domain).login(
+        username=os.environ.get("HQ_WEB_USER_EMAIL"), password=os.environ.get("HQ_WEB_USER_PASSWORD"),
     )
-    app_code = app_codes["APP_CODE_MOBILE_UPDATES_1_2"]
+    app_code = hq_client.get_app_install_code(mobile_updates_app_id, saved_app_id=v1_build_id, release_first=False)
 
     bs = AppiumBrowserStackClient()
     print(f"Uploading old APK ({OLD_APK_PATH.name}) to BrowserStack ...")
@@ -228,11 +282,27 @@ def main():
     # every Maestro result from that job's own artifact. Load and merge with
     # whatever's already there first, same TestResult(**item) pattern
     # scripts/merge_reports.py already uses to combine multiple artifacts.
+    # UPDATE (2026-08-21), per direct user report: a blind append here made
+    # a stale FAILED entry from an earlier LOCAL debugging attempt (of the
+    # exact same scenario, re-run several times while iterating on a fix)
+    # linger alongside the current run's own PASSED result, so the overall
+    # exit code (and this file's own report) kept reading "failed" even
+    # after the real bug was fixed - confirmed live, not just suspected,
+    # by inspecting reports/latest_results.json directly mid-session. This
+    # was never a problem for the REAL CI case this merge exists for (a
+    # fresh job only ever writes once per test name), only for repeated
+    # local reruns in the same working directory - so replaces any
+    # existing entry that shares a name with one of THIS run's results
+    # (keeping the newest outcome) instead of blindly concatenating, which
+    # fixes the local case without needing a separate report/exit code
+    # scheme for standalone runs.
     existing_results_path = REPO_ROOT / "reports" / "latest_results.json"
     if existing_results_path.exists():
         import json
         existing = json.loads(existing_results_path.read_text(encoding="utf-8"))
-        results = [report_generator.TestResult(**item) for item in existing] + results
+        new_names = {r.name for r in results}
+        results = [report_generator.TestResult(**item) for item in existing
+                   if item["name"] not in new_names] + results
 
     build_id = f"appium-{int(time.time())}"
     report_path = report_generator.generate_report(build_id, results, enrich=False)

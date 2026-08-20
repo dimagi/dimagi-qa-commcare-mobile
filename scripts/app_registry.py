@@ -33,13 +33,64 @@ APP_REGISTRY = {
     # showed the update prompt firing on "Case Managements!", not "Basic
     # Tests" - confirming the mismatch, not just the missing id.
     "CASE_MANAGEMENTS": ("qateam", "ca82bb0c5cc043a781d96437ee83944b"),
+    # UPDATE (2026-08-20), per direct user instruction: the varying_prompt_*
+    # flows must install an EXISTING, already-cut build (identified by its
+    # release note, matching the test plan's "Install the application with
+    # release notes '3.4,1'") rather than a build hq_setup mints fresh each
+    # run - the earlier varying_prompt_setup.json's create_new_build action
+    # was creating a needless new "3.4,1"-commented build on every single
+    # dispatch (confirmed live via HQ - v233/v234 today alone), and those
+    # Maestro-authored builds must never be selected/relied on going forward
+    # (the user can't delete them). Pinned like RU_TEST_ONE/TWO/THREE below -
+    # v230, build_comment "3.4.1  - 2.64" (by Sameena Shaik, CommCare 2.64.0,
+    # matching the test APK), confirmed live via HQClient.list_releases. A
+    # SEPARATE, unpinned CASE_MANAGEMENTS entry above stays as-is for
+    # flows/form_submissions/save_to_case_01_03... which wants the current
+    # top build, not this specific historical one.
+    "CASE_MANAGEMENTS_VARYING_PROMPT": (
+        "qateam", "ca82bb0c5cc043a781d96437ee83944b", "2216dbc11efb4b3dabd095e1727dd53e",
+    ),
     "MULTIMEDIA": ("qateam", "4df9b7f7e66740a2bd9e02371af832b1"),
     "RIGHT_TO_LEFT": ("qateam", "1abba0dead4daede49abc56c04e56ae0"),
     "DATE_WIDGETS": ("qateam", "02a769c498fa428f89978b61e2846317"),
     "SESSION_EXPIRATION": ("qateam", "825e17ec246c487ab2d51c6696463898"),
     "OTHER": ("qateam", "0d7b77064440473a859fd19174806992"),
-    "MOBILE_UPDATES_1_2": ("qateam", "424db1b7c64a94e3e4cdc03c6cc61038"),
-    "CASE_MANAGEMENTS": ("qateam", "ca82bb0c5cc043a781d96437ee83944b"),
+    # UPDATE (2026-08-21), confirmed live via HQClient.list_releases +
+    # scripts/run_appium_suite.py's own fix (see its citation for the full
+    # story): the plain unpinned form here resolves (via max_commcare_
+    # version's "newest build under the ceiling" rule) to v79, the current
+    # top build - which is ALREADY "Mobile Updates - Test 1_2!", not
+    # "Version 1" as the sheet's own Setup step requires ("Install Version
+    # 1... Set Version 2 as released"), and attempting to release v79 (or
+    # the similarly-old v26) can fail live with a real HQ platform error
+    # ("mobile UCR restore version... needs to be updated to V2.0" - an
+    # app-level migration blocker, not something this repo can push
+    # through). Pinned to v66 ("2.55 - Version 1", already released,
+    # confirmed live this one does NOT hit that blocker) - both of this
+    # key's real callers (scenario_1/scenario_2's Maestro flows) want
+    # "Version 1" as the starting install per their own Setup steps, and
+    # v71 ("2.55 (Heavier) Version 2", already released=True) is already
+    # the next-highest-numbered released build, so the "update to Version
+    # 2" step in both flows has something correct to land on without
+    # needing to touch it separately.
+    "MOBILE_UPDATES_1_2": ("qateam", "424db1b7c64a94e3e4cdc03c6cc61038", "969f2df0118b4619ac386f123c58edd3"),
+    # UPDATE (2026-08-21), per direct user-supplied recording: scenario_3's
+    # sheet references "Mobile Updates - Test 3", which does not exist under
+    # that name anywhere in the qateam domain's app list (confirmed live via
+    # /apps/api/list_apps/, all 123 apps checked) - the real app, per the
+    # recording's own on-screen title bar, is "Mobile2.47". Its release
+    # history (HQClient.list_releases) has a genuine Version 1-4 progression
+    # matching the sheet's own notes ("Version 1 - Forms A and B... Version
+    # 4 - Made a change in Form A"): v19 ("Version V1 - Form A & B", CC
+    # 2.45.2, already released) is the only build low enough for the old
+    # 2.45 APK under test to install via app-code at all, and v68 ("Version
+    # 4 A(updated)&B", CC 2.57.0) is ALREADY the current top-released build
+    # - satisfying Update 10's "mark Version V4 as Released" step for free.
+    # Pinned with release_first=False (the 4th tuple element) since v19 is
+    # already released and marking it again hits the SAME real HQ UCR
+    # migration error as MOBILE_UPDATES_1_2's old v26/v79 candidates above -
+    # confirmed live, not assumed.
+    "MOBILE2_47": ("qateam", "4fc92eeed6032a7c650a10f6627f6cea", "3d85d0fd6a7a48c5abbd0c0c0f013ad2", False),
     "UPDATE_TEST_ALTERNATE": ("qateam", "7e8e7e8857f7466495888a37952e7ad0"),
     "RATE_LIMITED": ("rate-limited", "35589b21ffde2cd1e7be968088acd620"),
     "PERFORMANCE_TESTING": ("qateam", "4a1189cb56c44277906e9fc058838ebc"),

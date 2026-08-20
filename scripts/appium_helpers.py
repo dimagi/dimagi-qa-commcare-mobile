@@ -279,6 +279,27 @@ def hide_keyboard(driver):
         # Same "may not always be open" tolerance every hideKeyboard call
         # needs elsewhere in this repo - a no-op if no keyboard is showing.
         pass
+    reassert_portrait(driver)
+
+
+def reassert_portrait(driver):
+    """UPDATE (2026-08-20), per direct user report + confirmed live via a
+    real screenshot: despite AppiumBrowserStackClient.start_session already
+    setting bstack:options' deviceOrientation, the Appium `orientation`
+    capability, AND a one-time driver.orientation setter right after
+    session start, a real dispatch still landed in landscape - a single
+    assertion at session start doesn't survive later in-session rotation.
+    The keyboard opening/closing was already suspected (see
+    _install_app_by_code_once's own UPDATE comment, from a hierarchy dump
+    caught mid-rotation-animation) as the likely trigger, so this re-
+    asserts portrait every time hide_keyboard runs (called after every
+    text-entry step) rather than relying on one assertion to stick for the
+    whole session. Best-effort - swallows errors the same way the orientation
+    setter can't be guaranteed to always succeed mid-transition."""
+    try:
+        driver.orientation = "PORTRAIT"
+    except Exception:
+        pass
 
 
 def back(driver):
@@ -288,18 +309,28 @@ def back(driver):
 def swipe_up_on(driver, resource_id, percent=0.75, optional=False):
     """Port of Maestro's `swipe: direction: UP, id: <resource_id>` -
     scrolls a scrollable element (e.g. flows/common/logout.yaml's
-    nsv_home_screen) up by `percent` of its own height, via UiAutomator2's
-    documented `mobile: swipeGesture` element-relative form (no raw
-    coordinate math needed). No-op (returns False) if the element isn't
-    found and optional=True; raises otherwise."""
+    nsv_home_screen) up by `percent` of its own height. No-op (returns
+    False) if the element isn't found and optional=True; raises otherwise.
+
+    UPDATE (2026-08-20), confirmed live (a real failure landing on the
+    module list instead of logging out, reproduced across multiple
+    dispatches): UiAutomator2's `mobile: swipeGesture` can register as a
+    plain TAP at its start point instead of a scroll on this Appium
+    server/device, independent of render timing - it's meant for general
+    swipe gestures, not guaranteed-scroll. `mobile: scrollGesture` is
+    UiAutomator2's dedicated scroll primitive (same direction/percent
+    params) and doesn't carry that tap-fallback ambiguity, so it's used
+    here instead."""
     els = driver.find_elements(AppiumBy.ID, resource_id)
     if not els:
         if optional:
             return False
         raise RuntimeError(f"swipe_up_on: id={resource_id!r} not found")
-    driver.execute_script("mobile: swipeGesture", {
+    driver.execute_script("mobile: scrollGesture", {
         "elementId": els[0].id,
         "direction": "up",
         "percent": percent,
     })
     return True
+
+

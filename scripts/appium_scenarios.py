@@ -267,6 +267,7 @@ def _wait_out_progress_dialogs(driver, timeout=120):
     moment, not just post-login - confirmed live it can also reappear
     later, e.g. blocking "More options" while opening the update menu,
     since checking for an update is itself another server round-trip."""
+    h.reassert_portrait(driver)
     time.sleep(2)  # give a dialog that hasn't appeared YET a moment to do so
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
@@ -279,11 +280,26 @@ def _wait_out_progress_dialogs(driver, timeout=120):
 
 
 def _logout(driver):
-    """Port of flows/common/logout.yaml - the "Log out of CommCare" tile
-    can need several swipes up the home NestedScrollView to scroll into
-    view (same citation as that file's own header, InstrumentationUtility.kt
-    -> logout())."""
-    for _ in range(4):
+    """Port of flows/common/logout.yaml - "Log out of CommCare" is the
+    5th/last home-grid tile, with a plain visible text label.
+
+    UPDATE (2026-08-20), confirmed live via a real portrait screenshot, per
+    direct user correction: this genuinely IS a home-screen tile (not a
+    drawer item, and not icon-only) - a fresh diagnostic dispatched AFTER
+    the portrait-reassertion fix (h.reassert_portrait) showed all 5 tiles
+    (Start, Saved, Incomplete, Sync with Server, Log out of CommCare) at
+    once with real, readable labels, no scrolling even needed on this
+    device. Every earlier failure (landing on the module list, "Saved
+    Forms", the drawer never opening in time) traces back to the device
+    still being in LANDSCAPE at that point - its cramped height was both
+    hiding the tile and (per several dumps) leaving its label off the
+    accessibility tree entirely, which is what led earlier debugging
+    astray into drawer/index-tap workarounds that were solving the wrong
+    problem. Portrait's extra height fits everything without scrolling, but
+    a defensive scroll is kept first anyway (matching Maestro's own
+    logout.yaml, which always swipes first) in case a narrower device ever
+    needs it."""
+    for _ in range(2):
         h.swipe_up_on(driver, f"{APP_ID}:id/nsv_home_screen", optional=True)
     h.tap_by_text(driver, "Log out of CommCare")
 
@@ -311,18 +327,63 @@ def _check_app_version(driver):
 
 
 def _navigate_form_no_errors(driver, form_name):
-    """Port of flows/common/navigate_form_no_errors.yaml."""
+    """Port of flows/common/navigate_form_no_errors.yaml.
+
+    UPDATE (2026-08-20), confirmed live via a real dispatch: that Maestro
+    file's own header already flagged this as an UNVERIFIED assumption for
+    exactly the apps this is used against ("Mobile Updates - Test 1_2!") -
+    a real dispatch confirmed the gap: after tapping "Start", the module
+    list shows an intermediate "Mobile updates" module, not the form
+    directly, so tapping form_name there timed out. Taps through that
+    module first (optional, so nothing changes if a flat single-level app
+    never shows it).
+
+    UPDATE (2026-08-21), per direct user correction (a real-device
+    screenshot of Form 2's last question) that overturned the whole
+    "page through a few, then discard" design this was ported from: the
+    SAME nav_btn_next button relabels itself "FINISH" on a form's last
+    question, and tapping it there actually SUBMITS the form - Form 1 is
+    supposed to complete and submit (it has "a few media files" per the
+    sheet's own note, so more questions than the old fixed 4-tap loop
+    covered), not get discarded via "Exit Form?" partway through, which is
+    what a too-short loop was doing. Form 2 only ever "worked" by
+    coincidence - its 2 questions happened to fit inside 4 taps and the
+    2nd tap was already FINISH. Loops tapping Next/Finish while
+    nav_btn_next is still present (bounded generously rather than fixed
+    small, since the real question count varies by form) instead of
+    stopping early and discarding."""
     h.tap_by_text(driver, "Start")
+    h.tap_by_text(driver, "Mobile updates", optional=True, timeout=3)
+    # UPDATE (2026-08-21), per direct user confirmation: "Mobile2.47"
+    # (flows/common/navigate_form_no_errors.yaml's other real caller) has
+    # the same intermediate-module gap but names its module "Surveys" -
+    # matching that Maestro fix here too, in case a future Appium scenario
+    # ever targets this app.
+    h.tap_by_text(driver, "Surveys", optional=True, timeout=3)
     h.tap_by_text(driver, form_name)
     h.wait_visible_id(driver, f"{APP_ID}:id/nav_btn_next", timeout=5)
-    for _ in range(4):
+    for _ in range(20):
         h.tap_by_id(driver, f"{APP_ID}:id/choice_dialog_panel_3", optional=True, timeout=2)
+        if not h.wait_visible_id(driver, f"{APP_ID}:id/nav_btn_next", timeout=2, optional=True):
+            break
         h.tap_by_id(driver, f"{APP_ID}:id/nav_btn_next", optional=True, timeout=2)
     h.assert_not_visible_text(driver, "(?i).*unexpected error.*", regex=True)
     h.assert_not_visible_text(driver, "(?i).*commcare will now restart.*", regex=True)
-    h.back(driver)
-    h.tap_by_text(driver, "(?i).*exit without saving.*", regex=True, optional=True, timeout=2)
-    h.back(driver)
+    # UPDATE (2026-08-21), confirmed live via a real dispatch (the same fix
+    # ported to flows/common/navigate_form_no_errors.yaml, build
+    # "scenario2-notvisible-while-verify": passed, 1/1) after two earlier
+    # failures with a fixed 2-back count (one overshooting into the
+    # Android launcher, one landing on the login screen) - the real
+    # nesting depth genuinely varies by navigation (most likely because
+    # "Mobile updates", tapped through above, doesn't always show on a
+    # later navigation), so a fixed count can't be right for every case.
+    # Presses back only WHILE "Start" is not yet visible (bounded)
+    # instead - a form whose submission already lands on Start presses
+    # zero backs, one that doesn't gets exactly as many as it needs.
+    for _ in range(3):
+        if h.wait_visible_text(driver, "Start", timeout=2, optional=True):
+            break
+        h.back(driver)
     h.wait_visible_text(driver, "Start", timeout=5)
 
 
@@ -366,7 +427,11 @@ def _open_update_app_menu(driver):
     h.tap_by_text(driver, "More options")
     h.tap_by_text(driver, "Update App")
     h.wait_visible_text(driver, "New version of the application is available", timeout=8, optional=True)
-    h.tap_by_text(driver, "Update to the Latest App Version", optional=True, timeout=3)
+    # UPDATE (2026-08-20), confirmed live: this button's rendered `text`
+    # attribute is "UPDATE TO THE LATEST APP VERSION" (all-caps, an Android
+    # textAllCaps style) - a case-sensitive literal match against the
+    # title-case string never matches, so this needs regex + (?i).
+    h.tap_by_text(driver, r"(?i)update to the latest app version", regex=True, optional=True, timeout=3)
 
 
 def _complete_update_app(driver):
@@ -531,7 +596,7 @@ def run_prompted_update_scenario_2(driver, hq_client, app_id, latest_build_id, u
         ("Blocker still visible after Back",
          lambda: h.assert_visible_text(driver, "New version of the application is required")),
         ("Tap Update to the Latest App Version",
-         lambda: h.tap_by_text(driver, "Update to the Latest App Version")),
+         lambda: h.tap_by_text(driver, r"(?i)update to the latest app version", regex=True)),
         ("Wait for Update to version X & log out",
          lambda: h.wait_visible_text(driver, r"Update to version.*log out", timeout=30, regex=True)),
         ("Tap Update to version X & log out",

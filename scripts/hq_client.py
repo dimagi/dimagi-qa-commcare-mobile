@@ -160,8 +160,9 @@ class HQClient:
     def list_releases(self, app_id, only_show_released=True, limit=5):
         """
         List an app's builds, newest first, each as a dict including at least
-        `id` (the build's own doc id, usable as saved_app_id/DownloadCCZ's
-        app_id), `version`, and `is_released`.
+        `_id` (the build's own doc id, usable as saved_app_id/DownloadCCZ's
+        app_id - confirmed live 2026-08-20 the real key is `_id`, not `id`),
+        `version`, and `is_released`.
         GET /a/<domain>/apps/view/<app_id>/releases/json/?limit=&only_show_released=&page=1
         Source: corehq/apps/app_manager/views/releases.py:paginate_releases()
         """
@@ -495,6 +496,13 @@ def resolve_app_codes(registry, base_url=None, username=None, password=None, max
     not whatever happens to be newest today (see app_registry.py's own
     RU_TEST_ONE/TWO/THREE comment for the full citation).
 
+    A 4th tuple element (release_first, default True) on a pinned 3-tuple
+    entry opts OUT of the usual re-release attempt - use False when the
+    pinned build is already confirmed released, to avoid ever calling
+    mark_build_status on it (some older apps hit a real HQ platform
+    migration error on that call - see app_registry.py's MOBILE2_47 entry
+    for the full citation).
+
     Logs in once per distinct domain (a HQClient's session/CSRF token isn't
     reusable across domains needing separate permission checks) rather than
     once per app, since several registry entries commonly share a domain.
@@ -516,13 +524,22 @@ def resolve_app_codes(registry, base_url=None, username=None, password=None, max
     for key, entry in registry.items():
         domain, app_id = entry[0], entry[1]
         pinned_saved_app_id = entry[2] if len(entry) > 2 else None
+        # UPDATE (2026-08-21), confirmed live via a real HQ platform error
+        # ("mobile UCR restore version... needs to be updated to V2.0" - an
+        # app-level migration blocker some older apps hit, not something
+        # this repo can push through): a 4th tuple element lets a pinned
+        # entry opt OUT of the release_first re-release attempt entirely
+        # (default True, unchanged for every existing entry) - use False
+        # for a build that's already confirmed released, to avoid ever
+        # calling mark_build_status on it at all.
+        release_first = entry[3] if len(entry) > 3 else True
         if domain not in clients:
             clients[domain] = HQClient(base_url=base_url, domain=domain).login(
                 username=username, password=password,
             )
         if pinned_saved_app_id:
             codes[f"APP_CODE_{key}"] = clients[domain].get_app_install_code(
-                app_id, saved_app_id=pinned_saved_app_id,
+                app_id, saved_app_id=pinned_saved_app_id, release_first=release_first,
             )
         else:
             codes[f"APP_CODE_{key}"] = clients[domain].get_app_install_code(

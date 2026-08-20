@@ -5,15 +5,17 @@ tags:
 ---
 # Master Mobile Plan (2026) > Prompted Updates > "Varying Prompt 1" - Test Frequency.
 # ASSUMES the HQ-side setup has already run (see hq_setup/prompted_updates/
-# varying_prompt_setup.json): custom properties num-views-before-reducing-frequency=3,
-# reduced-show-frequency=4, regular-show-frequency=1, and build "3.4,1" released.
+# varying_prompt_setup.json): release note "3.4,1" build released.
 #
 # UPDATE (2026-08-20), confirmed via a user-supplied recording of this
 # exact flow: was installing APP_CODE_BASIC_TESTS (the wrong app) - the
-# prompt shown in that recording fires on "Case Managements!", the app
-# varying_prompt_setup.json's custom frequency properties actually target.
-# Fixed to install APP_CODE_CASE_MANAGEMENTS instead - see
-# scripts/app_registry.py's CASE_MANAGEMENTS entry for the full citation.
+# prompt shown in that recording fires on "Case Managements!", not "Basic
+# Tests".
+#
+# UPDATE (2026-08-20), per direct user instruction: installs the EXISTING
+# build carrying release note "3.4,1" (v230, per the test plan's own step 1)
+# rather than a build hq_setup creates fresh - see scripts/app_registry.py's
+# CASE_MANAGEMENTS_VARYING_PROMPT entry for the full citation.
 #
 # Prepends install_app_as_web_user.yaml (APP_NAME: ".*Case Managements.*") -
 # a fresh BrowserStack session has no app installed until this runs; see
@@ -23,7 +25,7 @@ tags:
 - runFlow:
     file: ../common/install_app_by_code.yaml
     env:
-      APP_CODE: ${APP_CODE_CASE_MANAGEMENTS}
+      APP_CODE: ${APP_CODE_CASE_MANAGEMENTS_VARYING_PROMPT}
 - runFlow:
     file: ../common/login.yaml
     env:

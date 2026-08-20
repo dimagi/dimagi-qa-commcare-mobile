@@ -12,6 +12,7 @@ import argparse
 import json
 import os
 import pathlib
+import re
 import shutil
 import sys
 import tempfile
@@ -513,6 +514,7 @@ def main():
 
     load_dotenv(REPO_ROOT / ".env")
 
+    prior_build_by_app_id = {}
     if args.hq_setup:
         print(f"Running HQ pre-step: {args.hq_setup}")
         with open(args.hq_setup) as f:
@@ -526,6 +528,27 @@ def main():
             username=os.environ.get("HQ_WEB_USER_EMAIL"),
             password=os.environ.get("HQ_WEB_USER_PASSWORD"),
         )
+        # UPDATE (2026-08-20), confirmed live: a spec that creates+releases a
+        # NEW build (e.g. varying_prompt_setup.json, to make a pending update
+        # exist for the varying_prompt_* flows to detect) races the plain
+        # resolve_app_codes() call below - both it and create_new_build's own
+        # mark_build_status resolve to "current top build" via the same
+        # release_first=True default (get_app_install_code), so the flow's
+        # install always lands on the build hq_setup just created, never the
+        # one that was current before it ran - leaving no update pending at
+        # all. This is exactly what made all 4 varying_prompt_* flows fail
+        # today ("New version of the application is available" never
+        # appeared) - the same release_first conflict already fixed for
+        # prompted_updates' Appium path (scripts/run_appium_prompted_updates_
+        # suite.py's _resolve_top_two_builds), just not here yet. Captures
+        # each touched app's PRE-hq_setup top build id so it can be pinned via
+        # resolve_app_codes' 3-tuple form below instead of racing it.
+        for action in spec.get("actions", []):
+            if action.get("type") == "create_new_build":
+                app_id = action["app_id"]
+                releases = client.list_releases(app_id, only_show_released=False, limit=1)
+                if releases:
+                    prior_build_by_app_id[app_id] = releases[0]["_id"]
         hq_client_module.run_pre_step(spec, client=client)
 
     apk_path = args.apk
@@ -584,23 +607,46 @@ def main():
         # someone cuts + publishes a new version. Only resolves keys actually
         # in use so a single-tag run doesn't need every domain's credentials.
         selected_text = "\n".join(f.read_text(encoding="utf-8") for f in flow_files)
-        needed_keys = {key for key in APP_REGISTRY if f"APP_CODE_{key}" in selected_text}
+        # UPDATE (2026-08-20), confirmed live: a plain substring check false-
+        # matched APP_CODE_CASE_MANAGEMENTS inside the LONGER
+        # APP_CODE_CASE_MANAGEMENTS_VARYING_PROMPT (a real env var this repo
+        # now uses), pulling in an extra unneeded key - a word-boundary-style
+        # check (no further identifier char immediately after) avoids that.
+        needed_keys = {key for key in APP_REGISTRY if re.search(rf"APP_CODE_{re.escape(key)}(?!\w)", selected_text)}
         # NO_VERSION_FILTER_KEYS (e.g. BASIC_TESTS_LATEST) deliberately skip
         # the max_commcare_version safety filter - see app_registry.py's own
         # comment on that set for why (some tests need the CommCare-APK-
         # version-mismatch dialog to actually appear).
         filtered_keys = needed_keys - app_registry.NO_VERSION_FILTER_KEYS
         unfiltered_keys = needed_keys & app_registry.NO_VERSION_FILTER_KEYS
+
+        def _registry_entry(key):
+            # Pins to the PRE-hq_setup build when one was captured above,
+            # instead of racing hq_setup's own newly-created/released build.
+            # A registry entry that's ALREADY pinned (a 3-tuple, e.g.
+            # RU_TEST_ONE/TWO/THREE, CASE_MANAGEMENTS_VARYING_PROMPT - or a
+            # 4-tuple with a trailing release_first override, e.g.
+            # MOBILE2_47) is left untouched - it's pinned to an exact build
+            # on purpose. UPDATE (2026-08-21): was `== 3`, which crashed on
+            # the first 4-tuple entry ("too many values to unpack") the same
+            # way an earlier 3-tuple entry once crashed this same function.
+            entry = APP_REGISTRY[key]
+            if len(entry) >= 3:
+                return entry
+            domain, app_id = entry
+            prior_build_id = prior_build_by_app_id.get(app_id)
+            return (domain, app_id, prior_build_id) if prior_build_id else (domain, app_id)
+
         if filtered_keys:
             print(f"Resolving install codes for: {', '.join(sorted(filtered_keys))} ...")
             env_variables.update(hq_client_module.resolve_app_codes(
-                {k: APP_REGISTRY[k] for k in filtered_keys},
+                {k: _registry_entry(k) for k in filtered_keys},
                 max_commcare_version=apk_commcare_version,
             ))
         if unfiltered_keys:
             print(f"Resolving install codes (unfiltered) for: {', '.join(sorted(unfiltered_keys))} ...")
             env_variables.update(hq_client_module.resolve_app_codes(
-                {k: APP_REGISTRY[k] for k in unfiltered_keys},
+                {k: _registry_entry(k) for k in unfiltered_keys},
             ))
 
         # See DEFAULT_WALL_CLOCK_BUDGET_SECONDS's own comment - computed once
