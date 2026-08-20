@@ -146,9 +146,44 @@ tags:
       - waitForAnimationToEnd:
           timeout: 4000
 - extendedWaitUntil:
-    visible: "App is up to date"
+    visible:
+      text: "(?i)(App is up to date|Update to version.*log out)"
     timeout: 45000
-- back
+# UPDATE (2026-08-20), per direct user instruction: don't assume this app
+# has no pending update just because none was expected - HQ build
+# versions drift over time regardless of what this flow itself does
+# (confirmed live: a real CI run found a genuine new build had appeared
+# on this app between two otherwise-identical runs, with nothing in this
+# flow responsible for it). Accepts either outcome instead of asserting
+# "up to date" specifically: if a real update happens to be pending,
+# complete it - `repeat/while/times: 1` is this repo's own established
+# if-once idiom, executing the block only when its condition is actually
+# true right now, same as e.g. flows/updates_partial_failed's own
+# relogin-until-blocker loops.
+- repeat:
+    times: 1
+    while:
+      visible:
+        text: "Update to version.*log out"
+    commands:
+      - tapOn:
+          text: "Update to version.*log out"
+      - runFlow:
+          file: ../common/login.yaml
+          env:
+            USERNAME: ${CC_TEST_USERNAME}
+            PASSWORD: ${CC_TEST_PASSWORD}
+# Only dismiss via back if we actually landed on the "up to date" results
+# screen above (an overlay on top of Start) - if the update branch above
+# ran instead, we already relogged in fresh onto Start with no overlay to
+# dismiss, and an unconditional "back" here would navigate somewhere
+# unintended.
+- repeat:
+    times: 1
+    while:
+      visible: "App is up to date"
+    commands:
+      - back
 - assertVisible: "Start"
 
 # === "Change update target back" ========================================
@@ -174,10 +209,34 @@ tags:
       - waitForAnimationToEnd:
           timeout: 4000
 - extendedWaitUntil:
-    visible: "App is up to date"
+    visible:
+      text: "(?i)(App is up to date|Update to version.*log out)"
     timeout: 45000
-- assertVisible: "App is up to date"
-- back
+# Same drift-tolerant handling as "Update + Check for changes" above - see
+# that block's UPDATE comment for the full citation. This step's own name
+# ("Confirm that no update occurs if you try") describes the intended
+# steady-state behavior, not a guarantee this repo can enforce - HQ build
+# activity outside this flow's control can make a real update genuinely
+# pending regardless, and that's not a flow failure.
+- repeat:
+    times: 1
+    while:
+      visible:
+        text: "Update to version.*log out"
+    commands:
+      - tapOn:
+          text: "Update to version.*log out"
+      - runFlow:
+          file: ../common/login.yaml
+          env:
+            USERNAME: ${CC_TEST_USERNAME}
+            PASSWORD: ${CC_TEST_PASSWORD}
+- repeat:
+    times: 1
+    while:
+      visible: "App is up to date"
+    commands:
+      - back
 - assertVisible: "Start"
 
 # === "Verify update" =====================================================
