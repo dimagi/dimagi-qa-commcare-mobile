@@ -87,14 +87,18 @@ tags:
 - assertVisible: "Start"
 - runFlow: ../common/check_app_version_via_about.yaml
 
-# --- Update 11: Form One verification. ---
+# --- Update 11: Form One (on-screen: "Form A") verification. ---
+# UPDATE (2026-08-21), confirmed live via a real failure screenshot: the
+# sheet's prose ("Navigate through Form One/Two") doesn't match the
+# on-screen labels - they're actually "Form A"/"Form B", matching the
+# notes column's own "Version 1 has Forms A and B" wording literally.
 - runFlow:
     file: ../common/navigate_form_no_errors.yaml
     env:
-      FORM_NAME: "Form One"
+      FORM_NAME: "Form A"
 
-# --- Update 12: Form Two verification. ---
+# --- Update 12: Form Two (on-screen: "Form B") verification. ---
 - runFlow:
     file: ../common/navigate_form_no_errors.yaml
     env:
-      FORM_NAME: "Form Two"
+      FORM_NAME: "Form B"
