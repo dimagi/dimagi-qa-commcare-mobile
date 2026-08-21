@@ -93,7 +93,24 @@ def _install_app_by_code_once(driver, app_code):
     Appium session already starts from a pristine install (BrowserStack
     provisions a clean device per session), unlike a Maestro flow that might
     run in a reused session."""
-    driver.activate_app(APP_ID)
+    # UPDATE (2026-08-21), confirmed live in CI (first-ever run of this
+    # step - a separate workflow gating bug had silently skipped it in
+    # every prior CI run): failed outright with "Unknown mobile command
+    # 'activateApp'. Only shell,execEmuConsoleCommand,dragGesture,..." -
+    # the specific BrowserStack device/Appium-driver instance this session
+    # landed on doesn't support the "mobile: activateApp" extension this
+    # client method sends, unlike every local run today (same script,
+    # same code) which landed on a driver that did. This call is provably
+    # redundant here anyway - appium_browserstack_client.py's start_session
+    # already sets `options.app = app_url`, which auto-installs AND
+    # auto-launches the app at session start, before this function ever
+    # runs. Best-effort only; swallow this one specific incompatibility
+    # rather than fail a session that's already on the right screen.
+    try:
+        driver.activate_app(APP_ID)
+    except Exception as e:
+        if "activateApp" not in str(e):
+            raise
     h.tap_by_text(driver, "OK", optional=True, timeout=3)  # Android 16 onboarding overlay
     h.tap_by_id(driver, f"{APP_ID}:id/enter_app_location")
     # UPDATE (2026-08-19), confirmed live via a saved failure hierarchy dump
@@ -113,7 +130,22 @@ def _install_app_by_code_once(driver, app_code):
     # flows/common/login.yaml already established for exactly this
     # uncertainty (see that file's own citation) - retry a few times rather
     # than trust one blind attempt.
+    # UPDATE (2026-08-21), confirmed live: a real failure screenshot showed
+    # this field reading "4o8Q2K4o8Q2KL4o8Q2KL" - the code typed 3 times in
+    # a row, overlapping - because this retry loop never cleared the field
+    # between attempts, same "APPENDING rather than replacing" class of bug
+    # clear_by_id's own docstring already documents for the password field
+    # elsewhere in this file. Can't reuse clear_by_id itself here (its
+    # find_elements(by id) gate would defeat the whole point of using
+    # type_into_focused over an id-targeted approach in the first place -
+    # see that function's own docstring on this field's near-empty
+    # accessibility tree), so send the same backward+forward delete
+    # keycodes directly, blind, before each retype instead.
     for attempt in range(3):
+        for _ in range(40):
+            driver.press_keycode(67)  # KEYCODE_DEL (backward)
+        for _ in range(40):
+            driver.press_keycode(112)  # KEYCODE_FORWARD_DEL (forward)
         h.type_into_focused(driver, app_code)
         if h.is_text_visible(driver, app_code):
             break
@@ -230,7 +262,13 @@ def _login(driver, username, password):
     _type_into_id_verified(driver, f"{APP_ID}:id/edit_password", password)
     h.hide_keyboard(driver)
     h.tap_by_id(driver, f"{APP_ID}:id/login_button")
-    for error_text in ("Bad Server Response", "Server Error"):
+    # UPDATE (2026-08-21), confirmed live: "Couldn't Reach Server" is the
+    # 3rd real login-error text flows/common/login.yaml's own Maestro
+    # version retries on (a device-side connectivity failure rather than a
+    # server-side error response, but still on this same login screen with
+    # login_button still tappable) - added here for parity, this Python
+    # port had only ever checked the other two.
+    for error_text in ("Bad Server Response", "Server Error", "Couldn't Reach Server"):
         for _ in range(5):
             if not h.is_text_visible(driver, error_text):
                 break
@@ -249,6 +287,22 @@ def _login(driver, username, password):
     # DIFFERENT one is about to, so whatever runs right after _login()
     # returns can still get blocked. See _wait_out_progress_dialogs.
     _wait_out_progress_dialogs(driver)
+    # UPDATE (2026-08-21), confirmed live (run_appium_prompted_updates_suite.py
+    # scenario_1, failure evidence reports/appium_failures/scenario_1_*.png):
+    # same timing gap already fixed in flows/common/login.yaml's Maestro
+    # version - the error-text retry loop above checks TOO EARLY, right
+    # after tapping login_button, and _wait_out_progress_dialogs falls
+    # through immediately if no progress dialog ever appeared either. The
+    # real "Bad Server Response" response can arrive late enough that both
+    # checks above pass clean before it renders. Re-check here, late, and
+    # retry the whole login-tap-and-wait sequence if it showed up after all.
+    for error_text in ("Bad Server Response", "Server Error", "Couldn't Reach Server"):
+        for _ in range(5):
+            if not h.is_text_visible(driver, error_text):
+                break
+            time.sleep(3)
+            h.tap_by_id(driver, f"{APP_ID}:id/login_button")
+            _wait_out_progress_dialogs(driver)
 
 
 _PROGRESS_DIALOG_TEXTS = ("Logging in", "Communicating with Server", "Requesting Data")
@@ -426,7 +480,20 @@ def _open_update_app_menu(driver):
     _wait_out_progress_dialogs(driver)
     h.tap_by_text(driver, "More options")
     h.tap_by_text(driver, "Update App")
-    h.wait_visible_text(driver, "New version of the application is available", timeout=8, optional=True)
+    # UPDATE (2026-08-21), confirmed live (run_appium_prompted_updates_suite.py
+    # scenario_1, failure evidence reports/appium_failures/scenario_1_*.png):
+    # a mark_build_status call fired mere seconds earlier can still leave
+    # this screen reading "App is up to date" - the same real HQ
+    # server-propagation delay already documented for scenario_2's forced-
+    # blocker relogin retry (_login_and_wait_for_forced_blocker), just hit
+    # here too since this screen's own "Recheck" button re-queries HQ
+    # without needing a fresh login. Retry it in place a few times rather
+    # than declaring "no update" after a single immediate check.
+    for _ in range(5):
+        if h.wait_visible_text(driver, "New version of the application is available", timeout=8, optional=True):
+            break
+        if not h.tap_by_text(driver, "Recheck", optional=True, timeout=3):
+            break
     # UPDATE (2026-08-20), confirmed live: this button's rendered `text`
     # attribute is "UPDATE TO THE LATEST APP VERSION" (all-caps, an Android
     # textAllCaps style) - a case-sensitive literal match against the

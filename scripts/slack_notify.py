@@ -180,6 +180,16 @@ def build_message(counts, failed_results, report_artifact_url, run_url):
         (f"*Pass rate:* {counts['pass_rate']:.1f}% ({counts['passed'] + counts['rerun']}/{counts['total']})   "
          f"*Total:* {counts['total']}   *Passed:* {counts['passed']}   *Failed:* {counts['failed']}   "
          f"*Skipped:* {counts['skipped']}   *Rerun:* {counts['rerun']}"),
+        # UPDATE (2026-08-21), per direct user question on why Pass rate's
+        # own numerator (104) didn't match the *Passed* count shown right
+        # next to it (101): *Passed* only counts tests that passed on their
+        # first attempt; *Rerun* counts tests that failed once but passed on
+        # a --retry-failed retry (report_generator.py's own "rerun" status -
+        # a real pass, just flagged as flaky rather than folded silently
+        # into *Passed*). Pass rate's numerator is therefore Passed+Rerun,
+        # not Passed alone - spelling that out here since the two numbers
+        # sitting side by side without it reads as a bug/mismatch.
+        "_(Pass rate counts Rerun as a pass: Total Pass = Passed + Rerun)_",
     ]
 
     if failed_results:

@@ -217,3 +217,32 @@ appId: org.commcare.dalvik
     notVisible:
       id: "org.commcare.dalvik:id/dialog_cancel_button"
     timeout: 120000
+# UPDATE (2026-08-21), confirmed live in CI (run 32475178875, group-a,
+# multimedia/lazy_video_05_no_references_media_not_found.yaml, build
+# 368045de2cd1b2eaedaf63dae8500a3a5df58a78): the "Bad Server Response"
+# retry loop above checked TOO EARLY - at that check, the error hadn't
+# rendered yet (the loop reported SKIPPED, i.e. not visible), and the
+# dialog_cancel_button wait above also fell through immediately since no
+# sync dialog had appeared either. The real key-exchange response arrived
+# late enough that "Bad Server Response" only showed up ~17s AFTER this
+# subflow had already reported COMPLETED - confirmed via the caller's own
+# failure screenshot at that later point, still sitting on LoginActivity
+# with "Bad Server Response" now visible. Same transient server-hiccup
+# class already documented above, just arriving after this subflow's own
+# checks had already passed - so re-check for all three known error texts
+# one more time here, late, and retry the login tap if any of them showed
+# up after all.
+- repeat:
+    times: 5
+    while:
+      visible:
+        text: "(?i)Bad Server Response|Server Error|Couldn.t Reach Server"
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - tapOn:
+          id: "org.commcare.dalvik:id/login_button"
+      - extendedWaitUntil:
+          notVisible:
+            id: "org.commcare.dalvik:id/dialog_cancel_button"
+          timeout: 120000
