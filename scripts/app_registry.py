@@ -91,6 +91,29 @@ APP_REGISTRY = {
     # migration error as MOBILE_UPDATES_1_2's old v26/v79 candidates above -
     # confirmed live, not assumed.
     "MOBILE2_47": ("qateam", "4fc92eeed6032a7c650a10f6627f6cea", "3d85d0fd6a7a48c5abbd0c0c0f013ad2", False),
+    # UPDATE (2026-08-21), per direct user correction: scenario_4/5's linked
+    # app ("Mobile Updates Test 4/5 Master"'s linked app) lives under the
+    # "let-sdoit" domain, NOT qateam - confirmed live via HQClient.
+    # list_releases against the real app link the user supplied
+    # (https://www.commcarehq.org/a/let-sdoit/apps/view/07f49277d22d6c77ecc2df0489a80aae/).
+    # An earlier lookup under qateam found a DIFFERENT, wrong app that
+    # happened to share a similar name - explicitly superseded by this one.
+    # Both scenario_4's Installation 2 and scenario_5's Installation 1 want
+    # "Version V2" installed first, then updated to "Version V6" - pinned
+    # to v19 ("Version V2 - Form A & B", CC 2.45.2, already released=True)
+    # with release_first=False since it's already released. v23 ("Version
+    # V6 - Age question added in Form A", CC 2.45.2) is ALREADY the
+    # current top-released build for this app (nothing above it is
+    # released, unlike the wrong qateam app's v93 which is a real,
+    # actively-maintained build) - so no further HQ action is needed for
+    # the "Update App" step in either scenario; it naturally finds v23.
+    # Switches both scenarios away from the "See Apps for My User" mobile-
+    # worker install (which was fetching whatever's CURRENTLY the top
+    # release directly, skipping "Version V2" entirely, and - for
+    # scenario_5 specifically - was also logging into the WRONG domain via
+    # the shared HQ_MOBILE_WORKER_USERNAME/HQ_DOMAIN qateam vars) to a
+    # pinned app-code install instead, matching every other fix today.
+    "LINKED_APP_TEST45": ("let-sdoit", "07f49277d22d6c77ecc2df0489a80aae", "e3ce9341eb014e878fae1977c9903818", False),
     "UPDATE_TEST_ALTERNATE": ("qateam", "7e8e7e8857f7466495888a37952e7ad0"),
     "RATE_LIMITED": ("rate-limited", "35589b21ffde2cd1e7be968088acd620"),
     "PERFORMANCE_TESTING": ("qateam", "4a1189cb56c44277906e9fc058838ebc"),

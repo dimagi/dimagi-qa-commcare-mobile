@@ -27,8 +27,11 @@ tags:
     env:
       USERNAME: ${CC_TEST_USERNAME}
       PASSWORD: ${CC_TEST_PASSWORD}
+# UPDATE (2026-08-21), confirmed live via a real failure (same fix as
+# varying_prompt_01_update_frequency.yaml - see that file's own citation):
+# update_app_via_menu.yaml's own final action ("Update to version X & log
+# out") already logs the device out. No separate logout.yaml call needed.
 - runFlow: ../common/update_app_via_menu.yaml
-- runFlow: ../common/logout.yaml
 - runFlow:
     file: ../common/login.yaml
     env:

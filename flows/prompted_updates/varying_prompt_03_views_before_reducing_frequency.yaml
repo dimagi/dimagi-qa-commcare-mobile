@@ -18,10 +18,25 @@ tags:
 # DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
 # null. Only needed once, before the first login below - the later
 # re-logins in this same flow reuse the app that's still installed.
+# UPDATE (2026-08-21), confirmed live via a real failure + the sheet's own
+# wording: step 2 says "Log in... AND LOGOUT", THEN step 3 says "Log back
+# in and confirm..." - the prompt isn't reliably ready on the very first
+# login right after a fresh install (same server-propagation-delay
+# behavior already confirmed for prompted_updates scenario_1/2's own
+# retry logic), so the sheet's own design treats that first login as a
+# throwaway warmup BEFORE the 3 real dismissed-prompt cycles below, not
+# as the first of them. This flow's `repeat` loop was asserting on that
+# very first login directly, skipping the warmup entirely.
 - runFlow:
     file: ../common/install_app_by_code.yaml
     env:
       APP_CODE: ${APP_CODE_CASE_MGMT_VP}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST2_USERNAME}
+      PASSWORD: ${CC_TEST2_PASSWORD}
+- runFlow: ../common/logout.yaml
 - repeat:
     times: 3
     commands:

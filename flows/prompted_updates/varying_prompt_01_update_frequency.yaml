@@ -31,8 +31,14 @@ tags:
     env:
       USERNAME: ${CC_TEST_USERNAME}
       PASSWORD: ${CC_TEST_PASSWORD}
+# UPDATE (2026-08-21), confirmed live via a real failure (a redundant
+# logout after this point tried to find "Log out of CommCare" on the
+# LOGIN screen, not home, and predictably couldn't): update_app_via_menu.
+# yaml's own final action ("Update to version X & log out") already logs
+# the device out - same citation as scenario_2_manual_update_after_
+# interrupted_download.yaml's own header note on this exact behavior.
+# No separate logout.yaml call needed here.
 - runFlow: ../common/update_app_via_menu.yaml
-- runFlow: ../common/logout.yaml
 - runFlow:
     file: ../common/login.yaml
     env:

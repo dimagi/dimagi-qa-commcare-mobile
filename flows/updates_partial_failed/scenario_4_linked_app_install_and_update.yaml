@@ -23,14 +23,12 @@ tags:
 #   edit_password/get_apps_button/apps_list_view/install_app_button).
 #   PARTIAL: needs valid HQ mobile-worker credentials, same as
 #   install_07/install_08.
-# - Update 13 (Partial - HQ mark-released dependency): "On HQ, ensure Version
-#   V6 is marked Released on the linked app's release page" - an HQ API
-#   pre-step this repo does not script (see
-#   hq_setup/recovery_measures/reinstall_update_app_flow.json for the JSON
-#   shape a "mark_build_status" action would take; not authored as its own
-#   hq_setup/*.json here since building that JSON was explicitly out of
-#   scope for this task). Once that's done externally, the on-device part is
-#   the same "Update App" menu action reused elsewhere in this workflow.
+# - Update 13: "On HQ, ensure Version V6 is marked Released on the linked
+#   app's release page" - already satisfied for free (see the
+#   LINKED_APP_TEST45 citation above): "Version V6" is ALREADY the current
+#   top-released build for this app, confirmed live via HQClient.
+#   list_releases, so the on-device "Update App" menu action below finds
+#   it naturally with no extra HQ step needed.
 # - Update 14: Form A verification (contains Registration Date + Age
 #   questions).
 # - Update 15: Form B verification (contains a photo-upload question).
@@ -40,83 +38,27 @@ tags:
 # see flows/common/verify_form_a_questions.yaml and
 # flows/common/verify_form_b_photo_question.yaml for the specific caveats on
 # "Form A"/"Form B" naming and question order/wording.
-- launchApp:
-    clearState: true
-- tapOn: "More options"
-- assertVisible: "See Apps for My User"
-
-# --- Installation 2: install the linked app (V2) as a mobile worker. ---
-# UPDATE (2026-08-20), per direct user correction (confirmed via a
-# screenshot of this exact login screen): "Mobile2.47_test4_5_linked_app"
-# lives under a DIFFERENT HQ domain ("let-sdoit") than this repo's usual
-# HQ_MOBILE_WORKER_USERNAME/HQ_DOMAIN (qateam's "mobile_maestro") - that's
-# also why scrollUntilVisible below could never have found it: it's not
-# in the qateam app list at all, no matter how far scrolled. Hardcoded to
-# this scenario's own real credentials rather than the shared env vars.
-- tapOn: "See Apps for My User"
-- tapOn:
-    id: "org.commcare.dalvik:id/edit_username"
-- inputText: "test1"
-- tapOn:
-    id: "org.commcare.dalvik:id/edit_domain"
-- inputText: "let-sdoit"
-- tapOn:
-    id: "org.commcare.dalvik:id/edit_password"
-- inputText: "123"
-- hideKeyboard
-- tapOn:
-    id: "org.commcare.dalvik:id/get_apps_button"
-- extendedWaitUntil:
-    visible:
-      id: "org.commcare.dalvik:id/apps_list_view"
-    timeout: 60000
-# UPDATE (2026-08-20, 2nd correction), confirmed live via a real CI
-# failure + a user-supplied screen recording: tapping the bare
-# apps_list_view id (this flow's original approach, and NOT what
-# flows/common/install_app_as_web_user.yaml's own already-correct pattern
-# does) taps whatever row happens to be at the container's default point,
-# not the intended app - the failure screenshot showed the flow had
-# landed on a completely unrelated app ("[KD Copy Master] Basic Tests1").
-# apps_list_view is a SCROLLABLE, alphabetically-sorted list (per
-# InstallFromListActivity.java, same citation as that file's own FOURTH
-# CAVEAT). Selects by name with scrollUntilVisible instead of the bare
-# list tap, same proven pattern as that file.
-# UPDATE (2026-08-20, 3rd correction), per direct user correction: the
-# real on-screen app name is "Mobile2.47_test4_5_linked_app" in full (this
-# repo's own install_app_as_web_user.yaml SEVENTH CAVEAT comment only
-# quoted a truncated "Mobile2.47_test4_5" as an alphabetical landmark, not
-# a complete/exact name) - matches the login-domain correction above (both
-# came from the same user-supplied evidence for this exact app).
-- scrollUntilVisible:
-    element:
-      text: "Mobile2.47_test4_5_linked_app"
-    direction: DOWN
-    timeout: 60000
-- tapOn: "Mobile2.47_test4_5_linked_app"
-# UPDATE (2026-08-20), confirmed live via a real CI failure (group-b,
-# "Tap on id: install_app_button FAILED"): this is the exact same
-# false-negative flows/install/install_07_install_as_mobile_user.yaml's
-# own extensive history already diagnosed and fixed on this identical
-# apps_list_view -> install_app_button sequence - the heavy native
-# "Setting Up App" dialog that follows can take over the screen before
-# Maestro's own hierarchy-change check resolves, so it self-reports the
-# tap as FAILED even though the install genuinely proceeds. Ported that
-# file's own proven fix (optional tap, no retry-on-no-change, then wait
-# on "Setting Up App" and the real success gate - a fresh login screen -
-# instead of trusting the tap's own reported status) rather than
-# reinventing it.
-- tapOn:
-    id: "org.commcare.dalvik:id/install_app_button"
-    retryTapIfNoChange: false
-    optional: true
-- extendedWaitUntil:
-    visible: "Setting Up App"
-    timeout: 60000
-    optional: true
-- extendedWaitUntil:
-    visible:
-      id: "org.commcare.dalvik:id/edit_username"
-    timeout: 120000
+# --- Installation 2: install the linked app pinned to "Version V2". ---
+# UPDATE (2026-08-21), per direct user correction with the real app link
+# (https://www.commcarehq.org/a/let-sdoit/apps/view/07f49277d22d6c77ecc2df0489a80aae/) -
+# supersedes every UPDATE below this one, which was chasing a DIFFERENT,
+# wrong app that happened to share a similar name under the qateam domain.
+# The mobile-worker "See Apps for My User" discovery flow always installs
+# whatever's the app's CURRENT top release, not "Version V2" specifically
+# (confirmed live: this app's actual current top release is "Version V6",
+# so that path would install V6 directly and skip the update-verification
+# steps below entirely) - and for scenario_5's copy of this same flow, was
+# also logging into the WRONG domain via the shared
+# HQ_MOBILE_WORKER_USERNAME/HQ_DOMAIN (qateam) vars, since this app is
+# under "let-sdoit". Switched to installing by app-code, pinned to
+# "Version V2" (see scripts/app_registry.py's LINKED_APP_TEST45 entry for
+# the full citation) - bootstraps a fresh CommCare install AND lands on
+# the right version in one step, same pattern as every other scenario
+# fixed today.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_LINKED_APP_TEST45}
 
 - runFlow:
     file: ../common/login.yaml
@@ -125,8 +67,7 @@ tags:
       PASSWORD: ${CC_TEST_PASSWORD}
 - assertVisible: "Start"
 
-# === HQ pre-step runs here in a real execution: mark linked-app V6 Released ===
-# --- Update 13 (Partial - HQ mark-released dependency, see header). ---
+# --- Update 13: update to "Version V6" (already released, see header). ---
 - runFlow: ../common/update_app_via_menu.yaml
 - runFlow:
     file: ../common/login.yaml

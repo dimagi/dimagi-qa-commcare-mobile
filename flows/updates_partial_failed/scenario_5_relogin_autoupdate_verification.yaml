@@ -29,47 +29,35 @@ tags:
 #     verification-only coverage below.
 #
 # This flow covers the remaining "Automatable" steps that follow those:
-#   - Installation 1: install linked app V2 (Version 18) as a mobile worker -
-#     reuses flows/install/install_07_install_as_mobile_user.yaml's verified
-#     selectors (InstallFromListTest.kt). PARTIAL: needs valid HQ
-#     mobile-worker credentials, same as install_07/install_08.
+#   - Installation 1: install the linked app pinned to "Version V2".
 #   - Update 17: re-login.
-#   - "Update verification": confirm the app auto-updated to V6 (Version 22)
-#     - this depends on Update 16's HQ mark-released step having happened
-#       upstream (out of scope here, per above).
+#   - "Update verification": confirm the app auto-updated to "Version V6".
 #   - Update 18: Form A verification (Registration Date + Age questions).
 #   - Update 19: Form B verification (photo-upload question).
+#
+# UPDATE (2026-08-21), per direct user correction with the real app link
+# (https://www.commcarehq.org/a/let-sdoit/apps/view/07f49277d22d6c77ecc2df0489a80aae/):
+# this flow's own HQ_MOBILE_WORKER_USERNAME/HQ_DOMAIN vars point at qateam,
+# but this app lives under "let-sdoit" - the SAME domain mismatch already
+# found and fixed for scenario_4's own copy of this install step, never
+# applied here until now. Also, "See Apps for My User" always installs
+# whatever's the app's CURRENT top release (confirmed live: that's already
+# "Version V6"), not "Version V2" specifically, which would skip the
+# update-verification steps below entirely. Switched to installing by
+# app-code, pinned to "Version V2" (see scripts/app_registry.py's
+# LINKED_APP_TEST45 entry for the full citation, including why no extra HQ
+# step is needed for "Version V6" - it's already the current top release)
+# - bootstraps a fresh CommCare install AND lands on the right version in
+# one step, same pattern as every other scenario fixed today.
 #
 # GENERIC/BEST-EFFORT: see flows/common/verify_form_a_questions.yaml and
 # flows/common/verify_form_b_photo_question.yaml for the caveats on
 # "Form A"/"Form B" naming and question order/wording in this pre-provisioned
 # QA app.
-- launchApp:
-    clearState: true
-- tapOn: "More options"
-- tapOn: "See Apps for My User"
-- tapOn:
-    id: "org.commcare.dalvik:id/edit_username"
-- inputText: "${HQ_MOBILE_WORKER_USERNAME}"
-- tapOn:
-    id: "org.commcare.dalvik:id/edit_domain"
-- inputText: "${HQ_DOMAIN}"
-- tapOn:
-    id: "org.commcare.dalvik:id/edit_password"
-- inputText: "${HQ_MOBILE_WORKER_PASSWORD}"
-- hideKeyboard
-- tapOn:
-    id: "org.commcare.dalvik:id/get_apps_button"
-- assertVisible:
-    id: "org.commcare.dalvik:id/apps_list_view"
-- tapOn:
-    id: "org.commcare.dalvik:id/apps_list_view"
-- tapOn:
-    id: "org.commcare.dalvik:id/install_app_button"
-- extendedWaitUntil:
-    visible:
-      id: "org.commcare.dalvik:id/edit_username"
-    timeout: 30000
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_LINKED_APP_TEST45}
 
 # --- Update 17: re-login. ---
 - runFlow:
@@ -79,7 +67,24 @@ tags:
       PASSWORD: ${CC_TEST_PASSWORD}
 - assertVisible: "Start"
 
-# --- "Update verification": confirm auto-update to V6 (Version 22) completed. ---
+# --- "Update verification": update to V6 and confirm it completed. ---
+# UPDATE (2026-08-21), confirmed live via a real failure (Form A's "Age"
+# question missing - it's only "ADDED in Form A" as of "Version V6" per
+# that build's own comment, see scripts/app_registry.py's
+# LINKED_APP_TEST45 citation): this step never actually triggered an
+# update at all, relying on Update 16's staged-CCZ auto-apply, which only
+# the Appium-orchestrated path (scripts/appium_scenarios.py's
+# run_scenario_5) genuinely stages - the device was staying on "Version
+# V2" (the pinned install) forever. Same "Update App" menu proxy every
+# other Maestro-only scenario uses instead of the out-of-scope
+# interrupted-staging precondition.
+- runFlow: ../common/update_app_via_menu.yaml
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- assertVisible: "Start"
 # UPDATE (2026-08-19), per direct user instruction: dropped EXPECTED_VERSION
 # - see check_app_version_via_about.yaml's own UPDATE comment for the full
 # citation (HQ build version drift, not a real regression signal).

@@ -19,10 +19,22 @@ tags:
 # DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
 # null. Only needed once, before the first login below - the later
 # re-logins in this same flow reuse the app that's still installed.
+# UPDATE (2026-08-21), same fix as varying_prompt_03_views_before_
+# reducing_frequency.yaml's own citation (this file replays that same
+# 3-cycle pattern independently, per its own header): the sheet's own
+# wording treats the very first login right after a fresh install as a
+# throwaway warmup (the prompt isn't reliably ready that fast) before the
+# 3 real dismissed-prompt cycles below, not as the first of them.
 - runFlow:
     file: ../common/install_app_by_code.yaml
     env:
       APP_CODE: ${APP_CODE_CASE_MGMT_VP}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST2_USERNAME}
+      PASSWORD: ${CC_TEST2_PASSWORD}
+- runFlow: ../common/logout.yaml
 - repeat:
     times: 3
     commands:
