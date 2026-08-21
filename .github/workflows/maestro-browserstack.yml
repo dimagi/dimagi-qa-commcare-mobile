@@ -211,7 +211,18 @@ jobs:
       # results-merge logic (see its own module docstring) has something to
       # merge into rather than overwrite.
       - name: Run Appium suite on BrowserStack (updates_partial_failed mid-session updates)
-        if: contains(matrix.tags, 'updates_partial_failed')
+        # always() - confirmed live 2026-08-21: this step's own `if:` was
+        # implicitly ANDed with success() on the prior "Run Maestro suite"
+        # step (GitHub Actions' default when no status-check function is
+        # given), so whenever that Maestro step failed for ANY reason - even
+        # a totally unrelated flow elsewhere in the same tag list - this
+        # step (and the prompted_updates one below) got silently skipped
+        # instead of running. Confirmed via this exact CI run's job steps
+        # showing both Appium steps as "skipped" after the Maestro step
+        # failed. This coverage is additive/independent (a separate
+        # BrowserStack session via a different script), so it should run
+        # regardless of the Maestro step's outcome.
+        if: always() && contains(matrix.tags, 'updates_partial_failed')
         env:
           BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
           BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
@@ -260,7 +271,13 @@ jobs:
       # pattern as the updates_partial_failed Appium step above (per the
       # same direct user question that led to that one).
       - name: Run Appium suite on BrowserStack (prompted_updates mid-flow HQ actions)
-        if: contains(matrix.tags, 'prompted_updates')
+        # always() - same fix/citation as the updates_partial_failed Appium
+        # step above: this is the step that gives scenario_01/02 real
+        # coverage (the plain Maestro versions structurally can't pass -
+        # see those flows' own headers), so it must not be skipped just
+        # because the Maestro step failed - confirmed live this exact CI
+        # run skipped it for that reason.
+        if: always() && contains(matrix.tags, 'prompted_updates')
         env:
           BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
           BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
