@@ -5,17 +5,17 @@ can't do them:
 - updates_partial_failed's scenario_1, scenario_2, scenario_5: need a
   mid-session CommCare BINARY swap (see scripts/run_appium_suite.py's own
   module docstring for the full citation/rationale).
-- prompted_updates' scenario_1 (optional CCZ update) and scenario_2 (forced
-  CCZ update): need an HQ-side action (mark_build_status/
+- prompted_updates' scenario_01_optional_ccz_update and
+  scenario_02_forced_ccz_update: need an HQ-side action (mark_build_status/
   set_prompt_update_settings) to fire BETWEEN an on-device logout and the
   next login, on the SAME device/app state - a Maestro build runs its whole
-  "execute" list server-side with no external control point mid-build (see
-  hq_setup/prompted_updates/scenario_02_forced.json's own header for where
-  this was first flagged as needing "extend scripts/run_suite.py to pause
-  here"). An Appium session is driven by a persistent Python process
-  instead, so it can freely call HQClient methods directly between UI
-  actions on that same live session - see
-  scripts/run_appium_prompted_updates_suite.py.
+  "execute" list server-side with no external control point mid-build. An
+  Appium session is driven by a persistent Python process instead, so it
+  can freely call HQClient methods directly between UI actions on that same
+  live session - see scripts/run_appium_prompted_updates_suite.py. The
+  plain-Maestro versions of these two scenarios (which could only ever
+  partially work, missing that mid-flow action) were deleted 2026-08-22 -
+  this Appium path is now the only coverage for them, not a supplement.
 
 Each function here ports that scenario's ALREADY-automated Maestro
 verification steps 1:1 (same resource-ids/text, catalogued directly from
@@ -488,11 +488,13 @@ def _open_update_app_menu(driver):
     h.tap_by_text(driver, "More options")
     h.tap_by_text(driver, "Update App")
     # UPDATE (2026-08-21), confirmed live (run_appium_prompted_updates_suite.py
-    # scenario_1, failure evidence reports/appium_failures/scenario_1_*.png):
+    # scenario_01_optional_ccz_update, failure evidence
+    # reports/appium_failures/scenario_01_optional_ccz_update_*.png):
     # a mark_build_status call fired mere seconds earlier can still leave
     # this screen reading "App is up to date" - the same real HQ
-    # server-propagation delay already documented for scenario_2's forced-
-    # blocker relogin retry (_login_and_wait_for_forced_blocker), just hit
+    # server-propagation delay already documented for
+    # scenario_02_forced_ccz_update's forced-blocker relogin retry
+    # (_login_and_wait_for_forced_blocker), just hit
     # here too since this screen's own "Recheck" button re-queries HQ
     # without needing a fresh login. Retry it in place a few times rather
     # than declaring "no update" after a single immediate check.
@@ -615,8 +617,9 @@ def _login_and_wait_for_forced_blocker(driver, username, password, attempts=6, w
     UPDATE (2026-08-22), confirmed live across 4 separate real runs today
     (local and CI) that the original attempts=4/wait_seconds=45 (~3 minutes,
     matching the recording's own estimate) is no longer enough - this exact
-    "never appeared" error recurred consistently, while scenario_1's
-    equivalent optional-prompt wait (same underlying mark_build_status
+    "never appeared" error recurred consistently, while
+    scenario_01_optional_ccz_update's equivalent optional-prompt wait (same
+    underlying mark_build_status
     propagation-delay mechanism) passed reliably in the same window. That
     asymmetry - forced needing noticeably longer than optional despite
     sharing the same mid-flow HQ action - says this is a real, currently
@@ -636,17 +639,31 @@ def _login_and_wait_for_forced_blocker(driver, username, password, attempts=6, w
     )
 
 
-def run_prompted_update_scenario_1(driver, hq_client, app_id, latest_build_id, username, password, app_code):
-    """Prompted Updates Scenario 1: optional CCZ update end-to-end. Port of
-    flows/prompted_updates/scenario_01_optional_ccz_update.yaml, with the
-    genuinely-new part being the mark_build_status call fired directly
+def run_prompted_update_scenario_01_optional_ccz_update(driver, hq_client, app_id, latest_build_id, username, password, app_code):
+    """Prompted Updates Scenario 1: optional CCZ update end-to-end. The
+    genuinely-hard part is the mark_build_status call fired directly
     against HQClient between the flow's own logout and re-login - see this
-    module's own docstring for why Maestro can't do that mid-build.
+    module's own docstring for why Maestro can't do that mid-build (the
+    plain-Maestro version of this scenario was deleted 2026-08-22 for
+    exactly that reason - it could never pass).
     ASSUMES Setup 2/3 (mark latest build In Test + prior Released, Prompt
-    Updates to CommCare/App = On) have already run - same precondition the
-    Maestro flow itself documents, see hq_setup/prompted_updates/
-    setup_02_mark_in_test.json and setup_03_prompts_on.json."""
+    Updates to CommCare/App = On) have already run - see
+    hq_setup/prompted_updates/setup_02_mark_in_test.json and
+    setup_03_prompts_on.json.
+
+    UPDATE (2026-08-22), confirmed live: when this scenario runs AFTER
+    scenario_02_forced_ccz_update in the same invocation (or after any
+    other run that left the latest build Released), Setup 2's own
+    "mark latest In Test" - run ONCE at the very top of the whole script,
+    not per-scenario - is already stale by the time this function starts,
+    so the "mark latest build Released" step below would be a no-op: no
+    real state transition for the device to ever detect, regardless of how
+    long the wait is given. Re-asserts "latest is In Test" here, as this
+    scenario's OWN first action, so it stays correct regardless of what
+    ran before it in the same invocation."""
     steps = [
+        ("HQ: ensure latest build is In Test (not already Released)",
+         lambda: hq_client.mark_build_status(app_id, latest_build_id, is_released=False)),
         ("Install app by code", lambda: _install_app_by_code(driver, app_code)),
         ("Login (before release)", lambda: _login(driver, username, password)),
         ("Assert Start visible", lambda: h.wait_visible_id(driver, f"{APP_ID}:id/home_gridview_buttons", timeout=15)),
@@ -663,17 +680,32 @@ def run_prompted_update_scenario_1(driver, hq_client, app_id, latest_build_id, u
     return _run_steps(steps)
 
 
-def run_prompted_update_scenario_2(driver, hq_client, app_id, latest_build_id, username, password, app_code):
-    """Prompted Updates Scenario 2: forced CCZ update blocker screen. Port
-    of flows/prompted_updates/scenario_02_forced_ccz_update.yaml. Same
-    mid-session-HQ-action mechanism as scenario_1 above. ASSUMES Setup 2
+def run_prompted_update_scenario_02_forced_ccz_update(driver, hq_client, app_id, latest_build_id, username, password, app_code):
+    """Prompted Updates Scenario 2: forced CCZ update blocker screen. Same
+    mid-session-HQ-action mechanism as scenario_01_optional_ccz_update
+    above. ASSUMES Setup 2
     (mark latest build In Test + prior Released) AND the forced
     set_prompt_update_settings call have already run - both belong BEFORE
     this scenario's first login, i.e. before the Appium session even
     starts, so the caller (scripts/run_appium_prompted_updates_suite.py)
-    runs them, not this function - see hq_setup/prompted_updates/
-    setup_02_mark_in_test.json and scenario_02_forced.json."""
+    runs them, not this function - see
+    hq_setup/prompted_updates/setup_02_mark_in_test.json for the first;
+    the forced set_prompt_update_settings call itself is issued directly by
+    the caller (no separate hq_setup JSON file for it anymore).
+
+    UPDATE (2026-08-22), confirmed live via real isolation testing: this
+    scenario failed consistently (at 180s, then even at 360s after widening
+    the wait) when run right after scenario_01_optional_ccz_update in the
+    same invocation, but passed cleanly every time when run alone. Root
+    cause wasn't propagation delay at all - scenario_01 leaves the latest
+    build marked Released as its own natural end-state, so THIS scenario's
+    own "mark latest build Released" step below became a no-op with no
+    real transition left to detect, no matter how long the wait. Same fix
+    as scenario_01_optional_ccz_update's own UPDATE above: re-assert
+    "latest is In Test" as this scenario's first action."""
     steps = [
+        ("HQ: ensure latest build is In Test (not already Released)",
+         lambda: hq_client.mark_build_status(app_id, latest_build_id, is_released=False)),
         ("Install app by code", lambda: _install_app_by_code(driver, app_code)),
         ("Login (before release, expect no blocker)", lambda: _login(driver, username, password)),
         ("Assert Start visible", lambda: h.wait_visible_id(driver, f"{APP_ID}:id/home_gridview_buttons", timeout=15)),

@@ -1,16 +1,27 @@
 """
-Orchestrator for prompted_updates' scenario_1 (optional CCZ update) and
-scenario_2 (forced CCZ update) - the 2 flows whose HQ pre-step
+Orchestrator for prompted_updates' scenario_01_optional_ccz_update and
+scenario_02_forced_ccz_update - the 2 scenarios whose HQ pre-step
 (mark_build_status) genuinely must fire BETWEEN an on-device logout and the
 next login, on the SAME device/app state. A Maestro build runs its whole
-"execute" list server-side with no external control point mid-build (see
-hq_setup/prompted_updates/scenario_02_forced.json's own header, first
-flagged as needing "extend scripts/run_suite.py to pause here" - and
+"execute" list server-side with no external control point mid-build, and
 scripts/run_suite.py's own --hq-setup only ever runs ONCE, before any flow
-starts). An Appium session is driven by a persistent Python process instead,
+starts. An Appium session is driven by a persistent Python process instead,
 so this script freely calls HQClient methods directly between UI actions on
 one live session - see scripts/appium_scenarios.py's
-run_prompted_update_scenario_1/2 for the actual step sequences.
+run_prompted_update_scenario_01_optional_ccz_update/
+run_prompted_update_scenario_02_forced_ccz_update for the actual step
+sequences.
+
+UPDATE (2026-08-22), per direct user instruction: this is now the ONLY
+coverage for these two scenarios - the plain-Maestro versions
+(flows/prompted_updates/scenario_01_optional_ccz_update.yaml,
+scenario_02_forced_ccz_update.yaml) were deleted, since they could never
+pass at all (the exact mid-build limitation described above, not a bug) and
+were showing as permanent, uninformative red failures on every CI run.
+Renamed the scenario identifiers/report names below to match those deleted
+files' own names exactly (dropping the "_appium" suffix that used to
+distinguish this from that now-removed duplicate) - there's only one
+"scenario_01_optional_ccz_update" now, not a Maestro one and an Appium one.
 
 Unlike scripts/run_appium_suite.py, this does NOT need a mid-session CommCare
 BINARY swap - both scenarios test an app-level (CCZ) update on a single,
@@ -23,17 +34,19 @@ _comment for the full citation):
     Setup 2 (both scenarios): mark the CURRENT top build In Test, and the
         next-newest Released - so the device's own fresh install lands on
         that "prior" build, matching what should already be installed.
-    Setup 3 (scenario_1 only): Prompt Updates to CommCare/App = On.
-    scenario_2's own forced set_prompt_update_settings: run here too (it
-        must land before the scenario's first login, i.e. before the
-        session even starts) rather than inside the scenario itself.
+    Setup 3 (scenario_01_optional_ccz_update only): Prompt Updates to
+        CommCare/App = On.
+    scenario_02_forced_ccz_update's own forced set_prompt_update_settings:
+        run here too (it must land before the scenario's first login, i.e.
+        before the session even starts) rather than inside the scenario
+        itself.
 The one action that genuinely can't move here - marking the latest build
 Released - stays inside each scenario function, fired between its own
 logout and re-login.
 
 Usage:
-    python scripts/run_appium_prompted_updates_suite.py --scenario scenario_1
-    python scripts/run_appium_prompted_updates_suite.py --scenario scenario_2 --devices "Samsung Galaxy S26-16.0"
+    python scripts/run_appium_prompted_updates_suite.py --scenario scenario_01_optional_ccz_update
+    python scripts/run_appium_prompted_updates_suite.py --scenario scenario_02_forced_ccz_update --devices "Samsung Galaxy S26-16.0"
 """
 import argparse
 import json
@@ -55,7 +68,7 @@ import appium_scenarios
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 HQ_SETUP_DIR = REPO_ROOT / "hq_setup" / "prompted_updates"
 
-SCENARIOS = ("scenario_1", "scenario_2")
+SCENARIOS = ("scenario_01_optional_ccz_update", "scenario_02_forced_ccz_update")
 
 
 def _split_device(devices_arg):
@@ -136,11 +149,19 @@ def _run_one_scenario(bs, name, app_url, device, os_version, build_name, fn):
     driver = None
     result = None
     start = time.monotonic()
+    # UPDATE (2026-08-22): dropped the "_appium" suffix on the report name -
+    # per direct user instruction, the plain-Maestro duplicates of these two
+    # scenarios were deleted (they could never pass at all), so this is now
+    # the ONLY "prompted_updates/scenario_0N_..." entry, not one of two - no
+    # suffix needed to disambiguate from a Maestro version that no longer
+    # exists. Also dropped the "{name}_appium.py" fake-filename framing in
+    # failed_step (this isn't actually a file per scenario) in favor of
+    # naming the real module.
     try:
         driver = bs.start_session(app_url, device, os_version, build_name=build_name, session_name=name)
         fn(driver)
         result = report_generator.TestResult(
-            name=f"prompted_updates/{name}_appium",
+            name=f"prompted_updates/{name}",
             workflow="prompted_updates",
             status="passed",
             duration_ms=int((time.monotonic() - start) * 1000),
@@ -149,24 +170,24 @@ def _run_one_scenario(bs, name, app_url, device, os_version, build_name, fn):
     except appium_scenarios.ScenarioFailure as exc:
         _save_failure_evidence(driver, name)
         result = report_generator.TestResult(
-            name=f"prompted_updates/{name}_appium",
+            name=f"prompted_updates/{name}",
             workflow="prompted_updates",
             status="failed",
             duration_ms=int((time.monotonic() - start) * 1000),
             device=f"{device}-{os_version}",
             error=str(exc.original),
-            failed_step=f"{name}_appium.py - {exc.step_name}: {exc.original}",
+            failed_step=f"appium_scenarios.py - {exc.step_name}: {exc.original}",
         )
     except Exception as exc:  # noqa: BLE001 - session-level infra failure (upload/session-start/HQ call/etc.)
         _save_failure_evidence(driver, name)
         result = report_generator.TestResult(
-            name=f"prompted_updates/{name}_appium",
+            name=f"prompted_updates/{name}",
             workflow="prompted_updates",
             status="failed",
             duration_ms=int((time.monotonic() - start) * 1000),
             device=f"{device}-{os_version}",
             error=str(exc),
-            failed_step=f"{name}_appium.py - session/infra error: {exc}",
+            failed_step=f"run_appium_prompted_updates_suite.py - session/infra error: {exc}",
         )
     finally:
         if driver is not None:
@@ -214,14 +235,14 @@ def main():
     hq_client.mark_build_status(app_id, latest_build_id, is_released=False)
     hq_client.mark_build_status(app_id, prior_build_id, is_released=True)
 
-    if "scenario_1" in scenarios_to_run:
+    if "scenario_01_optional_ccz_update" in scenarios_to_run:
         # Setup 3 - see hq_setup/prompted_updates/setup_03_prompts_on.json.
         print("HQ Setup 3: Prompt Updates to CommCare/App = On ...")
         hq_client.set_prompt_update_settings(app_id, app_prompt="on", apk_prompt="on")
-    if "scenario_2" in scenarios_to_run:
-        # scenario_02_forced.json's own first action - must land before
-        # scenario_2's first login, i.e. before the session even starts.
-        print("HQ: set forced prompt settings (scenario_2) ...")
+    if "scenario_02_forced_ccz_update" in scenarios_to_run:
+        # Must land before scenario_02_forced_ccz_update's first login, i.e.
+        # before the session even starts.
+        print("HQ: set forced prompt settings (scenario_02_forced_ccz_update) ...")
         hq_client.set_prompt_update_settings(app_id, app_prompt="forced", apk_prompt="on")
 
     # UPDATE (2026-08-20), confirmed live via a real dispatch: calling
@@ -255,9 +276,9 @@ def main():
     cc_password = os.environ["CC_TEST_PASSWORD"]
 
     scenario_fns = {
-        "scenario_1": lambda driver: appium_scenarios.run_prompted_update_scenario_1(
+        "scenario_01_optional_ccz_update": lambda driver: appium_scenarios.run_prompted_update_scenario_01_optional_ccz_update(
             driver, hq_client, app_id, latest_build_id, cc_username, cc_password, app_code),
-        "scenario_2": lambda driver: appium_scenarios.run_prompted_update_scenario_2(
+        "scenario_02_forced_ccz_update": lambda driver: appium_scenarios.run_prompted_update_scenario_02_forced_ccz_update(
             driver, hq_client, app_id, latest_build_id, cc_username, cc_password, app_code),
     }
 

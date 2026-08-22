@@ -262,22 +262,38 @@ jobs:
           fi
           python scripts/run_appium_suite.py "${ARGS[@]}"
 
-      # Runs prompted_updates' scenario_1 (optional CCZ update) and
-      # scenario_2 (forced CCZ update) - the 2 flows whose HQ pre-step
+      # Runs prompted_updates' scenario_01_optional_ccz_update and
+      # scenario_02_forced_ccz_update - the 2 scenarios whose HQ pre-step
       # (mark_build_status) must fire BETWEEN an on-device logout and the
       # next login, which a Maestro build has no way to do mid-execution -
       # see scripts/run_appium_prompted_updates_suite.py's own module
       # docstring for the full citation. Same fold-into-the-matrix-job
       # pattern as the updates_partial_failed Appium step above (per the
       # same direct user question that led to that one).
-      - name: Run Appium suite on BrowserStack (prompted_updates mid-flow HQ actions)
-        # always() - same fix/citation as the updates_partial_failed Appium
-        # step above: this is the step that gives scenario_01/02 real
-        # coverage (the plain Maestro versions structurally can't pass -
-        # see those flows' own headers), so it must not be skipped just
-        # because the Maestro step failed - confirmed live this exact CI
-        # run skipped it for that reason.
-        if: always() && contains(matrix.tags, 'prompted_updates')
+      #
+      # UPDATE (2026-08-22), per direct user instruction: split into TWO
+      # separate steps/builds (was one step running both scenarios via the
+      # script's own "no --scenario given = run all" default) - confirmed
+      # live that running scenario_02 right after scenario_01 in the SAME
+      # invocation left scenario_02's own "mark latest build Released"
+      # mid-flow action as a no-op (scenario_01 already released it as its
+      # end-state), so scenario_02 could never detect a real transition no
+      # matter how long it waited. appium_scenarios.py's own functions now
+      # each re-assert "latest is In Test" as their first action (a real
+      # code fix, not just a workaround), but running them as fully
+      # separate BrowserStack sessions here too is a cheap extra layer of
+      # isolation against this same class of shared-state bug recurring.
+      # UPDATE (2nd correction): per direct user instruction, placed in
+      # DIFFERENT matrix groups (scenario_01 -> group-b, scenario_02 ->
+      # group-c) rather than two steps in the same job - group-c has no
+      # 'prompted_updates' Maestro tag today, so this is gated on
+      # matrix.name directly for a full "All" dispatch (group-a/b/c),
+      # falling back to the tags check for a scoped single-tag dispatch
+      # (matrix.name is "single" there, matching neither group-b nor
+      # group-c) so `--tag prompted_updates` ad-hoc runs still cover both
+      # in that one job, same as before.
+      - name: Run Appium suite on BrowserStack (prompted_updates scenario_01_optional_ccz_update)
+        if: always() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'prompted_updates')))
         env:
           BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
           BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
@@ -302,7 +318,40 @@ jobs:
           if [ -z "$DEVICES" ]; then
             DEVICES="${ANDROID_DEVICE_MAP[$ANDROID_VERSION]}-$ANDROID_VERSION"
           fi
-          ARGS=(--devices "$DEVICES" --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-prompted-updates-appium")
+          ARGS=(--devices "$DEVICES" --scenario scenario_01_optional_ccz_update --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-prompted-updates-scenario-01")
+          APK_SOURCE="${{ github.event.inputs.apk_source || 'GitHub Releases' }}"
+          if [ "$APK_SOURCE" != "GitHub Releases" ]; then
+            ARGS+=(--apk "$APK_SOURCE")
+          elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
+            ARGS+=(--release-tag "${{ github.event.inputs.release_tag }}")
+          fi
+          python scripts/run_appium_prompted_updates_suite.py "${ARGS[@]}"
+
+      - name: Run Appium suite on BrowserStack (prompted_updates scenario_02_forced_ccz_update)
+        if: always() && (matrix.name == 'group-c' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'prompted_updates')))
+        env:
+          BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
+          BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
+          CC_TEST_USERNAME: ${{ secrets.CC_TEST_USERNAME }}
+          CC_TEST_PASSWORD: ${{ secrets.CC_TEST_PASSWORD }}
+          HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
+          HQ_WEB_USER_PASSWORD: ${{ secrets.HQ_WEB_USER_PASSWORD }}
+        run: |
+          declare -A ANDROID_DEVICE_MAP=(
+            ["16.0"]="Samsung Galaxy S26"
+            ["15.0"]="Samsung Galaxy S25"
+            ["14.0"]="Samsung Galaxy S24"
+            ["13.0"]="Samsung Galaxy S23"
+            ["12.0"]="Samsung Galaxy S22"
+            ["11.0"]="Samsung Galaxy S21"
+            ["10.0"]="Samsung Galaxy S20"
+          )
+          ANDROID_VERSION="${{ github.event.inputs.android_version || '16.0' }}"
+          DEVICES="${{ github.event.inputs.devices }}"
+          if [ -z "$DEVICES" ]; then
+            DEVICES="${ANDROID_DEVICE_MAP[$ANDROID_VERSION]}-$ANDROID_VERSION"
+          fi
+          ARGS=(--devices "$DEVICES" --scenario scenario_02_forced_ccz_update --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-prompted-updates-scenario-02")
           APK_SOURCE="${{ github.event.inputs.apk_source || 'GitHub Releases' }}"
           if [ "$APK_SOURCE" != "GitHub Releases" ]; then
             ARGS+=(--apk "$APK_SOURCE")
