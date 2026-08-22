@@ -602,7 +602,7 @@ def run_scenario_5(driver, appium_client, new_app_url, cc_username, cc_password,
 
 # ------------------------------------------------- prompted_updates scenarios --
 
-def _login_and_wait_for_forced_blocker(driver, username, password, attempts=4, wait_seconds=45):
+def _login_and_wait_for_forced_blocker(driver, username, password, attempts=6, wait_seconds=60):
     """Port of prompted_updates scenario_02's relogin step, hardened per a
     user-supplied recording of the real manual sequence: the forced
     "New version of the application is required" blocker does NOT always
@@ -610,8 +610,19 @@ def _login_and_wait_for_forced_blocker(driver, username, password, attempts=4, w
     showed it can take multiple relogin attempts or up to ~3 minutes
     (presumably server-side propagation delay on HQ's end), not a fixed
     instant. Retries login + a bounded wait rather than asserting on one
-    immediate attempt; attempts=4 * wait_seconds=45 ~= 3 minutes total,
-    matching that recording's own guidance."""
+    immediate attempt.
+
+    UPDATE (2026-08-22), confirmed live across 4 separate real runs today
+    (local and CI) that the original attempts=4/wait_seconds=45 (~3 minutes,
+    matching the recording's own estimate) is no longer enough - this exact
+    "never appeared" error recurred consistently, while scenario_1's
+    equivalent optional-prompt wait (same underlying mark_build_status
+    propagation-delay mechanism) passed reliably in the same window. That
+    asymmetry - forced needing noticeably longer than optional despite
+    sharing the same mid-flow HQ action - says this is a real, currently
+    slower propagation path, not generic flakiness that a modest retry
+    absorbs. Raised to attempts=6/wait_seconds=60 (6 minutes total) based on
+    that evidence rather than re-guessing the original recording's number."""
     for attempt in range(attempts):
         _login(driver, username, password)
         if h.wait_visible_text(driver, "New version of the application is required",
