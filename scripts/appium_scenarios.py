@@ -135,17 +135,24 @@ def _install_app_by_code_once(driver, app_code):
     # a row, overlapping - because this retry loop never cleared the field
     # between attempts, same "APPENDING rather than replacing" class of bug
     # clear_by_id's own docstring already documents for the password field
-    # elsewhere in this file. Can't reuse clear_by_id itself here (its
-    # find_elements(by id) gate would defeat the whole point of using
-    # type_into_focused over an id-targeted approach in the first place -
-    # see that function's own docstring on this field's near-empty
-    # accessibility tree), so send the same backward+forward delete
-    # keycodes directly, blind, before each retype instead.
+    # elsewhere in this file.
+    # UPDATE (2nd correction, 2026-08-22), confirmed live in CI twice over:
+    # the first fix (backward+forward KEYCODE_DEL via driver.press_keycode())
+    # sends "mobile: pressKey", which failed with UnknownCommandError on the
+    # CI session's driver build; the follow-up fix (routing the same
+    # keycodes through "mobile: shell" + `input keyevent`) failed differently
+    # - "adb_shell" is a security-gated Appium server feature, disabled here.
+    # Both were vendor extensions with no guarantee of being enabled/
+    # supported on whatever driver build a given BrowserStack session lands
+    # on. Switched to base WebDriver protocol commands only (find_elements +
+    # the standard element .clear() command, part of every conformant
+    # driver's core protocol, not an Appium/vendor extension) - best-effort
+    # (silently continues if the field can't be located this pass, same
+    # near-empty-accessibility-tree caveat type_into_focused's own docstring
+    # already documents for this exact field), but can no longer crash the
+    # whole session the way the two vendor-extension attempts did.
     for attempt in range(3):
-        for _ in range(40):
-            driver.press_keycode(67)  # KEYCODE_DEL (backward)
-        for _ in range(40):
-            driver.press_keycode(112)  # KEYCODE_FORWARD_DEL (forward)
+        h.clear_by_id(driver, f"{APP_ID}:id/edit_profile_location", timeout=1)
         h.type_into_focused(driver, app_code)
         if h.is_text_visible(driver, app_code):
             break

@@ -206,14 +206,32 @@ def clear_by_id(driver, resource_id, timeout=5):
     delete. Sends BOTH backward (KEYCODE_DEL) and forward
     (KEYCODE_FORWARD_DEL, deletes the character AFTER the cursor) delete
     events so the field clears regardless of which end the cursor is
-    sitting at."""
+    sitting at.
+
+    UPDATE (3rd correction, 2026-08-22), confirmed live in CI twice over
+    (prompted_updates/scenario_1_appium + scenario_2_appium, run
+    32503332653): press_keycode() sends "mobile: pressKey", unsupported on
+    that session's driver build (UnknownCommandError); the follow-up
+    "mobile: shell" + `input keyevent` alternative then failed differently -
+    "adb_shell" is a security-gated Appium server feature, disabled here.
+    Both are vendor extensions with no guarantee of being enabled on
+    whatever driver build a given BrowserStack session lands on. Reverted
+    to the standard element .clear() command instead - part of every
+    conformant driver's core WebDriver protocol, not an extension, so it
+    can't fail with an unsupported-command error the way the last two
+    attempts did. Per the 1st UPDATE above, .clear() alone was ALREADY
+    known to be unreliable on this app's fields (silently leaves old text
+    in place) - accepted here as a real tradeoff: a fix that doesn't always
+    clear beats one that reliably crashes the whole session."""
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        if driver.find_elements(AppiumBy.ID, resource_id):
-            for _ in range(40):
-                driver.press_keycode(67)  # KEYCODE_DEL (backward)
-            for _ in range(40):
-                driver.press_keycode(112)  # KEYCODE_FORWARD_DEL (forward)
+        els = driver.find_elements(AppiumBy.ID, resource_id)
+        if els:
+            for el in els:
+                try:
+                    el.clear()
+                except Exception:
+                    pass
             return True
         time.sleep(_DEFAULT_POLL)
     return False
