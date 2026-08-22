@@ -496,8 +496,15 @@ def _open_update_app_menu(driver):
     # here too since this screen's own "Recheck" button re-queries HQ
     # without needing a fresh login. Retry it in place a few times rather
     # than declaring "no update" after a single immediate check.
-    for _ in range(5):
-        if h.wait_visible_text(driver, "New version of the application is available", timeout=8, optional=True):
+    # UPDATE (2nd correction, 2026-08-22), confirmed live (2 more real
+    # failures on this exact same "App is up to date" screen, same version
+    # 1141): the 5x8s=40s budget above was nowhere near
+    # _login_and_wait_for_forced_blocker's own established 4x45s=180s
+    # precedent for this identical underlying HQ-propagation-delay
+    # phenomenon - raised to match it exactly rather than a shorter,
+    # unproven number.
+    for _ in range(4):
+        if h.wait_visible_text(driver, "New version of the application is available", timeout=45, optional=True):
             break
         if not h.tap_by_text(driver, "Recheck", optional=True, timeout=3):
             break

@@ -280,12 +280,33 @@ def main():
         # raised - this is cleanup, not part of the test result itself, so
         # failures here are logged, not allowed to mask/replace whatever
         # the actual scenario results were.
-        try:
-            print("Cleanup: restoring latest build to Released and Prompt Updates to Off ...")
-            hq_client.mark_build_status(app_id, latest_build_id, is_released=True)
-            hq_client.set_prompt_update_settings(app_id, app_prompt="off", apk_prompt="off")
-        except Exception as cleanup_exc:  # noqa: BLE001 - best-effort, never mask the real scenario results
-            print(f"  (cleanup failed, may need manual fixup on HQ: {cleanup_exc})")
+        # UPDATE (2026-08-22), per direct user instruction: this cleanup
+        # must actually land on HQ even during a CI run where a transient
+        # network blip is far more likely than it sounds - confirmed live
+        # today (RemoteDisconnected on this exact call, twice) that a single
+        # attempt with no retry can leave the shared app stuck mid-toggle
+        # (wrong build released, or Prompt Updates left on) for every other
+        # flow that touches this app afterward. Retries each cleanup call up
+        # to 3 times with a short pause before giving up and logging - still
+        # best-effort (this is cleanup, not the test result itself), but no
+        # longer gives up after one bad connection.
+        for description, cleanup_call in [
+            ("mark latest build Released",
+             lambda: hq_client.mark_build_status(app_id, latest_build_id, is_released=True)),
+            ("set Prompt Updates to Off",
+             lambda: hq_client.set_prompt_update_settings(app_id, app_prompt="off", apk_prompt="off")),
+        ]:
+            print(f"Cleanup: {description} ...")
+            for attempt in range(3):
+                try:
+                    cleanup_call()
+                    break
+                except Exception as cleanup_exc:  # noqa: BLE001 - best-effort, never mask the real scenario results
+                    if attempt < 2:
+                        time.sleep(5)
+                        continue
+                    print(f"  (cleanup step {description!r} failed after 3 attempts, "
+                          f"may need manual fixup on HQ: {cleanup_exc})")
 
     # UPDATE (2026-08-20), same fix as scripts/run_suite.py's own UPDATE
     # comment: a custom --apk has no release tag, so apk_commcare_version
