@@ -53,6 +53,31 @@ class ScenarioFailure(Exception):
         super().__init__(f"{step_name}: {original}")
 
 
+def _relaunch_app(driver):
+    """UPDATE (2026-08-24), confirmed live in CI: the "Relaunch app after
+    binary swap" step in run_scenario_1/2/5 called driver.activate_app(APP_ID)
+    directly and failed outright with the exact same "Unknown mobile command
+    'activateApp'" error _install_app_by_code_once() already hit and fixed
+    (2026-08-21) for the fresh-install case - this BrowserStack Appium
+    driver build (appium-uiautomator2-driver 1.22.0) doesn't support the
+    "mobile: activateApp" extension at all, regardless of context. Those
+    3 call sites never got the same fix. Reusing the identical
+    swallow-if-activateApp pattern here too, on the same reasoning: a
+    `mobile: installApp` install of a newer build over a running app
+    (appium_browserstack_client.install_mid_session) very plausibly already
+    brings the app back to the foreground as a side effect of the install
+    itself, same as BrowserStack's own session-start auto-launch made the
+    fresh-install case's call provably redundant. If that assumption is
+    wrong, the very next step (a login/version check) will fail with a
+    different, diagnosable error - not this one - which is the same
+    real-evidence-first approach used everywhere else in this file."""
+    try:
+        driver.activate_app(APP_ID)
+    except Exception as e:
+        if "activateApp" not in str(e):
+            raise
+
+
 def _run_steps(steps):
     """Runs a list of (name, fn) pairs in order, returning the list of step
     names completed. Raises ScenarioFailure(step_name, original_exc) on the
@@ -106,11 +131,7 @@ def _install_app_by_code_once(driver, app_code):
     # auto-launches the app at session start, before this function ever
     # runs. Best-effort only; swallow this one specific incompatibility
     # rather than fail a session that's already on the right screen.
-    try:
-        driver.activate_app(APP_ID)
-    except Exception as e:
-        if "activateApp" not in str(e):
-            raise
+    _relaunch_app(driver)
     h.tap_by_text(driver, "OK", optional=True, timeout=3)  # Android 16 onboarding overlay
     h.tap_by_id(driver, f"{APP_ID}:id/enter_app_location")
     # UPDATE (2026-08-19), confirmed live via a saved failure hierarchy dump
@@ -184,7 +205,18 @@ def _install_app_by_code_once(driver, app_code):
 
 
 def _install_as_mobile_worker(driver, username, domain, password):
-    """Port of scenario_5's own inline mobile-worker install sequence."""
+    """Port of scenario_5's own inline mobile-worker install sequence.
+
+    UPDATE (2026-08-24), confirmed live in CI: failed outright with
+    "Text 'More options' never became tappable within 10s" - unlike every
+    other scenario here, this is the FIRST on-device interaction of a fresh
+    session (scenario_5 has no _install_app_by_code call before it), so it
+    never got that function's own Android-16-onboarding-overlay dismiss
+    step (_install_app_by_code_once, same file) - a real overlay covering
+    "More options" would explain exactly this timeout. Same
+    relaunch+dismiss pair as that function, applied here too."""
+    _relaunch_app(driver)
+    h.tap_by_text(driver, "OK", optional=True, timeout=3)  # Android 16 onboarding overlay
     h.tap_by_text(driver, "More options")
     h.tap_by_text(driver, "See Apps for My User")
     # UPDATE (2026-08-19): same self-verifying tap+type as _login below -
@@ -547,7 +579,7 @@ def run_scenario_1(driver, appium_client, new_app_url, username, password, app_c
         ("Wait for CCZ download/staging in progress", lambda: _wait_for_update_in_progress(driver, timeout=20)),
         ("Install new CommCare binary mid-session (interrupt)",
          lambda: appium_client.install_mid_session(driver, new_app_url)),
-        ("Relaunch app after binary swap", lambda: driver.activate_app(APP_ID)),
+        ("Relaunch app after binary swap", lambda: _relaunch_app(driver)),
         ("Login again (new binary)", lambda: _login(driver, username, password)),
         ("Update 1: staged update auto-applied (About CommCare check)", lambda: _check_app_version(driver)),
         ("Update 2: Form 1 navigates without error", lambda: _navigate_form_no_errors(driver, "Form 1")),
@@ -568,7 +600,7 @@ def run_scenario_2(driver, appium_client, new_app_url, username, password, app_c
         # possible so the download genuinely doesn't finish staging.
         ("Install new CommCare binary mid-session (early interrupt)",
          lambda: appium_client.install_mid_session(driver, new_app_url)),
-        ("Relaunch app after binary swap", lambda: driver.activate_app(APP_ID)),
+        ("Relaunch app after binary swap", lambda: _relaunch_app(driver)),
         ("Login again (new binary)", lambda: _login(driver, username, password)),
         ("Update 4: update did NOT auto-apply (About CommCare check)", lambda: _check_app_version(driver)),
         ("Update 5: manually complete the update", lambda: _complete_update_app(driver)),
@@ -593,7 +625,7 @@ def run_scenario_5(driver, appium_client, new_app_url, cc_username, cc_password,
         ("Wait for CCZ download/staging in progress", lambda: _wait_for_update_in_progress(driver, timeout=20)),
         ("Install new CommCare binary mid-session (interrupt)",
          lambda: appium_client.install_mid_session(driver, new_app_url)),
-        ("Relaunch app after binary swap", lambda: driver.activate_app(APP_ID)),
+        ("Relaunch app after binary swap", lambda: _relaunch_app(driver)),
         ("Update 17: re-login (new binary)", lambda: _login(driver, cc_username, cc_password)),
         ("Update verification: auto-updated to V6 (About CommCare check)", lambda: _check_app_version(driver)),
         ("Update 18: Form A verification", lambda: _verify_form_a_questions(driver, "Form A")),
