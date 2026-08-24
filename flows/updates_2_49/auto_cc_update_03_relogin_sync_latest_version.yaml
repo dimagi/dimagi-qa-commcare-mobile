@@ -36,27 +36,39 @@ tags:
 #     inside the R.id.dialog_text TextView of the scrolling_info_dialog
 #     layout - this is where the on-device "latest version" text lives.
 #
-# Prepends install_app_as_web_user.yaml (APP_NAME: ".*Basic Tests$") - a fresh
-# BrowserStack session has no app installed until this runs; see
-# DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
-# null. "Basic Tests" is a guess by proximity (no specific app is named in
-# this row itself; sibling flows in this same tab default to it - see
-# prompted_update_scenario_01_ill_update_later.yaml) rather than a
-# citation-confirmed fact for THIS specific row - flag for correction if
-# "Auto CC Update 1"'s actual HQ setup uses a different app.
+# A fresh BrowserStack session has no app installed until
+# install_app_by_code.yaml runs; see DispatchActivity.java's
+# CommCareSetupActivity routing when currentApp == null.
+#
+# UPDATE (2026-08-24), per direct user-supplied app link + screen
+# recording: moved from the shared APP_CODE_BASIC_TESTS to
+# APP_CODE_BASIC_TESTS_NS_COPY ("[Master] Basic Tests NS Copy", a
+# dedicated copy) - same app now used by every other flow on this tab (see
+# prompted_update_scenario_01_ill_update_later.yaml's own UPDATE citation
+# for the full reasoning), resolving the earlier "guess by proximity" flag
+# on this row - confirmed, not a guess.
 - runFlow:
     file: ../common/install_app_by_code.yaml
     env:
-      APP_CODE: ${APP_CODE_BASIC_TESTS}
+      APP_CODE: ${APP_CODE_BASIC_TESTS_NS_COPY}
 - runFlow:
     file: ../common/login.yaml
     env:
       USERNAME: ${CC_TEST_USERNAME}
       PASSWORD: ${CC_TEST_PASSWORD}
 - tapOn: "Sync with Server"
+# UPDATE (2026-08-24), confirmed live: the real on-device string is "Sync
+# Successful! Your information is up to date." (sync.success.synced, per
+# this file's own header citation) - a real BrowserStack failure's own
+# embedded view hierarchy (not just a screenshot) showed sync had already
+# genuinely succeeded with exactly that text present, but the bare
+# "(?i)Sync Successful" regex still failed to match - Maestro's textRegex
+# requires a FULL match of the target string, not a substring (same class
+# of fix already applied elsewhere today, e.g. geoservices' "Latitude:"
+# check). Wildcarded to match the real, longer string.
 - extendedWaitUntil:
     visible:
-      text: "(?i)Sync Successful"
+      text: "(?i).*Sync Successful.*"
     timeout: 30000
 - assertNotVisible:
     text: "(?i)sync.*(fail|error|unavailable)"

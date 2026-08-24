@@ -1,10 +1,10 @@
 {
-  "_comment": "Master Mobile Plan (2026) > Updates (coverage_matrix.csv XLSX Tab 'Updates', 2.49 grab-bag section) > 'Rate limit 1' - 'Download rate-limited app + login'. Marks the dedicated 'Rate Limiting' test app's latest build Released via HQ so the device can install/download it (the on-device install+login half of this row, plus the actual rate-limit-triggering submit loop, is covered on-device by flows/updates_2_49/rate_limit_02_04_popup_dont_show_toast.yaml, which explicitly ASSUMES this app is already installed and logged into - see that flow's header comment). Run via `python scripts/hq_client.py hq_setup/updates_2_49/rate_limit_provisioning.json`. app_id/saved_app_id are placeholders - fill in with the 'Rate Limiting' test app's current app_id/build id (these test apps get rebuilt between QA cycles, confirm before relying on stale ids).",
+  "_comment": "Master Mobile Plan (2026) > Updates (coverage_matrix.csv XLSX Tab 'Updates', 2.49 grab-bag section) > 'Rate limit 1' - 'Download rate-limited app + login'. Marks the dedicated 'Rate Limiting' test app's latest build Released via HQ so the device can install/download it (the on-device install+login half of this row, plus the actual rate-limit-triggering submit loop, is covered on-device by flows/updates_2_49/rate_limit_02_04_popup_dont_show_toast.yaml, which explicitly ASSUMES this app is already installed and logged into - see that flow's header comment). UPDATE (2026-08-21): app_id/saved_app_id filled in - confirmed live via HQClient.list_releases against domain 'rate-limited' (matching scripts/app_registry.py's own RATE_LIMITED entry): v36 (id 186fa08b7e9d4d819064a2034fd893c7, name 'Rate limited submission app') is ALREADY the current top build and already is_released=True, so this action is a no-op confirmation, not a real state change. IMPORTANT: this app lives under domain 'rate-limited', NOT the default 'qateam' - run via `python scripts/hq_client.py hq_setup/updates_2_49/rate_limit_provisioning.json --domain rate-limited --web-user` (or fix run_suite.py's --hq-setup to read a domain override from the spec file itself, which it does not currently support - it always logs in against HQ_DOMAIN/qateam regardless of what an individual action's app_id actually belongs to).",
   "actions": [
     {
       "type": "mark_build_status",
-      "app_id": "REPLACE_WITH_RATE_LIMITING_APP_ID",
-      "saved_app_id": "REPLACE_WITH_RATE_LIMITING_BUILD_ID",
+      "app_id": "35589b21ffde2cd1e7be968088acd620",
+      "saved_app_id": "186fa08b7e9d4d819064a2034fd893c7",
       "is_released": true
     }
   ]

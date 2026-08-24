@@ -7,6 +7,9 @@ Usage:
     python scripts/run_suite.py --tag mobile_pins --devices "Samsung Galaxy S26-16.0"
     python scripts/run_suite.py --tag prompted_updates --hq-setup hq_setup/prompted_updates/varying_prompt_setup.json
     python scripts/run_suite.py --flow flows/install/install_04_see_apps_menu_item_visible.yaml
+    python scripts/run_suite.py --tag updates_2_49 \
+        --hq-setup hq_setup/updates_2_49/setup_02_commcare_version_plus_one.json \
+        --hq-teardown hq_setup/updates_2_49/prompted_update_scenario_teardown.json
 """
 import argparse
 import json
@@ -488,6 +491,15 @@ def main():
                          help="GitHub release tag to download if --apk isn't given.")
     parser.add_argument("--hq-setup", default=None,
                          help="Path to an hq_setup/*.json pre-step spec to run first.")
+    parser.add_argument("--hq-teardown", default=None,
+                         help="Path to an hq_setup/*.json spec to run last, ALWAYS (even if the "
+                              "flows themselves fail or raise) - for restoring shared HQ state a "
+                              "--hq-setup mutated on an app other flows also depend on. Best-effort: "
+                              "retried up to 3 times, logged rather than raised on final failure, so "
+                              "a teardown hiccup never masks the real test results. Its spec's "
+                              "apk_version may use the \"$CURRENT_APK_VERSION\" sentinel, substituted "
+                              "with this run's own resolved APK version - see hq_client.py's "
+                              "run_pre_step().")
     # UPDATE (2026-08-17), per direct user request: bumped the default
     # device+Android version from Samsung Galaxy S20 (Android 10) to
     # Samsung Galaxy S26 (Android 16) - the latest Android version
@@ -515,6 +527,7 @@ def main():
     load_dotenv(REPO_ROOT / ".env")
 
     prior_build_by_app_id = {}
+    client = None
     if args.hq_setup:
         print(f"Running HQ pre-step: {args.hq_setup}")
         with open(args.hq_setup) as f:
@@ -579,6 +592,63 @@ def main():
             f"{pathlib.Path(apk_path).name} (custom)", encoding="utf-8",
         )
 
+    try:
+        _dispatch_and_report(args, apk_path, apk_commcare_version, prior_build_by_app_id)
+    finally:
+        # UPDATE (2026-08-24), per direct user instruction: a --hq-teardown
+        # spec (e.g. hq_setup/updates_2_49/prompted_update_scenario_teardown.json)
+        # must run regardless of whether _dispatch_and_report above passed,
+        # failed, or raised (including its own sys.exit(1) on a failed
+        # result) - same "cleanup is not part of the test result" principle
+        # as scripts/run_appium_prompted_updates_suite.py's own finally-block
+        # cleanup. See _run_hq_teardown()'s own docstring for the retry
+        # rationale.
+        if args.hq_teardown:
+            _run_hq_teardown(args.hq_teardown, client, apk_commcare_version)
+
+
+def _run_hq_teardown(hq_teardown_path, client, apk_commcare_version):
+    """
+    Best-effort HQ cleanup, run from main()'s finally block. Mirrors
+    scripts/run_appium_prompted_updates_suite.py's own finally-block cleanup
+    (see that file's UPDATE comments for why retries matter: a transient
+    network blip on a single un-retried cleanup call can leave shared HQ
+    state - e.g. Prompt Updates left on, or pointed at a dev/pre-release
+    build - stuck for every other flow that touches the same app
+    afterward). Logs and swallows failure after 3 attempts rather than
+    raising, so a teardown hiccup never masks/replaces the real dispatch
+    results _dispatch_and_report() already reported.
+
+    `apk_commcare_version` (e.g. "2.63.4", from download_apk's release tag)
+    becomes the teardown spec's "$CURRENT_APK_VERSION" sentinel value, in
+    the same "<version>/latest" shape every other apk_version value in this
+    repo uses - so a teardown can restore apk_version to the ACTUAL release
+    this run tested against, not a hardcoded literal. None (a custom --apk
+    with no release tag) means any action relying on that sentinel will
+    raise inside run_pre_step - logged like any other teardown failure,
+    not a special case.
+    """
+    print(f"Running HQ teardown: {hq_teardown_path}")
+    with open(hq_teardown_path) as f:
+        spec = json.load(f)
+    client = client or hq_client_module.HQClient().login(
+        username=os.environ.get("HQ_WEB_USER_EMAIL"),
+        password=os.environ.get("HQ_WEB_USER_PASSWORD"),
+    )
+    current_apk_version = f"{apk_commcare_version}/latest" if apk_commcare_version else None
+    for attempt in range(3):
+        try:
+            hq_client_module.run_pre_step(spec, client=client, current_apk_version=current_apk_version)
+            return
+        except Exception as exc:  # noqa: BLE001 - best-effort, never mask the real dispatch results
+            if attempt < 2:
+                time.sleep(5)
+                continue
+            print(f"::warning::HQ teardown {hq_teardown_path} failed after 3 attempts, "
+                  f"may need manual fixup on HQ: {exc}")
+
+
+def _dispatch_and_report(args, apk_path, apk_commcare_version, prior_build_by_app_id):
     flow_files = select_flow_files(tags=args.tags, explicit_flows=args.flows)
     if not flow_files:
         raise SystemExit("No matching flow files found for the given --tag/--flow filters.")

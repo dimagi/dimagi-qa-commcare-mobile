@@ -360,6 +360,113 @@ jobs:
           fi
           python scripts/run_appium_prompted_updates_suite.py "${ARGS[@]}"
 
+      # Runs the Updates(2.49)-tab's OWN "Prompted Update Scenario 1/2" (the
+      # CommCare-BINARY/APK forced-vs-optional update prompt - distinct from
+      # the CCZ/app-content prompted_updates scenarios above) as two plain
+      # Maestro dispatches, each with its own --hq-setup, matching the
+      # mutually-exclusive apk_prompt=on-then-forced HQ states these two
+      # flows exercise (a single Maestro build only applies one --hq-setup
+      # before the whole build starts - there's no mid-build hook to flip
+      # HQ state, unlike run_appium_prompted_updates_suite.py's Appium
+      # sessions above, which is why this can't just be folded into the
+      # scenario_01/02 Appium steps or the main tag-based dispatch instead).
+      #
+      # UPDATE (2026-08-24), per direct user instruction: scheduled to run
+      # LAST in group-a's job (after the main Maestro dispatch and both
+      # Appium steps above) rather than interleaved by tag - confirmed live
+      # this app_id's Manage Update Settings are a genuinely global,
+      # per-app_id HQ setting, so any OTHER flow sharing this app_id
+      # (auto_cc_update_03_relogin_sync_latest_version.yaml,
+      # capture_01_gather_signature.yaml, capture_02_signature_reset.yaml -
+      # all tagged updates_2_49/multimedia, both in group-a) running
+      # concurrently with a mutated apk_prompt=on/forced window is a real
+      # hazard, not theoretical. Running these two last, within the same
+      # job, after everything else that shares the app has already finished,
+      # eliminates the overlap entirely without needing precise
+      # interleaving - confirmed via a real local dispatch that running
+      # auto_cc_update_03 back-to-back with this app's mutated window did
+      # NOT actually break it, but "last, in the same job" removes the
+      # question altogether rather than relying on that being reliably true
+      # under CI's own (possibly different) timing.
+      #
+      # Gated the same way as the two Appium steps above: matrix.name ==
+      # 'group-a' for the normal All/nightly dispatch, or (for a scoped
+      # single-tag ad-hoc dispatch) matrix.tags containing the flows' own
+      # updates_2_49_apk_prompt tag.
+      - name: Run Maestro suite (prompted_update_scenario_01, apk-prompt on)
+        if: always() && (matrix.name == 'group-a' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'updates_2_49_apk_prompt')))
+        env:
+          BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
+          BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
+          HQ_API_USERNAME: ${{ secrets.HQ_API_USERNAME }}
+          HQ_API_PASSWORD: ${{ secrets.HQ_API_PASSWORD }}
+          HQ_SESSION_COOKIE: ${{ secrets.HQ_SESSION_COOKIE }}
+          HQ_DOMAIN: qateam
+          CC_TEST_USERNAME: ${{ secrets.CC_TEST_USERNAME }}
+          CC_TEST_PASSWORD: ${{ secrets.CC_TEST_PASSWORD }}
+          HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
+          HQ_WEB_USER_PASSWORD: ${{ secrets.HQ_WEB_USER_PASSWORD }}
+        run: |
+          declare -A ANDROID_DEVICE_MAP=(
+            ["16.0"]="Samsung Galaxy S26"
+            ["15.0"]="Samsung Galaxy S25"
+            ["14.0"]="Samsung Galaxy S24"
+            ["13.0"]="Samsung Galaxy S23"
+            ["12.0"]="Samsung Galaxy S22"
+            ["11.0"]="Samsung Galaxy S21"
+            ["10.0"]="Samsung Galaxy S20"
+          )
+          ANDROID_VERSION="${{ github.event.inputs.android_version || '16.0' }}"
+          DEVICES="${{ github.event.inputs.devices }}"
+          if [ -z "$DEVICES" ]; then
+            DEVICES="${ANDROID_DEVICE_MAP[$ANDROID_VERSION]}-$ANDROID_VERSION"
+          fi
+          ARGS=(--devices "$DEVICES" --flow flows/updates_2_49/prompted_update_scenario_01_ill_update_later.yaml --hq-setup hq_setup/updates_2_49/setup_02_commcare_version_plus_one.json --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-prompted-update-scenario-01-apk")
+          APK_SOURCE="${{ github.event.inputs.apk_source || 'GitHub Releases' }}"
+          if [ "$APK_SOURCE" != "GitHub Releases" ]; then
+            ARGS+=(--apk "$APK_SOURCE")
+          elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
+            ARGS+=(--release-tag "${{ github.event.inputs.release_tag }}")
+          fi
+          python scripts/run_suite.py "${ARGS[@]}"
+
+      - name: Run Maestro suite (prompted_update_scenario_02, apk-prompt forced)
+        if: always() && (matrix.name == 'group-a' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'updates_2_49_apk_prompt')))
+        env:
+          BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
+          BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
+          HQ_API_USERNAME: ${{ secrets.HQ_API_USERNAME }}
+          HQ_API_PASSWORD: ${{ secrets.HQ_API_PASSWORD }}
+          HQ_SESSION_COOKIE: ${{ secrets.HQ_SESSION_COOKIE }}
+          HQ_DOMAIN: qateam
+          CC_TEST_USERNAME: ${{ secrets.CC_TEST_USERNAME }}
+          CC_TEST_PASSWORD: ${{ secrets.CC_TEST_PASSWORD }}
+          HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
+          HQ_WEB_USER_PASSWORD: ${{ secrets.HQ_WEB_USER_PASSWORD }}
+        run: |
+          declare -A ANDROID_DEVICE_MAP=(
+            ["16.0"]="Samsung Galaxy S26"
+            ["15.0"]="Samsung Galaxy S25"
+            ["14.0"]="Samsung Galaxy S24"
+            ["13.0"]="Samsung Galaxy S23"
+            ["12.0"]="Samsung Galaxy S22"
+            ["11.0"]="Samsung Galaxy S21"
+            ["10.0"]="Samsung Galaxy S20"
+          )
+          ANDROID_VERSION="${{ github.event.inputs.android_version || '16.0' }}"
+          DEVICES="${{ github.event.inputs.devices }}"
+          if [ -z "$DEVICES" ]; then
+            DEVICES="${ANDROID_DEVICE_MAP[$ANDROID_VERSION]}-$ANDROID_VERSION"
+          fi
+          ARGS=(--devices "$DEVICES" --flow flows/updates_2_49/prompted_update_scenario_02_forced_commcare_update.yaml --hq-setup hq_setup/updates_2_49/prompted_update_scenario_02_forced.json --hq-teardown hq_setup/updates_2_49/prompted_update_scenario_teardown.json --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-prompted-update-scenario-02-apk")
+          APK_SOURCE="${{ github.event.inputs.apk_source || 'GitHub Releases' }}"
+          if [ "$APK_SOURCE" != "GitHub Releases" ]; then
+            ARGS+=(--apk "$APK_SOURCE")
+          elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
+            ARGS+=(--release-tag "${{ github.event.inputs.release_tag }}")
+          fi
+          python scripts/run_suite.py "${ARGS[@]}"
+
       # No report-history cache restore/save here on purpose: each matrix
       # job's own reports/history.json only reflects ITS slice of tags, not
       # the full logical run, so it isn't meaningful on its own - the

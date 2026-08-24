@@ -166,13 +166,74 @@ APP_REGISTRY = {
     "CC_REINSTALL_NEEDED": ("qateam", "fc3b94e8ae9a445680df496ee783439d"),
     "CC_UPDATE_NEEDED": ("qateam", "8fc02611dd694001a147749a6ea558c0"),
     "POINT_RELEASE": ("qateam", "df1c05ddfb640f32c9d453f780442ce4"),
+    # UPDATE (2026-08-24), per direct user-supplied app link: "Recovery:
+    # Point Release" is NOT single-build after all - confirmed live via
+    # list_releases it has 4 real builds (v9 unreleased, v11 released, v12
+    # unreleased, v14 released), and per the user's own direction this is
+    # the REAL app for update_app_02_forced_two_to_three.yaml's Test Two ->
+    # Test Three transition (moved off the "Reinstall and Update App" app
+    # this flow used before, which triggers the wrong recovery-measure
+    # type for this row's own auto-update-no-chooser narrative - see that
+    # flow's own header and the Recovery Measures tab's "Update 5/6"
+    # measure-type-mismatch note this resolves). Pinned to the two already-
+    # released builds (release_first=False - no HQ release action needed,
+    # both already are): v11 as the older "Test Two" state, v14 (the
+    # current top) as "Test Three". Named "PT_REL_*" rather than the more
+    # obvious "POINT_RELEASE_TEST_*" - the latter's "APP_CODE_" + key form
+    # is 31-33 chars, over the confirmed 30-char setEnvVariables key limit
+    # (same class of bug already hit twice today).
+    "PT_REL_TWO": ("qateam", "df1c05ddfb640f32c9d453f780442ce4", "8ab3f997208c4c6899e48817037d27b1", False),
+    "PT_REL_THREE": ("qateam", "df1c05ddfb640f32c9d453f780442ce4", "b0833a601b404dda969e47e4a4b0589b", False),
     "HEARTBEAT": ("qateam", "35b9a60884c8f8e69e507c56cbe8f370"),
     # A genuinely different, unregistered app from "Basic Tests" - see
     # capture_01_gather_signature.yaml's own header for the full root-cause
     # writeup (the recording's real signature-canvas widget only renders on
     # THIS app, not on APP_CODE_BASIC_TESTS). User-confirmed app_id
     # (2026-08-13) via its HQ Releases page URL.
+    #
+    # UPDATE (2026-08-24), per direct user-supplied app link + screen
+    # recording: this SAME app ("[Master] Basic Tests NS Copy" - its own
+    # real app description literally reads "Basic test app - Please make
+    # no changes to this!!!") is also where updates_2_49's 3 tests
+    # (prompted_update_scenario_01/02, auto_cc_update_03) now live, off the
+    # shared BASIC_TESTS/BASIC_TESTS_LATEST entries above. Two real
+    # reasons, not just a rename: (1) a dedicated copy means these tests'
+    # own apk_prompt/app_prompt/apk_version mutations (via
+    # set_prompt_update_settings) don't collide with every OTHER flow in
+    # this repo that also installs the shared BASIC_TESTS app expecting
+    # its normal, unmutated state - the exact same class of shared-HQ-
+    # state collision already root-caused and fixed today for
+    # prompted_updates' own scenario_01/02 (see appium_scenarios.py's
+    # 2026-08-22 UPDATE on run_prompted_update_scenario_01/02_*).
+    # (2) confirmed live via a real superuser session cookie that this
+    # app's Manage Update Settings dropdown genuinely has 131 apk_version
+    # choices for a superuser (including "2.63.2/latest", "2.64.0/latest"
+    # ["alpha"], "2.65.0/latest" ["dev"]) vs only 128 for a regular web
+    # user (tops out at "2.63.1/latest") - alpha/dev CommCare versions are
+    # real, HQ-known choices, just hidden from a regular account's own
+    # rendered <option> list, not missing from the underlying data. Also
+    # confirmed live that the regular (non-superuser) web-user account CAN
+    # WRITE "2.65.0/latest" via set_prompt_update_settings once its CSRF
+    # cookie is primed (see login()'s own 2026-08-24 UPDATE in
+    # hq_client.py for a related real bug this surfaced) - the visibility
+    # restriction is template/rendering-only, not a write-permission gate,
+    # so no superuser credentials are needed for actual test dispatches.
+    # (An earlier same-day attempt used "2.65.0/dev" - accepted by the
+    # form but disproven live via 5 real login attempts over 12 minutes
+    # that never triggered the prompt; superseded by the superuser-
+    # dropdown discovery and the real "2.65.0/latest" value above.)
     "BASIC_TESTS_NS_COPY": ("qateam", "8a04cdf1b9474ee2b090b1d7896b1bd7"),
+    # Same split as BASIC_TESTS/BASIC_TESTS_LATEST above, for the same
+    # reason - prompted_update_scenario_01/02 need the unfiltered variant
+    # (see NO_VERSION_FILTER_KEYS below); auto_cc_update_03 uses the plain
+    # filtered entry above. UPDATE (2026-08-24), confirmed live (a real 422
+    # from BrowserStack's own /android/build endpoint): named
+    # "BASIC_TESTS_NS_COPY_LATEST" at first, but "APP_CODE_" + that key is
+    # 35 chars - over the confirmed 30-char setEnvVariables key limit
+    # already root-caused once this session for
+    # CASE_MANAGEMENTS_VARYING_PROMPT -> CASE_MGMT_VP. Shortened to fit
+    # (26 chars with the APP_CODE_ prefix) rather than repeat that bug.
+    "BT_NS_COPY_LATEST": ("qateam", "8a04cdf1b9474ee2b090b1d7896b1bd7"),
     # A separate app from "Multimedia" - see lazy_video_05's own header for
     # the root-cause writeup (video-question forms, reached via a "Video
     # Questions" menu item that doesn't exist on APP_CODE_MULTIMEDIA).
@@ -193,4 +254,4 @@ APP_REGISTRY = {
 # build to require one CommCare version ahead of what's installed
 # specifically to trigger it; picking an older, version-filtered build
 # instead would make the dialog never appear and both tests meaningless.
-NO_VERSION_FILTER_KEYS = {"BASIC_TESTS_LATEST"}
+NO_VERSION_FILTER_KEYS = {"BASIC_TESTS_LATEST", "BT_NS_COPY_LATEST"}
