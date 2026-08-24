@@ -204,34 +204,6 @@ def _install_app_by_code_once(driver, app_code):
     h.wait_visible_id(driver, f"{APP_ID}:id/edit_username", timeout=60, optional=True)
 
 
-def _install_as_mobile_worker(driver, username, domain, password):
-    """Port of scenario_5's own inline mobile-worker install sequence.
-
-    UPDATE (2026-08-24), confirmed live in CI: failed outright with
-    "Text 'More options' never became tappable within 10s" - unlike every
-    other scenario here, this is the FIRST on-device interaction of a fresh
-    session (scenario_5 has no _install_app_by_code call before it), so it
-    never got that function's own Android-16-onboarding-overlay dismiss
-    step (_install_app_by_code_once, same file) - a real overlay covering
-    "More options" would explain exactly this timeout. Same
-    relaunch+dismiss pair as that function, applied here too."""
-    _relaunch_app(driver)
-    h.tap_by_text(driver, "OK", optional=True, timeout=3)  # Android 16 onboarding overlay
-    h.tap_by_text(driver, "More options")
-    h.tap_by_text(driver, "See Apps for My User")
-    # UPDATE (2026-08-19): same self-verifying tap+type as _login below -
-    # see _type_into_id_verified's own docstring for the full citation.
-    _type_into_id_verified(driver, f"{APP_ID}:id/edit_username", username)
-    _type_into_id_verified(driver, f"{APP_ID}:id/edit_domain", domain)
-    _type_into_id_verified(driver, f"{APP_ID}:id/edit_password", password)
-    h.hide_keyboard(driver)
-    h.tap_by_id(driver, f"{APP_ID}:id/get_apps_button")
-    h.wait_visible_id(driver, f"{APP_ID}:id/apps_list_view", timeout=15)
-    h.tap_by_id(driver, f"{APP_ID}:id/apps_list_view")
-    h.tap_by_id(driver, f"{APP_ID}:id/install_app_button")
-    h.wait_visible_id(driver, f"{APP_ID}:id/edit_username", timeout=30)
-
-
 def _type_into_id_verified(driver, resource_id, text, attempts=5):
     """Self-verifying tap+type, same pattern flows/common/login.yaml already
     established for exactly this uncertainty: tapping a text field can race
@@ -481,8 +453,18 @@ def _navigate_form_no_errors(driver, form_name):
 
 
 def _verify_form_a_questions(driver, form_name):
-    """Port of flows/common/verify_form_a_questions.yaml."""
+    """Port of flows/common/verify_form_a_questions.yaml.
+
+    UPDATE (2026-08-25), confirmed live in CI ("Text 'Form A' never became
+    tappable within 10s", real screenshot showing a "Surveys" module
+    folder in between): same intermediate-module gap already documented
+    and fixed for _navigate_form_no_errors' own "Mobile2.47" case (see
+    that function's own 2026-08-21 UPDATE, which explicitly flagged this
+    as a risk "in case a future Appium scenario ever targets this app" -
+    run_scenario_5's switch to LINKED_APP_TEST45 is exactly that)."""
     h.tap_by_text(driver, "Start")
+    h.tap_by_text(driver, "Mobile updates", optional=True, timeout=3)
+    h.tap_by_text(driver, "Surveys", optional=True, timeout=3)
     h.tap_by_text(driver, form_name)
     h.wait_visible_id(driver, f"{APP_ID}:id/nav_btn_next", timeout=5)
     h.assert_visible_text(driver, "(?i).*registration date.*", regex=True)
@@ -490,32 +472,68 @@ def _verify_form_a_questions(driver, form_name):
     h.assert_visible_text(driver, r"(?i).*\bage\b.*", regex=True)
     h.assert_not_visible_text(driver, "(?i).*unexpected error.*", regex=True)
     h.assert_not_visible_text(driver, "(?i).*commcare will now restart.*", regex=True)
-    h.back(driver)
-    h.tap_by_text(driver, "(?i).*exit without saving.*", regex=True, optional=True, timeout=2)
-    h.back(driver)
-    h.wait_visible_text(driver, "Start", timeout=5)
+    _exit_form_without_saving(driver)
 
 
 def _verify_form_b_photo_question(driver, form_name):
-    """Port of flows/common/verify_form_b_photo_question.yaml."""
+    """Port of flows/common/verify_form_b_photo_question.yaml.
+
+    UPDATE (2026-08-25): same "Surveys" intermediate-module fix as
+    _verify_form_a_questions' own UPDATE - see that function for the full
+    citation."""
     h.tap_by_text(driver, "Start")
+    h.tap_by_text(driver, "Mobile updates", optional=True, timeout=3)
+    h.tap_by_text(driver, "Surveys", optional=True, timeout=3)
     h.tap_by_text(driver, form_name)
     h.wait_visible_id(driver, f"{APP_ID}:id/nav_btn_next", timeout=5)
     h.assert_visible_text(driver, "(?i).*(take picture|choose image).*", regex=True)
     h.assert_not_visible_text(driver, "(?i).*unexpected error.*", regex=True)
     h.assert_not_visible_text(driver, "(?i).*commcare will now restart.*", regex=True)
+    _exit_form_without_saving(driver)
+
+
+def _exit_form_without_saving(driver):
+    """Shared tail of _verify_form_a_questions/_verify_form_b_photo_question -
+    port of flows/common/verify_form_a_questions.yaml's own repeat-loop
+    (see that file's 2026-08-21, 2nd correction UPDATE for the full
+    citation): a second back() needed to unwind the "Surveys"
+    intermediate-module tap can re-trigger "Exit Form?" (Android's system
+    back on that dialog is CANCEL, not real navigation) - a single
+    back/dismiss/back sequence can get stuck showing the dialog forever.
+    Re-dismisses it every iteration while "Start" still isn't visible,
+    bounded rather than fixed-depth, so it works whether the Surveys tap
+    fired or not."""
     h.back(driver)
-    h.tap_by_text(driver, "(?i).*exit without saving.*", regex=True, optional=True, timeout=2)
-    h.back(driver)
+    for _ in range(3):
+        if h.wait_visible_text(driver, "Start", timeout=2, optional=True):
+            break
+        h.tap_by_text(driver, "(?i).*exit without saving.*", regex=True, optional=True, timeout=2)
+        h.back(driver)
     h.wait_visible_text(driver, "Start", timeout=5)
 
 
-def _open_update_app_menu(driver):
+def _open_update_app_menu(driver, start_download=True):
     """First half of flows/common/update_app_via_menu.yaml - opens the
     update dialog and taps through to the point where a CCZ download/stage
     would begin, WITHOUT waiting for or tapping the final "Update to version
-    X & log out" completion button - the interruption point for
-    scenario_1/scenario_2."""
+    X & log out" completion button - the interruption point for scenario_1.
+
+    UPDATE (2026-08-25), confirmed live in CI (real failure evidence: the
+    device's app title/version had ALREADY changed to the post-update name
+    by the time scenario_2 got around to checking - "App is up to date"
+    several steps later wasn't a stale HQ-propagation read, the update had
+    genuinely already completed): scenario_2 called this with ZERO
+    synchronization between the "start the download" tap below and its own
+    immediate mid-session interrupt right after, unlike scenario_1 (which
+    explicitly waits for the progress dialog first). For a small test CCZ
+    the download can complete before the interrupt ever takes effect,
+    silently defeating the whole "does NOT auto-apply" premise of that
+    scenario. `start_download=False` stops one tap short of here instead -
+    a genuinely deterministic "hasn't started yet" interrupt point, not a
+    race against download speed. scenario_1's "wait for progress, THEN
+    interrupt" design is unaffected (still start_download=True, the
+    default) - only scenario_2 (see its own docstring) needs the earlier
+    stop."""
     _wait_out_progress_dialogs(driver)
     h.tap_by_text(driver, "More options")
     h.tap_by_text(driver, "Update App")
@@ -542,6 +560,8 @@ def _open_update_app_menu(driver):
             break
         if not h.tap_by_text(driver, "Recheck", optional=True, timeout=3):
             break
+    if not start_download:
+        return
     # UPDATE (2026-08-20), confirmed live: this button's rendered `text`
     # attribute is "UPDATE TO THE LATEST APP VERSION" (all-caps, an Android
     # textAllCaps style) - a case-sensitive literal match against the
@@ -591,13 +611,19 @@ def run_scenario_1(driver, appium_client, new_app_url, username, password, app_c
 def run_scenario_2(driver, appium_client, new_app_url, username, password, app_code):
     """Test Case 2: update CommCare while a CCZ download is in progress,
     interrupted early enough that the CCZ update does NOT auto-apply -
-    then manually complete it via the update menu (Update 4-7)."""
+    then manually complete it via the update menu (Update 4-7).
+
+    UPDATE (2026-08-25), confirmed live in CI: the download genuinely
+    completed before the interrupt ever ran (see _open_update_app_menu's
+    own UPDATE for the full evidence/citation) - opens the menu WITHOUT
+    tapping "start download" (start_download=False), so the interrupt
+    lands deterministically before anything begins, instead of racing a
+    download that can finish before the swap takes effect."""
     steps = [
         ("Install app by code (old CommCare binary)", lambda: _install_app_by_code(driver, app_code)),
         ("Login (old binary)", lambda: _login(driver, username, password)),
-        ("Trigger Update App (start CCZ download)", lambda: _open_update_app_menu(driver)),
-        # No settle wait here (unlike scenario_1) - interrupt as early as
-        # possible so the download genuinely doesn't finish staging.
+        ("Trigger Update App (stop before starting CCZ download)",
+         lambda: _open_update_app_menu(driver, start_download=False)),
         ("Install new CommCare binary mid-session (early interrupt)",
          lambda: appium_client.install_mid_session(driver, new_app_url)),
         ("Relaunch app after binary swap", lambda: _relaunch_app(driver)),
@@ -612,15 +638,32 @@ def run_scenario_2(driver, appium_client, new_app_url, username, password, app_c
     return _run_steps(steps)
 
 
-def run_scenario_5(driver, appium_client, new_app_url, cc_username, cc_password,
-                    hq_mobile_worker_username, hq_domain, hq_mobile_worker_password):
-    """Test Case 5: install the linked app as a mobile worker on the old
-    binary, stage a V6 CCZ update, interrupt with a CommCare binary update
-    mid-stream, then verify the auto-update to V6/Version 22 and Forms A/B
-    (Update 17-19)."""
+def run_scenario_5(driver, appium_client, new_app_url, cc_username, cc_password, app_code):
+    """Test Case 5: install the linked app (pinned to "Version V2") on the
+    old binary, stage a V6 CCZ update, interrupt with a CommCare binary
+    update mid-stream, then verify the auto-update to V6/Version 22 and
+    Forms A/B (Update 17-19).
+
+    UPDATE (2026-08-25), confirmed live in CI: originally installed via
+    "See Apps for My User" as a mobile worker against the shared
+    HQ_MOBILE_WORKER_USERNAME/HQ_DOMAIN (qateam) credentials - failed
+    outright with "Incompatible CommCare Version for Install" right after
+    selecting an app from the list. Root cause: this is the EXACT SAME bug
+    already found and fixed for this scenario's Maestro counterpart
+    (flows/updates_partial_failed/scenario_5_relogin_autoupdate_
+    verification.yaml's own 2026-08-21 UPDATE) - that mobile worker's app
+    actually lives under domain "let-sdoit", not qateam, and "See Apps for
+    My User" always installs the CURRENT top release ("Version V6")
+    regardless, not "Version V2" - which would skip the update-
+    verification steps this scenario needs entirely even if the domain
+    were right. This Appium port never inherited that fix. Switched to the
+    same remedy: install by app code, pinned to "Version V2" (CC 2.45.2,
+    compatible with the OLD 2.45 binary this scenario installs on first) -
+    see app_registry.py's LINKED_APP_TEST45 entry and run_appium_suite.py's
+    own resolution of it for the full citation."""
     steps = [
-        ("Install as mobile worker (old CommCare binary)",
-         lambda: _install_as_mobile_worker(driver, hq_mobile_worker_username, hq_domain, hq_mobile_worker_password)),
+        ("Install app by code (old CommCare binary)", lambda: _install_app_by_code(driver, app_code)),
+        ("Login (old binary)", lambda: _login(driver, cc_username, cc_password)),
         ("Trigger Update App (stage V6 CCZ update)", lambda: _open_update_app_menu(driver)),
         ("Wait for CCZ download/staging in progress", lambda: _wait_for_update_in_progress(driver, timeout=20)),
         ("Install new CommCare binary mid-session (interrupt)",

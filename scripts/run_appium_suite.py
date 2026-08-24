@@ -231,6 +231,29 @@ def main():
     )
     app_code = hq_client.get_app_install_code(mobile_updates_app_id, saved_app_id=v1_build_id, release_first=False)
 
+    # UPDATE (2026-08-25), confirmed live in CI (real failure: "Incompatible
+    # CommCare Version for Install" right after selecting an app from the
+    # mobile-worker's app list): run_scenario_5 originally installed via
+    # "See Apps for My User" against the shared HQ_MOBILE_WORKER_USERNAME/
+    # HQ_DOMAIN (qateam) credentials - the EXACT SAME bug already found and
+    # fixed for this same scenario's Maestro counterpart
+    # (flows/updates_partial_failed/scenario_5_relogin_autoupdate_
+    # verification.yaml's own 2026-08-21 UPDATE): that mobile worker's app
+    # lives under domain "let-sdoit", not qateam, AND "See Apps for My
+    # User" always installs the CURRENT top release ("Version V6"), not
+    # "Version V2" - skipping the update-verification steps this scenario
+    # needs entirely. This Appium port never inherited that fix. Same
+    # remedy: install by app code, pinned to "Version V2" (CC 2.45.2,
+    # compatible with the OLD 2.45 binary this scenario installs on) - see
+    # app_registry.py's LINKED_APP_TEST45 entry for the full citation.
+    print("Resolving install code for LINKED_APP_TEST45 (pinned to 'Version V2', let-sdoit domain) ...")
+    linked_app_domain, linked_app_id, linked_app_v2_build_id, _ = APP_REGISTRY["LINKED_APP_TEST45"]
+    linked_app_hq_client = hq_client_module.HQClient(domain=linked_app_domain).login(
+        username=os.environ.get("HQ_WEB_USER_EMAIL"), password=os.environ.get("HQ_WEB_USER_PASSWORD"),
+    )
+    linked_app_code = linked_app_hq_client.get_app_install_code(
+        linked_app_id, saved_app_id=linked_app_v2_build_id, release_first=False)
+
     bs = AppiumBrowserStackClient()
     print(f"Uploading old APK ({OLD_APK_PATH.name}) to BrowserStack ...")
     old_app_url = bs.upload_app(str(OLD_APK_PATH))["app_url"]
@@ -246,9 +269,7 @@ def main():
         "scenario_2": lambda driver: appium_scenarios.run_scenario_2(
             driver, bs, new_app_url, cc_username, cc_password, app_code),
         "scenario_5": lambda driver: appium_scenarios.run_scenario_5(
-            driver, bs, new_app_url, cc_username, cc_password,
-            os.environ["HQ_MOBILE_WORKER_USERNAME"], os.environ["HQ_DOMAIN"],
-            os.environ["HQ_MOBILE_WORKER_PASSWORD"]),
+            driver, bs, new_app_url, cc_username, cc_password, linked_app_code),
     }
 
     results = []
