@@ -40,6 +40,12 @@ import requests
 DEFAULT_BASE_URL = os.environ.get("HQ_BASE_URL", "https://www.commcarehq.org")
 LATEST_APK_VALUE = "latest"  # corehq/apps/app_manager/const.py
 LATEST_APP_VALUE = 0  # corehq/apps/app_manager/const.py
+# Sentinel for set_prompt_update_settings()'s apk_version param - resolved via
+# find_dev_apk_version() at call time instead of a literal version string, so
+# callers never hardcode a specific pre-release build (e.g. "2.65.0/latest")
+# that goes stale the moment a newer dev/alpha build ships. See
+# find_dev_apk_version()'s own docstring for the full citation.
+DEV_APK_VALUE = "AUTO_DEV_BUILD"
 
 _HIDDEN_INPUT_RE = re.compile(
     r'<input[^>]*type=["\']hidden["\'][^>]*name=["\']([^"\']+)["\'][^>]*value=["\']([^"\']*)["\']',
@@ -67,6 +73,16 @@ class HQClient:
         cookie = os.environ.get("HQ_SESSION_COOKIE")
         if cookie:
             self.session.cookies.set("sessionid", cookie, domain=_domain_of(self.base_url))
+            # UPDATE (2026-08-24), confirmed live: the username/password path
+            # below primes a real csrftoken cookie as a side effect of its
+            # own GET to /accounts/login/ before ever POSTing anything, but
+            # this cookie escape hatch skipped straight to returning with
+            # only `sessionid` set - the first POST any caller made right
+            # after (e.g. set_prompt_update_settings) got a spurious 403
+            # (missing/stale CSRF cookie), not a real permission error. A
+            # throwaway GET here closes that gap the same way the normal
+            # path already does.
+            self.session.get(self.base_url)
             return self
 
         username = username or os.environ.get("HQ_API_USERNAME")
@@ -363,9 +379,16 @@ class HQClient:
         registered separately, NOT inside app_urls - confirmed those two
         did not need this same fix.)
         app_prompt/apk_prompt must be one of "off", "on", "forced".
+
+        UPDATE (2026-08-24): apk_version accepts the DEV_APK_VALUE sentinel
+        ("AUTO_DEV_BUILD") in place of a literal version string - resolved via
+        find_dev_apk_version() right before POSTing, so callers never hardcode
+        a specific pre-release build number that goes stale next release.
         """
         assert app_prompt in ("off", "on", "forced")
         assert apk_prompt in ("off", "on", "forced")
+        if apk_version == DEV_APK_VALUE:
+            apk_version = self.find_dev_apk_version(app_id)
         url = self._apps_url(f"view/{app_id}/update_prompts/")
         resp = self.session.post(
             url,
@@ -378,7 +401,158 @@ class HQClient:
             headers=self._csrf_headers(),
         )
         resp.raise_for_status()
+
+        # UPDATE (2026-08-24), per direct user instruction: verify the save
+        # actually took before any on-device Maestro retry loop burns its
+        # budget assuming a propagation delay - a 200 here only means the
+        # form POST didn't error, not that HQ saved the values we expect
+        # (e.g. PromptUpdateSettingsForm could silently reject/coerce a
+        # value). Read the same page find_dev_apk_version() already reads
+        # and compare its rendered `selected` option against what we just
+        # asked for; raise loudly and immediately if they don't match,
+        # rather than let a real misconfiguration masquerade as "device just
+        # hasn't caught up yet" across 4+ minutes of on-device retries.
+        actual = self.get_prompt_update_settings(app_id)
+        expected = {"apk_prompt": apk_prompt, "apk_version": str(apk_version), "app_prompt": app_prompt}
+        mismatches = {
+            k: {"expected": v, "actual": actual.get(k)}
+            for k, v in expected.items() if str(actual.get(k)) != str(v)
+        }
+        if mismatches:
+            raise RuntimeError(
+                f"set_prompt_update_settings for app {app_id} did not take effect as HQ now "
+                f"reports it: {mismatches} - HQ may have rejected/coerced part of the POST "
+                f"silently. Fix the HQ config before retrying the on-device flow, since no "
+                f"amount of login/logout retrying will help a genuinely wrong setting."
+            )
         return resp
+
+    def get_prompt_update_settings(self, app_id):
+        """
+        Read back the Manage Update Settings tab's actually-SAVED values
+        (not just what we last POSTed) by parsing which <option> in each
+        <select> carries the `selected` attribute - confirmed live the
+        releases page always pre-fills the form with the app's real saved
+        values (e.g. right after a teardown POST of apk_prompt=off, an
+        immediate GET showed `<option value="off" selected>` on that
+        select), not a blank/default-only render. Same GET/regex approach
+        as find_dev_apk_version() - see that method's own docstring for the
+        full page-shape citation.
+        """
+        url = self._apps_url(f"view/{app_id}/releases/")
+        resp = self.session.get(url)
+        resp.raise_for_status()
+        result = {}
+        for field in ("apk_prompt", "apk_version", "app_prompt", "app_version"):
+            select_match = re.search(
+                rf'<select[^>]*name=["\']{field}["\'][^>]*>(.*?)</select>',
+                resp.text, re.DOTALL | re.IGNORECASE,
+            )
+            if not select_match:
+                result[field] = None
+                continue
+            selected_match = re.search(
+                r'<option[^>]*value=["\']([^"\']*)["\'][^>]*selected[^>]*>',
+                select_match.group(1), re.IGNORECASE,
+            )
+            result[field] = selected_match.group(1) if selected_match else None
+        return result
+
+    def find_dev_apk_version(self, app_id, label_substring="(dev)"):
+        """
+        Return the `value` of whichever <option> in the "Manage Update
+        Settings" tab's apk_version <select> has `label_substring` in its
+        visible label (e.g. a "CommCare 2.66.0 (dev)" option) - so callers
+        never hardcode a specific pre-release version number that goes stale
+        the moment a newer dev/alpha build ships (see DEV_APK_VALUE).
+
+        UPDATE (2026-08-24), confirmed live (first real dispatch of this
+        method 404'd... actually 405'd): GET
+        /a/<domain>/apps/view/<app_id>/update_prompts/ is POST-only
+        (PromptSettingsUpdateView's `dispatch` is wrapped in
+        `@method_decorator(no_conflict_require_POST, name='dispatch')`,
+        corehq/apps/app_manager/views/settings.py) - it's the form's SAVE
+        target, not where it's rendered. Checked commcare-hq source
+        directly: the "Manage Update Settings" tab is actually rendered as
+        part of the Releases page - GET /a/<domain>/apps/view/<app_id>/releases/
+        (view_app -> view_generic(release_manager=True) ->
+        get_releases_context(), corehq/apps/app_manager/views/apps.py +
+        view_generic.py + releases.py:197) - whose template
+        (app_manager/partials/releases/releases.html) renders
+        `prompt_settings_form` via `{% crispy prompt_settings_form %}`
+        (django-crispy-forms renders real server-side <select>/<option>
+        HTML, not client-side JS templating, so a plain GET+regex works).
+        The apk_version <select> is present in that HTML even when
+        apk_prompt is currently "off" - PromptUpdateSettingsForm only
+        CSS-hides it then (`style="display: none;"`,
+        corehq/apps/app_manager/forms.py), never omits it from the DOM.
+        Source: corehq/apps/app_manager/views/apps.py:view_app
+                corehq/apps/app_manager/views/view_generic.py
+                corehq/apps/app_manager/views/releases.py:get_releases_context
+                corehq/apps/app_manager/forms.py:PromptUpdateSettingsForm
+        NOTE: option-label format assumption ("CommCare {label}", the label
+        itself coming from live CommCareBuildConfig data, not source code -
+        confirmed live only informally, see
+        setup_02_commcare_version_plus_one.json's own "2.65.0/latest 'dev'"
+        citation) - if HQ's labeling convention ever changes, this fails
+        loudly (see the "no option ... found" error below) rather than
+        silently resolving the wrong build.
+
+        UPDATE (2026-08-24): alpha/dev/pre-release CommCare versions are only
+        rendered as visible <option> choices in this page for a SUPERUSER
+        session - confirmed live (see
+        hq_setup/updates_2_49/setup_02_commcare_version_plus_one.json's own
+        citation: a regular web-user's dropdown tops out at "2.63.1/latest",
+        128 options, while a superuser session shows 131 options, including
+        "2.64.0/latest" ("alpha") and "2.65.0/latest" ("dev")).
+
+        UPDATE (2026-08-24, corrected same day per direct user instruction):
+        this repo's existing HQ_SESSION_COOKIE / HQ_API_USERNAME+PASSWORD ARE
+        themselves a superuser account's credentials - there is no separate,
+        lower-privileged "regular automation account" for this domain. So
+        this method just reuses self.session (the same already-authenticated
+        session set_prompt_update_settings's POST already uses) - no second
+        session or separate superuser-only env var needed. (An earlier
+        version of this method introduced a distinct HQ_SUPERUSER_SESSION_COOKIE
+        env var/throwaway session for this - removed, it was solving a
+        privilege split that doesn't actually exist here.)
+        """
+        url = self._apps_url(f"view/{app_id}/releases/")
+        resp = self.session.get(url)
+        resp.raise_for_status()
+
+        select_match = re.search(
+            r'<select[^>]*name=["\']apk_version["\'][^>]*>(.*?)</select>',
+            resp.text, re.DOTALL | re.IGNORECASE,
+        )
+        if not select_match:
+            raise RuntimeError(
+                f"Could not find an apk_version <select> on {url} - "
+                f"the settings page shape may have changed."
+            )
+        options = re.findall(
+            r'<option[^>]*value=["\']([^"\']*)["\'][^>]*>([^<]*)</option>',
+            select_match.group(1), re.IGNORECASE,
+        )
+        matches = [
+            (value, html.unescape(label).strip())
+            for value, label in options
+            if label_substring.lower() in label.lower()
+        ]
+        if not matches:
+            raise RuntimeError(
+                f"No apk_version option containing {label_substring!r} found on {url} "
+                f"({len(options)} option(s) total) - has the dev/alpha build shipped yet, "
+                f"or did HQ's labeling convention change?"
+            )
+        if len(matches) > 1:
+            raise RuntimeError(
+                f"{len(matches)} apk_version options contain {label_substring!r} on {url}: "
+                f"{matches} - narrow label_substring to disambiguate."
+            )
+        value, label = matches[0]
+        print(f"[hq_client] resolved apk_version {label_substring!r} -> {value!r} ({label!r})")
+        return value
 
     def find_recent_submission(self, username, form_path_contains=None, after=None, limit=20):
         """
@@ -563,7 +737,7 @@ def _filename_from_content_disposition(header):
     return match.group(1) if match else None
 
 
-def run_pre_step(spec: dict, client: HQClient = None):
+def run_pre_step(spec: dict, client: HQClient = None, current_apk_version: str = None):
     """
     Execute a declarative list of HQ actions, e.g. loaded from an hq_setup/*.json
     companion file for a Maestro flow:
@@ -571,6 +745,12 @@ def run_pre_step(spec: dict, client: HQClient = None):
             {"type": "mark_build_status", "app_id": "...", "saved_app_id": "...", "is_released": true},
             {"type": "create_new_build", "app_id": "...", "comment": "auto QA build"}
         ]}
+
+    `current_apk_version` substitutes for the "$CURRENT_APK_VERSION" sentinel
+    in any action's `apk_version` field (same convention as "$LAST_BUILD_ID"
+    below) - e.g. a teardown spec that restores apk_version to whatever this
+    run's actual under-test CommCare release was, instead of a value only the
+    caller (scripts/run_suite.py's own resolved apk_commcare_version) knows.
     """
     client = client or HQClient().login()
     dispatch = {
@@ -590,6 +770,10 @@ def run_pre_step(spec: dict, client: HQClient = None):
             if not last_build_id:
                 raise ValueError("$LAST_BUILD_ID used but no prior create_new_build result available")
             action["saved_app_id"] = last_build_id
+        if action.get("apk_version") == "$CURRENT_APK_VERSION":
+            if not current_apk_version:
+                raise ValueError("$CURRENT_APK_VERSION used but no current_apk_version was given")
+            action["apk_version"] = current_apk_version
         result = dispatch[action_type](**action)
         if action_type == "create_new_build":
             # NOTE: field name assumed from releases.py:save_copy()'s
