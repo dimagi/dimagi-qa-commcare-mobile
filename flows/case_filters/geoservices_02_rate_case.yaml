@@ -222,8 +222,20 @@ tags:
 - tapOn:
     text: "Skip"
     optional: true
+# UPDATE (2nd correction, 2026-08-22), confirmed live via two real CI
+# failure screenshots (both showing the map, the dropped pin, and a fully
+# rendered place card - "Delsoft Corporation" with Directions/Call/Save
+# buttons - open correctly): "Search here" is only ONE of several rotating
+# placeholder strings Maps' search bar shows ("Try gas station...", "Try
+# restaurants...", etc., presumably server-side/A-B-tested), not a fixed
+# string - so this wait was really a coin-flip on which placeholder Maps
+# happened to rotate to that run, not a real signal of whether Maps opened
+# successfully. "Directions" is part of the place card itself, present in
+# both real evidence screenshots regardless of the search bar's rotating
+# text - waits on that instead as the actually-stable confirmation that
+# SHOW ADDRESS genuinely opened Maps on the right place.
 - extendedWaitUntil:
-    visible: "Search here"
+    visible: "Directions"
     timeout: 15000
 # UPDATE (2026-08-19, 2nd correction), confirmed live (build
 # batch2-regressions-fix-v1): a fixed "1 back to exit Maps + 4 backs to
