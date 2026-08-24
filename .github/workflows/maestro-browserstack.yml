@@ -394,7 +394,7 @@ jobs:
       # single-tag ad-hoc dispatch) matrix.tags containing the flows' own
       # updates_2_49_apk_prompt tag.
       - name: Run Maestro suite (prompted_update_scenario_01, apk-prompt on)
-        if: always() && (matrix.name == 'group-a' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'updates_2_49_apk_prompt')))
+        if: always() && (matrix.name == 'group-a' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'updates_2_49')))
         env:
           BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
           BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
@@ -431,7 +431,7 @@ jobs:
           python scripts/run_suite.py "${ARGS[@]}"
 
       - name: Run Maestro suite (prompted_update_scenario_02, apk-prompt forced)
-        if: always() && (matrix.name == 'group-a' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'updates_2_49_apk_prompt')))
+        if: always() && (matrix.name == 'group-a' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'updates_2_49')))
         env:
           BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
           BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
