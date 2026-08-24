@@ -24,6 +24,17 @@ flows.zip
 # latest-release/--release-tag download path.
 !resources/app-commcare-release-Android16.apk
 
+# Exception: the "old" CommCare build for scripts/run_appium_suite.py's
+# updates_partial_failed group-d mid-session-update tests (~22MB) -
+# midSessionInstallApps needs a real, older-signed-with-the-same-cert APK on
+# disk to install alongside the current release inside one Appium session;
+# there's no GitHub release/asset for this exact build to fetch on demand,
+# so it's committed directly, same reasoning as app-commcare-release-
+# Android16.apk above. Confirmed missing from git (never committed despite
+# existing locally) after a real CI failure on group-b:
+# FileNotFoundError on resources/commcare_2.45_release.apk.
+!resources/commcare_2.45_release.apk
+
 # BrowserStack / run artifacts
 artifacts/
 *.log
