@@ -393,7 +393,7 @@ jobs:
       # 'group-a' for the normal All/nightly dispatch, or (for a scoped
       # single-tag ad-hoc dispatch) matrix.tags containing the flows' own
       # updates_2_49_apk_prompt tag.
-      - name: Run Maestro suite (prompted_update_scenario_01, apk-prompt on)
+      - name: Run Maestro suite (Updates tab - CommCare APK update prompt, 1/2 optional)
         if: always() && (matrix.name == 'group-a' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'updates_2_49')))
         env:
           BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
@@ -421,7 +421,7 @@ jobs:
           if [ -z "$DEVICES" ]; then
             DEVICES="${ANDROID_DEVICE_MAP[$ANDROID_VERSION]}-$ANDROID_VERSION"
           fi
-          ARGS=(--devices "$DEVICES" --flow flows/updates_2_49/prompted_update_scenario_01_ill_update_later.yaml --hq-setup hq_setup/updates_2_49/setup_02_commcare_version_plus_one.json --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-prompted-update-scenario-01-apk")
+          ARGS=(--devices "$DEVICES" --flow flows/updates_2_49/prompted_update_scenario_01_ill_update_later.yaml --hq-setup hq_setup/updates_2_49/setup_02_commcare_version_plus_one.json --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-apk-update-prompt-1-optional")
           APK_SOURCE="${{ github.event.inputs.apk_source || 'GitHub Releases' }}"
           if [ "$APK_SOURCE" != "GitHub Releases" ]; then
             ARGS+=(--apk "$APK_SOURCE")
@@ -430,7 +430,7 @@ jobs:
           fi
           python scripts/run_suite.py "${ARGS[@]}"
 
-      - name: Run Maestro suite (prompted_update_scenario_02, apk-prompt forced)
+      - name: Run Maestro suite (Updates tab - CommCare APK update prompt, 2/2 forced)
         if: always() && (matrix.name == 'group-a' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'updates_2_49')))
         env:
           BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
@@ -458,7 +458,7 @@ jobs:
           if [ -z "$DEVICES" ]; then
             DEVICES="${ANDROID_DEVICE_MAP[$ANDROID_VERSION]}-$ANDROID_VERSION"
           fi
-          ARGS=(--devices "$DEVICES" --flow flows/updates_2_49/prompted_update_scenario_02_forced_commcare_update.yaml --hq-setup hq_setup/updates_2_49/prompted_update_scenario_02_forced.json --hq-teardown hq_setup/updates_2_49/prompted_update_scenario_teardown.json --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-prompted-update-scenario-02-apk")
+          ARGS=(--devices "$DEVICES" --flow flows/updates_2_49/prompted_update_scenario_02_forced_commcare_update.yaml --hq-setup hq_setup/updates_2_49/prompted_update_scenario_02_forced.json --hq-teardown hq_setup/updates_2_49/prompted_update_scenario_teardown.json --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-apk-update-prompt-2-forced")
           APK_SOURCE="${{ github.event.inputs.apk_source || 'GitHub Releases' }}"
           if [ "$APK_SOURCE" != "GitHub Releases" ]; then
             ARGS+=(--apk "$APK_SOURCE")
