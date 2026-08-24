@@ -745,6 +745,30 @@ def _dispatch_and_report(args, apk_path, apk_commcare_version, prior_build_by_ap
                 if retry_test_results:
                     test_results = report_generator.merge_rerun(test_results, retry_test_results)
 
+        # UPDATE (2026-08-25), confirmed live in CI (a real merged-report
+        # run showing only 88 of the ~139 unique flows this exact dispatch
+        # actually selected across all 3 matrix groups - entire categories
+        # from group-a's own MAIN dispatch, e.g. multimedia/install/
+        # other_error_tests/support_menus/trigger_device_logs, were
+        # completely absent): generate_report() always OVERWRITES
+        # reports/latest_results.json, and group-a's job now runs
+        # run_suite.py 3 times in sequence (the main tag-based dispatch,
+        # then the 2 dedicated updates_2_49 apk-prompt steps) - each later
+        # call was silently clobbering the earlier one's results instead
+        # of adding to them, so only the LAST invocation's tiny result set
+        # ever made it into that job's uploaded artifact. Same real bug
+        # scripts/run_appium_suite.py's own main() already found and fixed
+        # (2026-08-19) for exactly this "extra step in an existing job"
+        # pattern - see that file's own citation for the full reasoning,
+        # including why entries are replaced-by-name rather than blindly
+        # concatenated (a stale local rerun otherwise lingers forever).
+        existing_results_path = REPO_ROOT / "reports" / "latest_results.json"
+        if existing_results_path.exists():
+            existing = json.loads(existing_results_path.read_text(encoding="utf-8"))
+            new_names = {r.name for r in test_results}
+            test_results = [report_generator.TestResult(**item) for item in existing
+                             if item["name"] not in new_names] + test_results
+
         report_path = report_generator.generate_report(build_ids[0], test_results)
         print(f"HTML report: {report_path}")
 
