@@ -22,6 +22,48 @@ import requests
 
 API_BASE = "https://api-cloud.browserstack.com/app-automate/maestro/v2"
 
+# UPDATE (2026-08-24), confirmed live in CI (run 32702204540, group-c): a
+# genuine transient "504 Server Error: GATEWAY_TIMEOUT" from BrowserStack's
+# own /android/build endpoint hit trigger_build()'s bare
+# resp.raise_for_status(), with no retry - the resulting unhandled
+# HTTPError crashed run_suite.py's whole process mid-dispatch, losing every
+# already-passing result from that run (nothing had been flushed to
+# reports/latest_results.json yet). Every method below now retries through
+# transient failures (5xx responses, connection resets, timeouts) a few
+# times with backoff before giving up - the exact same class of "real
+# server-side hiccup, worth absorbing centrally" reasoning already applied
+# to flows/common/login.yaml's Bad Server Response retries, just at the
+# HTTP-client layer instead of the on-device UI layer.
+_RETRYABLE_STATUS_CODES = {500, 502, 503, 504}
+
+
+def _request_with_retry(method, url, attempts=4, backoff_seconds=5, file_path=None, file_field="file", **kwargs):
+    """`file_path`/`file_field`: for file-upload calls, opens the file FRESH
+    on every attempt (rather than accepting an already-opened handle in
+    kwargs) - a retried request reusing the same handle from a prior
+    attempt would send an already-fully-read/empty body, a silent-corruption
+    bug worse than not retrying at all."""
+    last_exc = None
+    for attempt in range(attempts):
+        try:
+            if file_path:
+                with open(file_path, "rb") as f:
+                    resp = requests.request(method, url, files={file_field: f}, **kwargs)
+            else:
+                resp = requests.request(method, url, **kwargs)
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as exc:
+            last_exc = exc
+        else:
+            if resp.status_code not in _RETRYABLE_STATUS_CODES:
+                resp.raise_for_status()
+                return resp
+            last_exc = requests.exceptions.HTTPError(
+                f"{resp.status_code} Server Error (retryable) for url: {url}", response=resp
+            )
+        if attempt < attempts - 1:
+            time.sleep(backoff_seconds)
+    raise last_exc
+
 
 class BrowserStackClient:
     def __init__(self, username=None, access_key=None):
@@ -30,19 +72,13 @@ class BrowserStackClient:
         self.auth = (self.username, self.access_key)
 
     def upload_app(self, apk_path, custom_id=None):
-        with open(apk_path, "rb") as f:
-            files = {"file": f}
-            data = {"custom_id": custom_id} if custom_id else {}
-            resp = requests.post(f"{API_BASE}/app", auth=self.auth, files=files, data=data)
-        resp.raise_for_status()
+        data = {"custom_id": custom_id} if custom_id else {}
+        resp = _request_with_retry("post", f"{API_BASE}/app", auth=self.auth, data=data, file_path=apk_path)
         return resp.json()  # {"app_url": "bs://...", ...}
 
     def upload_test_suite(self, zip_path, custom_id=None):
-        with open(zip_path, "rb") as f:
-            files = {"file": f}
-            data = {"custom_id": custom_id} if custom_id else {}
-            resp = requests.post(f"{API_BASE}/test-suite", auth=self.auth, files=files, data=data)
-        resp.raise_for_status()
+        data = {"custom_id": custom_id} if custom_id else {}
+        resp = _request_with_retry("post", f"{API_BASE}/test-suite", auth=self.auth, data=data, file_path=zip_path)
         return resp.json()  # {"test_suite_url": "bs://...", ...}
 
     def trigger_build(self, app_url, test_suite_url, devices, project="QA COMMCARE MOBILE TESTS",
@@ -79,13 +115,11 @@ class BrowserStackClient:
             payload["setEnvVariables"] = env_variables
         if extra_params:
             payload.update(extra_params)
-        resp = requests.post(f"{API_BASE}/android/build", auth=self.auth, json=payload)
-        resp.raise_for_status()
+        resp = _request_with_retry("post", f"{API_BASE}/android/build", auth=self.auth, json=payload)
         return resp.json()  # includes build id
 
     def get_build(self, build_id):
-        resp = requests.get(f"{API_BASE}/builds/{build_id}", auth=self.auth)
-        resp.raise_for_status()
+        resp = _request_with_retry("get", f"{API_BASE}/builds/{build_id}", auth=self.auth)
         return resp.json()
 
     def get_session(self, build_id, session_id):
@@ -94,8 +128,7 @@ class BrowserStackClient:
         (report_generator needs these) live in this separate per-session
         endpoint. Confirmed live: the build-level response's session objects
         have no `testcases.data`, only `testcases.count`/`testcases.status`."""
-        resp = requests.get(f"{API_BASE}/builds/{build_id}/sessions/{session_id}", auth=self.auth)
-        resp.raise_for_status()
+        resp = _request_with_retry("get", f"{API_BASE}/builds/{build_id}/sessions/{session_id}", auth=self.auth)
         return resp.json()
 
     def wait_for_build(self, build_id, poll_seconds=30, timeout_seconds=5400):
