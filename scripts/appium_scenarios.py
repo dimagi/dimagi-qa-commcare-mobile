@@ -618,7 +618,26 @@ def run_scenario_2(driver, appium_client, new_app_url, username, password, app_c
     own UPDATE for the full evidence/citation) - opens the menu WITHOUT
     tapping "start download" (start_download=False), so the interrupt
     lands deterministically before anything begins, instead of racing a
-    download that can finish before the swap takes effect."""
+    download that can finish before the swap takes effect.
+
+    UPDATE (2nd correction, 2026-08-25), confirmed live via a second real
+    dispatch AFTER the start_download=False fix above: identical result
+    (device already on "Mobile Updates - Test 1_2!" v71, i.e. fully
+    updated) even though "start download" was never tapped at all this
+    time. This means the download-speed race wasn't the (whole) story -
+    something about the login/relaunch sequence itself is applying the
+    pending update regardless of whether the update menu was ever used to
+    explicitly start it, most plausibly CommCare's normal sync/restore-on-
+    login flow independently detecting and completing any pending update
+    as routine behavior. If that's right, this scenario's premise (an
+    early-enough interrupt leaves a downloaded-but-unapplied update that
+    needs a later MANUAL completion) may not be achievable via this
+    mid-session-binary-swap mechanism at all - login itself may
+    deterministically resolve it either way. Left failing rather than
+    guessing a third fix blind; needs either a way to inspect the pending-
+    update state directly (not just its on-screen symptom) or acceptance
+    as a real product-behavior limit on what this test case can verify
+    this way."""
     steps = [
         ("Install app by code (old CommCare binary)", lambda: _install_app_by_code(driver, app_code)),
         ("Login (old binary)", lambda: _login(driver, username, password)),
