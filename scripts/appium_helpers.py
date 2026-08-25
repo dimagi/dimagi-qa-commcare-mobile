@@ -167,6 +167,87 @@ def tap_by_text(driver, pattern, timeout=10, regex=False, optional=False, poll=_
     raise TimeoutError(f"Text {'matching regex ' if regex else ''}{pattern!r} never became tappable within {timeout}s")
 
 
+_BOUNDS_RE = re.compile(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]")
+
+
+def tap_by_text_coords(driver, pattern, timeout=10, regex=False, optional=False, poll=_DEFAULT_POLL):
+    """UPDATE (2026-08-25), confirmed live: tap_by_text's element.click()
+    (UiAutomator2's accessibility-API-based click) consistently times out
+    (never once succeeds in 15s, reproduced 3x) on rows inside
+    com.android.documentsui's own directory GridView, even though the
+    matched element's own `bounds`/`displayed` attributes are valid and
+    identical between attempts - real evidence ruled out staleness/timing.
+    A raw coordinate touch (driver.tap(), the classic MJSONWP tap - not
+    UiAutomator2's own `mobile: clickGesture`, which this server's real
+    UnknownCommandError confirms isn't even in its supported command list)
+    at that exact same element's bounds succeeds on the first attempt -
+    bypasses whatever's blocking the accessibility-click path for this
+    specific view type. Reuses tap_by_text's own text/content-desc
+    matching, just swaps the click mechanism for elements where that
+    matters (DocumentsUI folder/file grids so far)."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            for el in driver.find_elements(AppiumBy.XPATH, "//*[@text or @content-desc]"):
+                try:
+                    labels = [_unescape_xml(el.get_attribute("text") or ""),
+                              _unescape_xml(el.get_attribute("content-desc") or "")]
+                    bounds = el.get_attribute("bounds")
+                except StaleElementReferenceException:
+                    continue
+                if any(_matches(label, pattern, regex) for label in labels if label):
+                    m = _BOUNDS_RE.match(bounds or "")
+                    if not m:
+                        continue
+                    x1, y1, x2, y2 = map(int, m.groups())
+                    driver.tap([((x1 + x2) // 2, (y1 + y2) // 2)])
+                    return True
+        except StaleElementReferenceException:
+            pass
+        time.sleep(poll)
+    if optional:
+        return False
+    raise TimeoutError(f"Text {'matching regex ' if regex else ''}{pattern!r} never became tappable within {timeout}s")
+
+
+def tap_by_exact_text_coords(driver, exact_text, timeout=10, optional=False, poll=_DEFAULT_POLL):
+    """UPDATE (2026-08-25), confirmed live via direct instrumentation:
+    tap_by_text_coords' whole-tree "//*[@text or @content-desc]" scan
+    returned 160 candidate elements on a real DocumentsUI folder-listing
+    screen, and get_attribute() is a real network round-trip to
+    BrowserStack per element per attribute (~320 round-trips to check
+    them all) - slow enough that this screen's own thumbnail-icon loading
+    mutated the view PARTWAY through nearly every single iteration attempt
+    (confirmed: elements past a certain index were uniformly stale in a
+    live dump), so the target text was never reached before its batch went
+    stale - reproducibly, not flaky, for the full timeout window every
+    time. For a known LITERAL target string (not a real regex need), a
+    server-side exact-match XPath returns just the ONE matching element
+    directly - zero wasted round-trips, confirmed live this reaches the
+    target and taps it successfully on the first attempt where the
+    whole-tree scan never could. Only for literal, non-regex text - use
+    tap_by_text/tap_by_text_coords for real pattern matching."""
+    deadline = time.monotonic() + timeout
+    escaped = exact_text.replace("'", "\"'\"'\"")
+    xpath = f"//*[@text='{escaped}' or @content-desc='{escaped}']"
+    while time.monotonic() < deadline:
+        try:
+            els = driver.find_elements(AppiumBy.XPATH, xpath)
+            if els:
+                bounds = els[0].get_attribute("bounds")
+                m = _BOUNDS_RE.match(bounds or "")
+                if m:
+                    x1, y1, x2, y2 = map(int, m.groups())
+                    driver.tap([((x1 + x2) // 2, (y1 + y2) // 2)])
+                    return True
+        except StaleElementReferenceException:
+            pass
+        time.sleep(poll)
+    if optional:
+        return False
+    raise TimeoutError(f"Exact text {exact_text!r} never became tappable within {timeout}s")
+
+
 def input_text(driver, resource_id, text, timeout=10):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:

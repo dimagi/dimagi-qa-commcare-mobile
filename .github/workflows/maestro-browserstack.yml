@@ -513,6 +513,56 @@ jobs:
             --apk resources/commcare_2.45_release.apk \
             --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-old-client-recovery-measures"
 
+      # Runs the 4 Recovery Measures scenarios that genuinely need a real
+      # .ccz file pushed onto the device's filesystem before the "Select
+      # CCZ" system file picker (Storage Access Framework) can find one -
+      # Maestro has no file-push mechanism at all (see each of these flows'
+      # own "REQUIRED MANUAL/CI PRE-STEP (not run by Maestro)" header:
+      # offline_06_select_ccz_via_picker.yaml, offline_08_move_ccz_to_
+      # downloads.yaml, offline_reinstall_update_app_flow.yaml,
+      # reinstall_update_05_06_chooser_and_ccz.yaml's own "Reinstall Using
+      # CCZ" branch). scripts/appium_browserstack_client.py's push_file
+      # (confirmed live 2026-08-25) does this via a real Appium session -
+      # see scripts/run_appium_offline_ccz_suite.py's own module docstring
+      # for the full citation. Additive to the plain Maestro flows above
+      # (which still cover everything except this one file-picker step) -
+      # same fold-into-the-matrix-job pattern as every other Appium step in
+      # this job, gated on group-c (recovery_measures' own group) or a
+      # scoped recovery_measures tag dispatch.
+      - name: Run Appium suite on BrowserStack (Recovery Measures - CCZ file picker)
+        if: always() && (matrix.name == 'group-c' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'recovery_measures')))
+        env:
+          BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
+          BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
+          HQ_DOMAIN: qateam
+          CC_TEST_USERNAME: ${{ secrets.CC_TEST_USERNAME }}
+          CC_TEST_PASSWORD: ${{ secrets.CC_TEST_PASSWORD }}
+          HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
+          HQ_WEB_USER_PASSWORD: ${{ secrets.HQ_WEB_USER_PASSWORD }}
+        run: |
+          declare -A ANDROID_DEVICE_MAP=(
+            ["16.0"]="Samsung Galaxy S26"
+            ["15.0"]="Samsung Galaxy S25"
+            ["14.0"]="Samsung Galaxy S24"
+            ["13.0"]="Samsung Galaxy S23"
+            ["12.0"]="Samsung Galaxy S22"
+            ["11.0"]="Samsung Galaxy S21"
+            ["10.0"]="Samsung Galaxy S20"
+          )
+          ANDROID_VERSION="${{ github.event.inputs.android_version || '16.0' }}"
+          DEVICES="${{ github.event.inputs.devices }}"
+          if [ -z "$DEVICES" ]; then
+            DEVICES="${ANDROID_DEVICE_MAP[$ANDROID_VERSION]}-$ANDROID_VERSION"
+          fi
+          ARGS=(--devices "$DEVICES" --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-appium-offline-ccz")
+          APK_SOURCE="${{ github.event.inputs.apk_source || 'GitHub Releases' }}"
+          if [ "$APK_SOURCE" != "GitHub Releases" ]; then
+            ARGS+=(--apk "$APK_SOURCE")
+          elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
+            ARGS+=(--release-tag "${{ github.event.inputs.release_tag }}")
+          fi
+          python scripts/run_appium_offline_ccz_suite.py "${ARGS[@]}"
+
       # No report-history cache restore/save here on purpose: each matrix
       # job's own reports/history.json only reflects ITS slice of tags, not
       # the full logical run, so it isn't meaningful on its own - the

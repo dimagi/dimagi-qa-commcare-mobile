@@ -26,6 +26,7 @@ Auth is the same HTTP Basic BROWSERSTACK_USERNAME/BROWSERSTACK_ACCESS_KEY
 pair scripts/browserstack_client.py already uses (same BrowserStack account,
 same credentials, different product API).
 """
+import base64
 import os
 import sys
 
@@ -178,3 +179,25 @@ class AppiumBrowserStackClient:
         UnknownMethodException/InvalidArgumentException - so call that
         instead of reimplementing (worse) the same fallback by hand."""
         driver.install_app(app_url)
+
+    @staticmethod
+    def push_file(driver, device_path, local_file_path):
+        """Pushes a local file onto the device's filesystem (e.g. a CCZ into
+        /sdcard/Download/ or a custom folder) before driving the on-device
+        UI that expects to find it there - the one thing this repo's Maestro
+        flows genuinely cannot do (confirmed: no `adb`/file-push wiring
+        anywhere in scripts/run_suite.py or browserstack_client.py, per
+        several flows/recovery_measures/offline_*.yaml files' own
+        "REQUIRED MANUAL/CI PRE-STEP (not run by Maestro)" headers).
+
+        UPDATE (2026-08-25), confirmed live: `mobile: pushFile` (the newer
+        extension-command form used by install_mid_session's own note above
+        for installApp) failed outright with UnknownMethodException on this
+        session's Appium server (1.22.0) - unlike installApp, there's no
+        newer-form fallback needed here anyway, since Appium-Python-Client's
+        classic `driver.push_file(path, base64data)` method (the older
+        dedicated PUSH_FILE endpoint, same vintage as install_app's own
+        fallback) worked directly on the first real attempt."""
+        with open(local_file_path, "rb") as f:
+            payload = base64.b64encode(f.read()).decode()
+        driver.push_file(device_path, payload)

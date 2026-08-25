@@ -52,3 +52,11 @@ reports/*
 # scripts/fetch_large_ccz.py or HQClient.download_ccz) if you need one to
 # inspect while writing/fixing a flow's selectors.
 *.ccz
+
+# Exception (2026-08-25): these two ARE genuinely read at runtime, unlike
+# every other CCZ excluded above - scripts/run_appium_offline_ccz_suite.py
+# pushes their real bytes onto the test device's filesystem for the
+# Recovery Measures "Select CCZ" system file picker to find. See
+# resources/README.md's own 2026-08-25 update for the full citation.
+!resources/OFFLINE_TEST_ONE.ccz
+!resources/RU_TEST_TWO.ccz

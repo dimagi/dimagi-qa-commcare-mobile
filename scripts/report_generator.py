@@ -50,6 +50,57 @@ class TestResult:
     maestro_commands_url: str = ""
 
 
+# UPDATE (2026-08-25), per direct user request: report.html/Slack's failed-
+# tests table showed raw flow filenames (e.g. "offline_06_select_ccz_via_
+# picker") - readable to whoever wrote the flow, opaque to anyone else
+# skimming a Slack notification. Keyed by the flow's own stem (TestResult.name
+# with its "<workflow>/" prefix stripped, matching how slack_notify.py's
+# render_failed_tests_txt already derives that stem) - covers recovery_measures
+# in full (including cc_reinstall_needed_flow/cc_update_needed_flow, the
+# pre-split names still needed to render older reports/history.json entries
+# correctly) plus this session's new Appium-based offline CCZ scenarios. Not
+# yet extended to every workflow in the repo - display_name()'s own fallback
+# (title-cased, underscores to spaces) keeps anything unmapped readable
+# without requiring an exhaustive rename-everything pass up front.
+DISPLAY_NAMES = {
+    "cc_reinstall_needed_flow": "CC Reinstall Needed",
+    "cc_update_needed_flow": "CC Update Needed",
+    "cc_reinstall_needed_01_trigger_on_old_client": "CC Reinstall Needed: Trigger (Old Client)",
+    "cc_reinstall_needed_02_verify_on_new_client": "CC Reinstall Needed: Verify (New Client)",
+    "cc_update_needed_01_trigger_on_old_client": "CC Update Needed: Trigger (Old Client)",
+    "cc_update_needed_02_verify_on_new_client": "CC Update Needed: Verify (New Client)",
+    "offline_06_select_ccz_via_picker": "Offline: Select CCZ via File Picker",
+    "offline_08_move_ccz_to_downloads": "Offline: CCZ Placed in Downloads",
+    "offline_09_uninstall_reinstall_test_two": "Offline: Uninstall & Reinstall (Test Two)",
+    "offline_reinstall_update_app_flow": "Offline: Reinstall + Update App",
+    "reinstall_update_05_06_chooser_and_ccz": "Reinstall/Update: Chooser + CCZ Branch",
+    "reinstall_update_07_10_online_install_and_negative": "Reinstall/Update: Online Install + Negative Check",
+    "retry_recovery_02_network_toggle_retry": "Retry Recovery: Network Toggle",
+    "update_app_02_forced_two_to_three": "Update App: Forced (Two to Three)",
+    "offline_08_appium": "Offline: CCZ in Downloads (Appium)",
+    "offline_06_appium": "Offline: Select CCZ via Picker (Appium)",
+    "offline_reinstall_update_appium": "Offline: Reinstall + Update (Appium)",
+    "reinstall_05_06_appium": "Reinstall/Update: Chooser + CCZ Branch (Appium)",
+}
+
+
+def display_name(name, workflow=None):
+    """Human-readable version of a TestResult.name for reports/Slack. Strips
+    a leading "<workflow>/" prefix if present (TestResult.name is built as
+    f"{workflow}/{stem}" - see run_suite.py/run_appium_*.py's own TestResult
+    calls), looks up DISPLAY_NAMES by the bare stem, and falls back to a
+    title-cased/de-underscored version of the stem for anything not yet
+    mapped rather than showing a raw, unmapped name unchanged."""
+    stem = name
+    if workflow and name.startswith(f"{workflow}/"):
+        stem = name[len(workflow) + 1:]
+    elif "/" in name:
+        stem = name.split("/", 1)[1]
+    if stem in DISPLAY_NAMES:
+        return DISPLAY_NAMES[stem]
+    return stem.replace("_", " ").strip().capitalize()
+
+
 # ---------------------------------------------------------------- normalize --
 
 def _parse_duration_ms(duration):
@@ -617,7 +668,7 @@ def render_html(build_meta, results, counts, history):
         rows.append(
             f'<tr data-status="{r.status}" data-text="{_escape(text)}">'
             f'<td>{_escape(r.workflow)}</td>'
-            f'<td>{_escape(r.name)}<div class="links">{"".join(links)}</div>{"".join(detail_parts)}</td>'
+            f'<td>{_escape(display_name(r.name, r.workflow))}<div class="links">{"".join(links)}</div>{"".join(detail_parts)}</td>'
             f'<td><span class="badge badge-{r.status}">{r.status}</span></td>'
             f'<td class="n">{r.duration_ms}ms</td>'
             f'<td>{_escape(r.device)}</td></tr>'

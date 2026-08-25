@@ -135,10 +135,7 @@ def render_failed_tests_txt(failed_results, out_path):
     header = f"{'Workflow'.ljust(workflow_width)} | Test"
     lines = [header, "-" * len(header)]
     for r in failed_results:
-        name = r["name"]
-        prefix = f"{r['workflow']}/"
-        if name.startswith(prefix):
-            name = name[len(prefix):]
+        name = report_generator.display_name(r["name"], r["workflow"])
         lines.append(f"{r['workflow'].ljust(workflow_width)} | {name}")
     pathlib.Path(out_path).write_text("\n".join(lines) + "\n", encoding="utf-8")
 

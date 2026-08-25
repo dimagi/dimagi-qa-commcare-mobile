@@ -33,6 +33,10 @@ script and `HQClient`'s own docstrings for the download mechanics
 (`GET /a/<domain>/apps/download/<build_id>/CommCare.ccz` kicks off an async
 job rather than streaming the file directly).
 
+UPDATE (2026-08-25): `OFFLINE_TEST_ONE.ccz`/`RU_TEST_TWO.ccz` below are a
+DIFFERENT case from the cleanup above - not unread reference copies. See
+"Other files" for why.
+
 ## Other files
 
 - `Mobile API Testing App-release.apk` - the ExternalApp Tests companion
@@ -46,3 +50,17 @@ job rather than streaming the file directly).
   build to test instead of a GitHub release, e.g. one not yet published
   there. Wired in via `scripts/run_suite.py`/`run_appium_suite.py --apk`
   and the CI workflow's `apk_source` dropdown.
+- `OFFLINE_TEST_ONE.ccz` / `RU_TEST_TWO.ccz` - real CCZs pushed onto the
+  test device's filesystem (via `AppiumBrowserStackClient.push_file`) by
+  `scripts/run_appium_offline_ccz_suite.py`, so the Recovery Measures
+  "Select CCZ" system file picker (Storage Access Framework) has a real
+  file to find - the app itself is still installed at run time via a
+  dynamic HQ app-code, same as every other flow; only the bytes the
+  picker selects come from here. Genuinely read at runtime (unlike the
+  removed CCZs above, which existed only for humans to inspect
+  `suite.xml`/`app_strings.txt` while writing flow selectors) - matches
+  `commcare_2.45_release.apk`'s own committed-and-referenced-directly
+  convention. Re-fetch with `HQClient(domain=...).download_ccz(build_id,
+  "resources/<KEY>.ccz")` (see `scripts/app_registry.py`'s
+  `OFFLINE_TEST_ONE`/`RU_TEST_TWO` entries for domain/build_id) if a
+  build ever needs to change.
