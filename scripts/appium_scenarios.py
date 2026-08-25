@@ -60,22 +60,42 @@ def _relaunch_app(driver):
     'activateApp'" error _install_app_by_code_once() already hit and fixed
     (2026-08-21) for the fresh-install case - this BrowserStack Appium
     driver build (appium-uiautomator2-driver 1.22.0) doesn't support the
-    "mobile: activateApp" extension at all, regardless of context. Those
-    3 call sites never got the same fix. Reusing the identical
-    swallow-if-activateApp pattern here too, on the same reasoning: a
-    `mobile: installApp` install of a newer build over a running app
-    (appium_browserstack_client.install_mid_session) very plausibly already
-    brings the app back to the foreground as a side effect of the install
-    itself, same as BrowserStack's own session-start auto-launch made the
-    fresh-install case's call provably redundant. If that assumption is
-    wrong, the very next step (a login/version check) will fail with a
-    different, diagnosable error - not this one - which is the same
-    real-evidence-first approach used everywhere else in this file."""
-    try:
-        driver.activate_app(APP_ID)
-    except Exception as e:
-        if "activateApp" not in str(e):
-            raise
+    "mobile: activateApp" extension at all, regardless of context.
+
+    UPDATE (2026-08-25), confirmed live in CI - the swallow-and-assume-
+    redundant fix above was WRONG for this call site: a real failure
+    screenshot showed the device sitting on the plain Android home screen
+    (wallpaper, app icons) after "Relaunch app after binary swap", not
+    CommCare at all - unlike the fresh-install case (where BrowserStack's
+    own session-start auto-launch genuinely does make the call redundant),
+    a `mobile: installApp` upgrade over an already-running app does NOT
+    bring it back to the foreground on its own. Uses start_activity (this
+    driver DOES support the "startActivity" mobile command, confirmed
+    against its own reported whitelist) targeting CommCare's real
+    launcher activity (org.commcare.activities.DispatchActivity, confirmed
+    against app/AndroidManifest.xml's own LAUNCHER intent-filter) instead
+    of the unsupported activate_app - safe to call unconditionally in
+    every context (fresh-install or mid-session-swap alike), since
+    re-affirming an already-foregrounded app's launcher activity is a
+    harmless no-op.
+
+    UPDATE (2026-08-25, 2nd correction): driver.start_activity() isn't a
+    method on this Appium-Python-Client version ('WebDriver' object has
+    no attribute 'start_activity', confirmed live) - calls the mobile:
+    command directly via execute_script instead.
+
+    UPDATE (2026-08-25, 3rd correction), confirmed live: a first attempt
+    passed separate appPackage/appActivity keys (the OLDER, deprecated
+    JSONWP `startActivity` endpoint's shape) - failed with a real adb
+    error, `am start-activity` run with NO arguments at all
+    ("java.lang.IllegalArgumentException: No intent supplied"), meaning
+    this driver's mobile: startActivity handler doesn't recognize those
+    keys and silently built an empty command. The error names exactly the
+    key it wanted: a single "intent" string in "<package>/<activity>"
+    form (adb's own `am start -n` shape), not two separate keys."""
+    driver.execute_script("mobile: startActivity", {
+        "intent": f"{APP_ID}/org.commcare.activities.DispatchActivity",
+    })
 
 
 def _run_steps(steps):
