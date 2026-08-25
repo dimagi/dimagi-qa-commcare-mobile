@@ -1,0 +1,57 @@
+appId: org.commcare.dalvik
+tags:
+  - recovery_measures
+  - automatable
+  - requires_old_client_apk
+---
+# Master Mobile Plan (2026) > Recovery Measures > CC Update Needed
+# (Test Case IDs "3" and "4" under this section, per coverage_matrix.csv's
+# reuse of the "CC Reinstall Needed" row labels - the forced-prompt half).
+#
+# File split 2026-08-21 (was cc_update_needed_flow.yaml, steps 1-2) - same
+# fix/rationale as
+# cc_reinstall_needed_01_trigger_on_old_client.yaml's own header: the real
+# precondition is an OLD CommCare CLIENT binary (RecoveryMeasure.
+# MEASURE_TYPE_CC_UPDATE / PromptApkUpdateActivity, gated on
+# cc_version_min/max - see the old file's header for the full citation, still
+# accurate), not a mid-session client swap. Dispatch this file with
+# `--apk resources/commcare_2.45_release.apk` (see the
+# `requires_old_client_apk` tag) - not yet wired into CI's own apk_source
+# dropdown (currently one global choice per whole workflow dispatch).
+#
+# See cc_update_needed_02_verify_on_new_client.yaml for the negative-check
+# half, and CAVEAT below about the Play Core / Play Store update UI not
+# being reliably driveable further.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_CC_UPDATE_NEEDED}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+# "CC Reinstall Needed 3" (CC Update Needed step) - the forced
+# "CommCare needs to be updated" message.
+#
+# UPDATE (2026-08-25), confirmed live in CI (real failure hierarchy dump):
+# the assumed "(?i).*update.*required.*" regex never matched - the real
+# on-device title is "New version of CommCare is Required"
+# (PromptApkUpdateActivity's apk.update.required.title, per
+# android_translatable_strings.txt - already confirmed correct elsewhere
+# this session, e.g. flows/updates_2_49/prompted_update_scenario_02_
+# forced_commcare_update.yaml's own identical assertion) - it contains
+# neither "update" nor a literal "required" anywhere near each other, just
+# "CommCare is Required". Everything else about the screen was already
+# correct (the blocking forced prompt genuinely appeared).
+- assertVisible: "New version of CommCare is Required"
+- assertVisible:
+    text: "(?i).*play store.*"
+# "CC Reinstall Needed 4" (CC Update Needed step) - update: tap the action
+# button. PromptApkUpdateActivity.onCreate() also kicks off the Play Core
+# in-app-update API in forced mode, so the OS's own update UI may appear
+# instead of/on top of this - only asserting the tap navigates away from the
+# blocking prompt, not driving that UI further (same CAVEAT as the pre-split
+# file).
+- tapOn:
+    text: "(?i).*update.*play store.*"

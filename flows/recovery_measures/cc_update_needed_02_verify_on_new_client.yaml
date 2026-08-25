@@ -1,0 +1,31 @@
+appId: org.commcare.dalvik
+tags:
+  - recovery_measures
+  - automatable
+---
+# Master Mobile Plan (2026) > Recovery Measures > CC Update Needed
+# (Test Case ID "5" under this section - the negative check).
+#
+# File split 2026-08-21 (was cc_update_needed_flow.yaml, step 3) - same
+# rationale as cc_reinstall_needed_02_verify_on_new_client.yaml: just needs
+# the default/current CommCare client this repo already dispatches with, no
+# special --apk flag. Fresh install here matches this repo's own "each flow
+# runnable in isolation" convention (docs/FRAMEWORK.md).
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_CC_UPDATE_NEEDED}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+# "CC Reinstall Needed 5" (CC Update Needed step) - negative check: on a
+# current client, no forced update prompt, home screen loads normally, and
+# the only form in the app can be submitted.
+- assertVisible: "Start"
+- assertNotVisible:
+    text: "(?i).*update.*required.*"
+- runFlow: ../common/submit_only_form.yaml
+- assertVisible:
+    text: "(?i).*form.*success.*completed.*"

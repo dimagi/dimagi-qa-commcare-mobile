@@ -60,10 +60,26 @@ appId: org.commcare.dalvik
 # confirmed via the failure hierarchy dump, not app content at all. Never
 # happened on the Android 10/Galaxy S20 device this flow was tuned
 # against. Dismiss it defensively if present before continuing.
+# UPDATE, confirmed live (2026-08-25, real failure dispatching against
+# resources/commcare_2.45_release.apk): the "Allow CommCare to send you
+# notifications?" (Allow/Don't allow) runtime permission prompt can block
+# enter_app_location below - the same dialog scripts/appium_browserstack_
+# client.py's own auto_grant_permissions capability already works around
+# for Appium sessions, but this is a plain Maestro build, which normally
+# auto-grants permissions on BrowserStack without ever showing this at all
+# (confirmed true for every other flow in this repo, all run against the
+# current release APK) - only reproduced against this old 2019-era binary,
+# most likely because it predates Android's POST_NOTIFICATIONS runtime-
+# permission model entirely, so BrowserStack's manifest-driven auto-grant
+# heuristic has nothing to pre-approve even though the (much newer) OS
+# still prompts for it live. Dismiss defensively if present.
 - launchApp:
     clearState: true
 - tapOn:
     text: "OK"
+    optional: true
+- tapOn:
+    text: "Allow"
     optional: true
 - tapOn:
     id: "org.commcare.dalvik:id/enter_app_location"

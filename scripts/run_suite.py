@@ -87,6 +87,17 @@ def select_flow_files(tags=None, explicit_flows=None):
             flow_tags = set((doc or {}).get("tags") or [])
             if "blocked_missing_asset" in flow_tags and (not tags or "blocked_missing_asset" not in tags):
                 continue
+            # UPDATE (2026-08-25): same exclusion pattern as
+            # blocked_missing_asset above - cc_reinstall_needed_01/
+            # cc_update_needed_01_trigger_on_old_client.yaml need a
+            # completely different CommCare BINARY (resources/
+            # commcare_2.45_release.apk, via --apk) than every other
+            # recovery_measures flow, which runs against the normal
+            # current-release build. Without this, --tag recovery_measures
+            # would sweep them into the same build as everything else,
+            # testing them against the wrong (current, not old) binary.
+            if "requires_old_client_apk" in flow_tags and (not tags or "requires_old_client_apk" not in tags):
+                continue
             if not tags:
                 selected.add(path)
                 continue

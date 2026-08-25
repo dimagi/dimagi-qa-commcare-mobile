@@ -467,6 +467,52 @@ jobs:
           fi
           python scripts/run_suite.py "${ARGS[@]}"
 
+      # Runs cc_reinstall_needed_01/cc_update_needed_01_trigger_on_old_client.yaml
+      # (tagged requires_old_client_apk, excluded from the main tag-based
+      # dispatch above - see run_suite.py's select_flow_files own citation)
+      # as their own dedicated build against the OLD CommCare binary
+      # (resources/commcare_2.45_release.apk) their forced-prompt precondition
+      # genuinely needs - unlike every other recovery_measures flow, which
+      # runs against the normal current-release build via apk_source/
+      # release_tag. Always resources/commcare_2.45_release.apk specifically
+      # (not the workflow's own apk_source dropdown) since this needs an OLD
+      # binary regardless of which current release the rest of the suite is
+      # testing. Gated the same way as the updates_2_49 apk-prompt steps
+      # above: matrix.name == 'group-c' for the normal All/nightly dispatch,
+      # or (for a scoped single-tag ad-hoc dispatch) matrix.tags containing
+      # requires_old_client_apk directly.
+      - name: Run Maestro suite (CC Reinstall/Update Needed - old CommCare client)
+        if: always() && (matrix.name == 'group-c' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'requires_old_client_apk')))
+        env:
+          BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
+          BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
+          HQ_API_USERNAME: ${{ secrets.HQ_API_USERNAME }}
+          HQ_API_PASSWORD: ${{ secrets.HQ_API_PASSWORD }}
+          HQ_SESSION_COOKIE: ${{ secrets.HQ_SESSION_COOKIE }}
+          HQ_DOMAIN: qateam
+          CC_TEST_USERNAME: ${{ secrets.CC_TEST_USERNAME }}
+          CC_TEST_PASSWORD: ${{ secrets.CC_TEST_PASSWORD }}
+          HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
+          HQ_WEB_USER_PASSWORD: ${{ secrets.HQ_WEB_USER_PASSWORD }}
+        run: |
+          declare -A ANDROID_DEVICE_MAP=(
+            ["16.0"]="Samsung Galaxy S26"
+            ["15.0"]="Samsung Galaxy S25"
+            ["14.0"]="Samsung Galaxy S24"
+            ["13.0"]="Samsung Galaxy S23"
+            ["12.0"]="Samsung Galaxy S22"
+            ["11.0"]="Samsung Galaxy S21"
+            ["10.0"]="Samsung Galaxy S20"
+          )
+          ANDROID_VERSION="${{ github.event.inputs.android_version || '16.0' }}"
+          DEVICES="${{ github.event.inputs.devices }}"
+          if [ -z "$DEVICES" ]; then
+            DEVICES="${ANDROID_DEVICE_MAP[$ANDROID_VERSION]}-$ANDROID_VERSION"
+          fi
+          python scripts/run_suite.py --devices "$DEVICES" --tag requires_old_client_apk \
+            --apk resources/commcare_2.45_release.apk \
+            --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-old-client-recovery-measures"
+
       # No report-history cache restore/save here on purpose: each matrix
       # job's own reports/history.json only reflects ITS slice of tags, not
       # the full logical run, so it isn't meaningful on its own - the
