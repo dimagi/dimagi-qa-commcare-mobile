@@ -74,7 +74,20 @@ def resolve(tag=None):
     raise SystemExit(f"No release in the last {MAX_RELEASES_TO_SCAN} releases has a usable .apk asset.")
 
 
-def download(url, out_path):
+def download(url, out_path, expected_size=None):
+    """`expected_size` (an asset dict's own `size` field, in bytes): if
+    out_path already exists and matches this size exactly, skips the
+    download entirely - confirmed live (2026-08-25) this repo's several
+    run_suite.py/run_appium_suite.py invocations within the same CI job (or
+    local session) each re-download the same current-release APK from
+    scratch, and a real local network hiccup once left a TRUNCATED file on
+    disk that a later run silently reused - matching by exact byte size
+    catches both: a genuinely-complete prior download is reused instead of
+    re-fetched, but any partial/corrupt file (wrong size) is always
+    re-downloaded rather than trusted."""
+    if expected_size is not None and os.path.exists(out_path) and os.path.getsize(out_path) == expected_size:
+        print(f"{out_path} already matches the expected {expected_size} bytes - skipping download.")
+        return
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
     urllib.request.urlretrieve(url, out_path)
 
@@ -91,7 +104,7 @@ def main():
     release, asset = resolve(args.tag)
     print(f"Downloading {asset['name']} from release {release['tag_name']} "
           f"({asset['size']} bytes) ...")
-    download(asset["browser_download_url"], args.out)
+    download(asset["browser_download_url"], args.out, expected_size=asset["size"])
     print(f"Saved to {args.out}")
     print(f"::set-output name=apk_path::{args.out}")  # harmless outside GH Actions
     print(f"::set-output name=release_tag::{release['tag_name']}")

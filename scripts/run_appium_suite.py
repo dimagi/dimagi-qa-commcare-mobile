@@ -186,7 +186,7 @@ def main():
         release, asset = download_apk.resolve(args.release_tag or None)
         apk_path = f"apks/{asset['name']}"
         print(f"Downloading {asset['name']} from {release['tag_name']} ...")
-        download_apk.download(asset["browser_download_url"], apk_path)
+        download_apk.download(asset["browser_download_url"], apk_path, expected_size=asset["size"])
         apk_commcare_version = release["tag_name"].removeprefix("commcare_")
 
     # UPDATE (2026-08-19), confirmed live (3/3 identical failures, "Setting

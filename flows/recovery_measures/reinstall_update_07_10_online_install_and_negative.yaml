@@ -124,7 +124,57 @@ tags:
     env:
       USERNAME: ${CC_TEST_USERNAME}
       PASSWORD: ${CC_TEST_PASSWORD}
-- runFlow: ../common/logout.yaml
+# UPDATE (2026-08-25), confirmed live in CI (real failure hierarchy dump):
+# the plain logout.yaml call below assumed this login always lands on the
+# normal home screen (with a "Log out of CommCare" tile to tap) - it can
+# instead land straight on "Choose Reinstall Method" if Test Two is already
+# stale relative to the released Test Three by this point (Test Three is
+# released alongside Test One/Two from the very start, per this file's own
+# header), same as the offline family's own documented "no home screen ever
+# reachable" behavior (see offline_reinstall_update_app_flow.yaml's header).
+#
+# UPDATE (2nd correction, 2026-08-25), confirmed live via a SECOND real
+# dispatch: this is genuinely non-deterministic run to run (the same class
+# of HQ-propagation-timing variance already hit repeatedly elsewhere this
+# session) - one dispatch hit the dialog immediately, the very next one
+# landed on the completely normal home screen instead. A hard assertVisible
+# on either outcome is wrong; handles BOTH real, confirmed possibilities:
+# if the dialog is already up, consume it via "Online Reinstall" (proven to
+# work later at "Reinstall and update 9" below, and doesn't need a local
+# CCZ file the way "Reinstall Using CCZ" does - see reinstall_update_05_06_
+# chooser_and_ccz.yaml's own real failure evidence for that gap); otherwise
+# fall through to the normal logout.yaml path (inlined here rather than via
+# runFlow, since runFlow itself has no `optional` flag to skip it when the
+# dialog branch already reached the login screen on its own). Either path
+# ends on the same login screen logout.yaml was always trying to reach.
+- extendedWaitUntil:
+    visible: "Choose Reinstall Method"
+    timeout: 10000
+    optional: true
+- tapOn:
+    text: "(?i).*Online Reinstall.*"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/edit_username"
+    timeout: 60000
+    optional: true
+- repeat:
+    times: 4
+    while:
+      notVisible:
+        id: "org.commcare.dalvik:id/edit_username"
+    commands:
+      - swipe:
+          direction: UP
+          id: "org.commcare.dalvik:id/nsv_home_screen"
+      - tapOn:
+          text: "Log out of CommCare"
+          optional: true
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/edit_username"
+    timeout: 15000
 # "Reinstall and update 7" - uninstall Test Two via the App Manager, reached
 # from the login screen's overflow menu.
 - tapOn: "More options"
@@ -206,6 +256,23 @@ tags:
     env:
       USERNAME: ${CC_TEST_USERNAME}
       PASSWORD: ${CC_TEST_PASSWORD}
+# OPEN ISSUE (2026-08-25), confirmed live in CI (real failure hierarchy
+# dump): this assertion fails - the device shows a completely normal home
+# screen (Start, Log out of CommCare, Logged In: test1, synced fine), not
+# the reinstall-chooser, even though Test Two was JUST reinstalled via App
+# Manager above with Test Three released. This is the SAME "genuine
+# unexplained anomaly" already documented for offline_09_uninstall_
+# reinstall_test_two.yaml (reinstalling via App Manager doesn't trigger
+# staleness detection the way a fresh install_app_by_code.yaml install
+# does, even under an apparently-identical release-state setup) - now
+# confirmed a SECOND time, in a different flow, against a different app
+# (RU_TEST_TWO/THREE here vs OFFLINE_TEST_TWO/THREE there), suggesting a
+# real, systemic difference in how CommCare's staleness check treats an
+# App-Manager-driven uninstall+reinstall versus a fresh code-based install,
+# not a one-off flake. Left as a hard assertion (not made optional) since
+# silently tolerating this would mean the row verifies nothing - if this is
+# a genuine product behavior difference, that's itself the real finding
+# this row should surface, not paper over.
 - assertVisible: "Choose Reinstall Method"
 - assertVisible:
     text: "(?i).*Online Reinstall.*"
@@ -233,10 +300,15 @@ tags:
 - runFlow: ../common/submit_only_form.yaml
 - assertVisible:
     text: "(?i).*form.*success.*completed.*"
+# UPDATE (2026-08-25), confirmed live elsewhere this session (auto_cc_
+# update_03/geoservices_02's own identical fix): Maestro's textRegex
+# requires a FULL match, not substring - the real device text is "Sync
+# Successful! Your information is up to date.", longer than the bare
+# "Sync Successful" this used to check. Wildcarded.
 - tapOn: "Sync with Server"
 - extendedWaitUntil:
     visible:
-      text: "(?i)Sync Successful"
+      text: "(?i).*Sync Successful.*"
     timeout: 30000
 # "Reinstall and update 10" - negative check: already on latest (Test
 # Three), no further forced reinstall/update prompt.
