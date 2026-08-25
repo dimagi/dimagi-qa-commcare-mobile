@@ -27,10 +27,13 @@ pair scripts/browserstack_client.py already uses (same BrowserStack account,
 same credentials, different product API).
 """
 import os
+import sys
 
-import requests
 from appium import webdriver
 from appium.options.android import UiAutomator2Options
+
+sys.path.insert(0, os.path.dirname(__file__))
+from browserstack_client import _request_with_retry
 
 UPLOAD_API_BASE = "https://api-cloud.browserstack.com/app-automate"
 APPIUM_HUB_URL = "https://hub.browserstack.com/wd/hub"
@@ -43,15 +46,20 @@ class AppiumBrowserStackClient:
         self.auth = (self.username, self.access_key)
 
     def upload_app(self, apk_path, custom_id=None):
-        with open(apk_path, "rb") as f:
-            files = {"file": f}
-            data = {"custom_id": custom_id} if custom_id else {}
-            resp = requests.post(f"{UPLOAD_API_BASE}/upload", auth=self.auth, files=files, data=data)
-        resp.raise_for_status()
+        # UPDATE (2026-08-25), confirmed live (twice in one session): a
+        # transient local SSLError (EOF occurred in violation of protocol)
+        # on this upload has no retry at all here, unlike
+        # scripts/browserstack_client.py's own upload_app - reuses that
+        # exact same _request_with_retry helper (requests.exceptions.
+        # SSLError is a subclass of ConnectionError, which it already
+        # catches) instead of duplicating the retry/fresh-file-handle logic.
+        data = {"custom_id": custom_id} if custom_id else {}
+        resp = _request_with_retry("post", f"{UPLOAD_API_BASE}/upload", auth=self.auth,
+                                    data=data, file_path=apk_path)
         return resp.json()  # {"app_url": "bs://...", ...}
 
     def start_session(self, app_url, device, os_version, project="QA COMMCARE MOBILE TESTS",
-                       build_name=None, session_name=None, mid_session_apps=None):
+                       build_name=None, session_name=None, mid_session_apps=None, network_profile=None):
         """Starts a live Appium session and returns the connected driver.
 
         `mid_session_apps` (list of app_url strings, e.g. [new_app_url]) must
@@ -59,7 +67,20 @@ class AppiumBrowserStackClient:
         app mid-session if its app_url was already listed in this capability
         at session start (confirmed against BrowserStack's own "Test app
         upgrade in Appium tests" doc - it's not something you can add
-        after the fact via execute_script alone)."""
+        after the fact via execute_script alone).
+
+        `network_profile` (e.g. "2g-gprs-good") throttles the WHOLE session
+        to one of BrowserStack's named network-condition presets - this is
+        an Appium-product-only capability (confirmed earlier this session:
+        BrowserStack's Maestro v2 build-trigger API has no equivalent
+        parameter at all). See scripts/appium_scenarios.py's run_scenario_2
+        for why this is needed: real evidence showed the test app's CCZ
+        download completes so fast on a normal connection that there's no
+        reliable window to interrupt it mid-download, no matter how tightly
+        the interrupt is timed in code - throttling the network is what
+        actually creates the window the real test case's own steps
+        ("while CommCare is downloading the app updates, update CommCare")
+        assume exists."""
         bstack_options = {
             "userName": self.username,
             "accessKey": self.access_key,
@@ -73,6 +94,8 @@ class AppiumBrowserStackClient:
             bstack_options["sessionName"] = session_name
         if mid_session_apps:
             bstack_options["midSessionInstallApps"] = mid_session_apps
+        if network_profile:
+            bstack_options["networkProfile"] = network_profile
         # UPDATE (2026-08-19, 3rd correction), per direct user observation
         # (confirmed independently via every saved hierarchy dump's own
         # explicit width/height attributes, width > height throughout -

@@ -592,9 +592,30 @@ def _open_update_app_menu(driver, start_download=True):
 def _complete_update_app(driver):
     """Full flows/common/update_app_via_menu.yaml, run to completion (used
     when a scenario needs a genuinely-finished, uninterrupted update - e.g.
-    scenario_2's Update 5)."""
+    scenario_2's Update 5).
+
+    UPDATE (2026-08-25), confirmed live in CI: scenario_2's own session now
+    runs on a throttled "2g-gprs-good" network profile (see
+    run_appium_suite.py's own citation - needed to create a real
+    interrupt-mid-download window earlier in that scenario). A real
+    failure showed the download genuinely still in progress ("Updates
+    found! Downloading new resource 1 done of 3", "Stop checking" button
+    visible) after the original 30s wait here - correct behavior (it did
+    NOT auto-apply, matching Update 4's own intent), just needing much
+    longer than 30s to finish resuming/completing over that same slow
+    connection. Raised generously rather than guessing a second short
+    number.
+
+    UPDATE (2nd correction, 2026-08-25), confirmed live: even 180s wasn't
+    enough on "3g-umts-good" (a real, valid preset - see
+    run_appium_suite.py's own citation on the invalid one tried first) -
+    but the progress text had genuinely changed between attempts ("1 done
+    of 3" then later "1 done of 1"), unlike the earlier stalled-outright
+    "2g-gprs-good" case where it never moved at all across a 30s vs 180s
+    comparison. This is real progress, just needing more patience - raised
+    further rather than assuming a stall this time."""
     _open_update_app_menu(driver)
-    h.wait_visible_text(driver, r"Update to version.*log out", timeout=30, regex=True)
+    h.wait_visible_text(driver, r"Update to version.*log out", timeout=300, regex=True)
     h.tap_by_text(driver, r"Update to version.*log out", regex=True)
 
 
@@ -649,21 +670,34 @@ def run_scenario_2(driver, appium_client, new_app_url, username, password, app_c
     pending update regardless of whether the update menu was ever used to
     explicitly start it, most plausibly CommCare's normal sync/restore-on-
     login flow independently detecting and completing any pending update
-    as routine behavior. If that's right, this scenario's premise (an
-    early-enough interrupt leaves a downloaded-but-unapplied update that
-    needs a later MANUAL completion) may not be achievable via this
-    mid-session-binary-swap mechanism at all - login itself may
-    deterministically resolve it either way. Left failing rather than
-    guessing a third fix blind; needs either a way to inspect the pending-
-    update state directly (not just its on-screen symptom) or acceptance
-    as a real product-behavior limit on what this test case can verify
-    this way."""
+    as routine behavior.
+
+    UPDATE (3rd correction, 2026-08-25): checked the Master Mobile Plan's
+    own literal Test Case 2 setup steps directly rather than guessing
+    further from code alone - "3. ... select Update App\n4. DO NOT LET
+    THE UPDATE CHECK COMPLETE - Rather, while CommCare is downloading the
+    app updates, update CommCare to the version in test". The real spec
+    wants the interrupt WHILE downloading (start_download=True, same as
+    before either of the two corrections above), not before the check
+    ever starts - so the 2nd correction's identical-symptom result makes
+    sense: without ever starting the download, there was nothing to
+    "interrupt" in the first place, i.e. that experiment tested a
+    different (also broken) hypothesis, not proof the whole approach is
+    unachievable. The real reason a plain "start, then immediately
+    interrupt" never worked is speed, not logic: this app's CCZ downloads
+    fast enough on a normal connection that no code-level interrupt
+    timing can reliably land mid-flight. run_appium_suite.py now starts
+    this scenario's own session on a throttled "2g-gprs-good" network
+    profile (BrowserStack Appium sessions support this; Maestro sessions
+    don't) specifically to create a real window, restoring
+    start_download=True here to match."""
     steps = [
         ("Install app by code (old CommCare binary)", lambda: _install_app_by_code(driver, app_code)),
         ("Login (old binary)", lambda: _login(driver, username, password)),
-        ("Trigger Update App (stop before starting CCZ download)",
-         lambda: _open_update_app_menu(driver, start_download=False)),
-        ("Install new CommCare binary mid-session (early interrupt)",
+        ("Trigger Update App (start CCZ download, throttled network)",
+         lambda: _open_update_app_menu(driver)),
+        ("Wait for CCZ download/staging in progress", lambda: _wait_for_update_in_progress(driver, timeout=20)),
+        ("Install new CommCare binary mid-session (interrupt mid-download)",
          lambda: appium_client.install_mid_session(driver, new_app_url)),
         ("Relaunch app after binary swap", lambda: _relaunch_app(driver)),
         ("Login again (new binary)", lambda: _login(driver, username, password)),

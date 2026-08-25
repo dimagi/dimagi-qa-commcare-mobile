@@ -113,7 +113,8 @@ def _set_browserstack_session_status(driver, result):
         pass
 
 
-def _run_one_scenario(bs, name, old_app_url, new_app_url, device, os_version, build_name, env, fn):
+def _run_one_scenario(bs, name, old_app_url, new_app_url, device, os_version, build_name, env, fn,
+                       network_profile=None):
     driver = None
     result = None
     start = time.monotonic()
@@ -122,6 +123,7 @@ def _run_one_scenario(bs, name, old_app_url, new_app_url, device, os_version, bu
             old_app_url, device, os_version,
             build_name=build_name, session_name=name,
             mid_session_apps=[new_app_url],
+            network_profile=network_profile,
         )
         fn(driver)
         result = report_generator.TestResult(
@@ -272,12 +274,45 @@ def main():
             driver, bs, new_app_url, cc_username, cc_password, linked_app_code),
     }
 
+    # UPDATE (2026-08-25), per the Master Mobile Plan's own literal Test
+    # Case 2 setup steps ("DO NOT LET THE UPDATE CHECK COMPLETE - while
+    # CommCare is downloading the app updates, update CommCare"): only
+    # scenario_2 needs its download genuinely still in flight when
+    # interrupted - confirmed live this test app's CCZ downloads fast
+    # enough on a normal connection that no code-level interrupt timing
+    # can reliably catch it mid-flight. Throttled to a slow preset for
+    # JUST this scenario's own dedicated session (each scenario already
+    # gets its own session - see _run_one_scenario), not the other two,
+    # which don't need or want the extra wall-clock cost.
+    #
+    # UPDATE (2026-08-25, correction), confirmed live: "2g-gprs-good"
+    # left the download showing the EXACT SAME "resource 1 done of 3"
+    # state after both a 30s and a 180s wait - not slow-but-progressing,
+    # genuinely stalled (most likely below some minimum throughput
+    # CommCare's own download client tolerates before it silently retries
+    # from scratch rather than visibly advancing).
+    #
+    # UPDATE (2026-08-25, 2nd correction), confirmed live: "3g-average-mobile"
+    # isn't a real BrowserStack preset at all - a real
+    # BROWSERSTACK_INVALID_NETWORK_PROFILE error named the actual full
+    # list (fetched from BrowserStack's own docs, not guessed): no-network,
+    # airplane-mode, 2g-gprs-good, 2g-gprs-lossy, edge-good, edge-lossy,
+    # 3g-umts-good, 3g-umts-lossy, 3.5g-hspa-good, 3.5g-hspa-lossy,
+    # 3.5g-hspa-plus-good, 3.5g-hspa-plus-lossy, 4g-lte-good,
+    # 4g-lte-high-latency, 4g-lte-lossy, 4g-lte-advanced-good,
+    # 4g-lte-advanced-lossy, reset. "3g-umts-good" is the real preset one
+    # tier up from the 2g one that stalled - meaningfully slower than an
+    # unthrottled connection without (hopefully) dropping below whatever
+    # throughput floor caused the stall.
+    network_profiles = {"scenario_2": "3g-umts-good"}
+
     results = []
     for name in scenarios_to_run:
         print(f"Running {name} (Appium, mid-session binary swap) ...")
         result = _run_one_scenario(
             bs, name, old_app_url, new_app_url, device, os_version, args.build_name,
             os.environ, scenario_fns[name],
+            network_profile=network_profiles.get(name),
         )
         print(f"  {name}: {result.status}" + (f" - {result.failed_step}" if result.status == "failed" else ""))
         results.append(result)
