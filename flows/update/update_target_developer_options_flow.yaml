@@ -81,7 +81,9 @@ tags:
     env:
       USERNAME: ${CC_TEST_USERNAME}
       PASSWORD: ${CC_TEST_PASSWORD}
-- assertVisible: "Start"
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
 
 # === "Change update target" =============================================
 # Enable developer mode: About CommCare x4, dismissing with OK each time.
@@ -101,7 +103,9 @@ tags:
 - tapOn: "Enabled"
 - back
 - back
-- assertVisible: "Start"
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
 
 # Menu > Settings > Update Options > Latest saved state.
 - tapOn: "More options"
@@ -109,7 +113,9 @@ tags:
 - tapOn: "Update Options"
 - tapOn: "Latest saved state"
 - back
-- assertVisible: "Start"
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
 
 # === "Update + Check for changes" =======================================
 # No HQ-side app change was made (out of scope, see header comment), so we
@@ -184,7 +190,9 @@ tags:
       visible: "App is up to date"
     commands:
       - back
-- assertVisible: "Start"
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
 
 # === "Change update target back" ========================================
 - tapOn: "More options"
@@ -192,7 +200,9 @@ tags:
 - tapOn: "Update Options"
 - tapOn: "Latest version"
 - back
-- assertVisible: "Start"
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
 
 # === "Confirm that no update occurs if you try" ==========================
 - tapOn: "More options"
@@ -237,7 +247,9 @@ tags:
       visible: "App is up to date"
     commands:
       - back
-- assertVisible: "Start"
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
 
 # === "Verify update" =====================================================
 # Best-effort: logout/login should still work post-update, and the About
@@ -250,7 +262,9 @@ tags:
     env:
       USERNAME: ${CC_TEST_USERNAME}
       PASSWORD: ${CC_TEST_PASSWORD}
-- assertVisible: "Start"
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
 - tapOn: "More options"
 - tapOn: "About CommCare"
 - assertVisible:

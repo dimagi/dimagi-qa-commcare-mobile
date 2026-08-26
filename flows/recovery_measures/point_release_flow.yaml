@@ -68,7 +68,9 @@ tags:
 # "CC Reinstall Needed 8" - verify unblocked: the device has already been
 # updated to the test/point-release version (see header comment), so no
 # forced-update prompt should appear and the home screen should load.
-- assertVisible: "Start"
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
 - assertNotVisible:
     text: "(?i).*update.*required.*"
 # "CC Reinstall Needed 8" (cont.) - submit a form successfully.

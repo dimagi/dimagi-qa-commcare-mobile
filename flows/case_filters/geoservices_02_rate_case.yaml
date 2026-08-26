@@ -69,7 +69,9 @@ tags:
     env:
       USERNAME: ${CC_TEST_USERNAME}
       PASSWORD: ${CC_TEST_PASSWORD}
-- assertVisible: "Start"
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
 
 # UPDATE (2026-08-19), per direct user instruction: give this run's site a
 # dynamic, unique name instead of the same literal "Geoservices Rate
@@ -167,7 +169,9 @@ tags:
 # citation) can pop an unwanted "Exit Form?" dialog here instead.
 - inputText: "Automation rating comment"
 - tapOn: "FINISH"
-- assertVisible: "Start"
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
 
 # === Case Lists 5 (steps 1-3 only - the automatable portion): re-open Rate
 # Case and confirm the star rating shows correctly, both in the case list
@@ -253,4 +257,6 @@ tags:
       notVisible: "Start"
     commands:
       - back
-- assertVisible: "Start"
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000

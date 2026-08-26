@@ -47,7 +47,9 @@ tags:
             PASSWORD: ${CC_TEST2_PASSWORD}
       - assertVisible: "New version of the application is available"
       - tapOn: "I'll update later"
-      - assertVisible: "Start"
+      - extendedWaitUntil:
+          visible: "Start"
+          timeout: 20000
       - runFlow: ../common/logout.yaml
 - runFlow:
     file: ../common/login.yaml

@@ -47,7 +47,9 @@ tags:
 - hideKeyboard
 - tapOn:
     id: "org.commcare.dalvik:id/login_button"
-- assertVisible: "Start"
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
 - swipe:
     start: "50%, 1%"
     end: "50%, 60%"

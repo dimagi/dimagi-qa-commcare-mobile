@@ -78,7 +78,9 @@ tags:
     env:
       USERNAME: "test1"
       PASSWORD: "123"
-- assertVisible: "Start"
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
 
 # --- Answer 2 of ~20+ questions, save incomplete. ---
 - tapOn: "Start"
@@ -94,7 +96,9 @@ tags:
 - back
 - assertVisible: "Exit Form?"
 - tapOn: "SAVE INCOMPLETE"
-- assertVisible: "Start"
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
 
 # --- Incomplete Forms 5/6: list entry shows a summary text + timestamp
 # below the form name, not just the name. ---

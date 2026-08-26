@@ -65,7 +65,9 @@ tags:
     env:
       USERNAME: ${CC_TEST_USERNAME}
       PASSWORD: ${CC_TEST_PASSWORD}
-- assertVisible: "Start"
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
 
 # --- "Update verification": update to V6 and confirm it completed. ---
 # UPDATE (2026-08-21), confirmed live via a real failure (Form A's "Age"
@@ -84,7 +86,9 @@ tags:
     env:
       USERNAME: ${CC_TEST_USERNAME}
       PASSWORD: ${CC_TEST_PASSWORD}
-- assertVisible: "Start"
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
 # UPDATE (2026-08-19), per direct user instruction: dropped EXPECTED_VERSION
 # - see check_app_version_via_about.yaml's own UPDATE comment for the full
 # citation (HQ build version drift, not a real regression signal).

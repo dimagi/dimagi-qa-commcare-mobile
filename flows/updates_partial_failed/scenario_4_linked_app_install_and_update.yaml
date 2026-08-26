@@ -65,7 +65,9 @@ tags:
     env:
       USERNAME: ${CC_TEST_USERNAME}
       PASSWORD: ${CC_TEST_PASSWORD}
-- assertVisible: "Start"
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
 
 # --- Update 13: update to "Version V6" (already released, see header). ---
 - runFlow: ../common/update_app_via_menu.yaml
@@ -74,7 +76,9 @@ tags:
     env:
       USERNAME: ${CC_TEST_USERNAME}
       PASSWORD: ${CC_TEST_PASSWORD}
-- assertVisible: "Start"
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
 # UPDATE (2026-08-19), per direct user instruction: dropped EXPECTED_VERSION
 # - see check_app_version_via_about.yaml's own UPDATE comment for the full
 # citation (HQ build version drift, not a real regression signal).

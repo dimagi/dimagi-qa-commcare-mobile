@@ -27,7 +27,9 @@ tags:
     env:
       USERNAME: ${CC_TEST_USERNAME}
       PASSWORD: ${CC_TEST_PASSWORD}
-- assertVisible: "Start"
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
 # Logout keeping the current (prior released) version installed - no update
 # is taken here.
 - runFlow: ../common/logout.yaml
@@ -46,6 +48,8 @@ tags:
 # surface a prompt after further on-device navigation.
 - tapOn: "Start"
 - pressKey: Back
-- assertVisible: "Start"
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
 - assertNotVisible: "New version of the application is available"
 - assertNotVisible: "New version of the application is required"

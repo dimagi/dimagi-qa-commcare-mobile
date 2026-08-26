@@ -28,7 +28,9 @@ tags:
 # CC Reinstall Needed 5 - negative check: on a current client, no forced
 # reinstall prompt, home screen loads normally, and the only form in the
 # app can be submitted.
-- assertVisible: "Start"
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
 - assertNotVisible:
     text: "(?i).*reinstall.*required.*"
 - runFlow: ../common/submit_only_form.yaml

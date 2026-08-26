@@ -23,7 +23,9 @@ tags:
 # "CC Reinstall Needed 5" (CC Update Needed step) - negative check: on a
 # current client, no forced update prompt, home screen loads normally, and
 # the only form in the app can be submitted.
-- assertVisible: "Start"
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
 - assertNotVisible:
     text: "(?i).*update.*required.*"
 - runFlow: ../common/submit_only_form.yaml

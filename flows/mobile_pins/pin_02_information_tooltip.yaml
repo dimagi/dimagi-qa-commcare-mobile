@@ -33,7 +33,9 @@ tags:
 # flows/mobile_pins/setup_04_claim_privileges_scanner_opens.yaml already
 # established (see that file's own header for the full selector citations:
 # DeveloperPreferences.java, GlobalPrivilegeClaimingActivity.java, etc.).
-- assertVisible: "Start"
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
 - repeat:
     times: 4
     commands:

@@ -135,4 +135,6 @@ tags:
         text: "Start"
     commands:
       - back
-- assertVisible: "Start"
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000

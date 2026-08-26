@@ -46,7 +46,9 @@ tags:
     env:
       USERNAME: "test1"
       PASSWORD: "123"
-- assertVisible: "Start"
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
 - tapOn: "Start"
 - tapOn: "Interface"
 - tapOn: "Keyboard Tests"

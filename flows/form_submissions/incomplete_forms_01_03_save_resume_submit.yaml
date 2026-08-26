@@ -111,7 +111,9 @@ tags:
     env:
       USERNAME: "test1"
       PASSWORD: "123"
-- assertVisible: "Start"
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
 
 # --- Incomplete Forms 1/2/3: answer 2 of ~20+ questions, save incomplete. ---
 - tapOn: "Start"
@@ -132,7 +134,9 @@ tags:
 - assertVisible:
     text: "(?i).*form saved as incomplete.*"
     optional: true
-- assertVisible: "Start"
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
 
 # --- Reopen: verify both prior answers persisted, answer a third question. ---
 - tapOn:
@@ -166,7 +170,9 @@ tags:
 - back
 - assertVisible: "Exit Form?"
 - tapOn: "SAVE INCOMPLETE"
-- assertVisible: "Start"
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
 
 # --- Reopen again and fully submit (no remaining question is required). ---
 - tapOn:

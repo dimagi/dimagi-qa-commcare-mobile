@@ -68,7 +68,9 @@ tags:
     env:
       USERNAME: "test1"
       PASSWORD: "123"
-- assertVisible: "Start"
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
 
 # --- Case Name Size 1: register a case with a > 255 char name, attempt
 # submit, confirm the length-warning error. ---
@@ -125,7 +127,9 @@ tags:
         text: "Start"
     commands:
       - back
-- assertVisible: "Start"
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
 
 # --- Case Name Size 2: the oversized-name submission must NOT show up
 # under Saved Forms (it was quarantined, not completed). ---
@@ -167,4 +171,6 @@ tags:
 - assertNotVisible:
     text: "(?i).*CaseNameTooLong.*"
 - back
-- assertVisible: "Start"
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000

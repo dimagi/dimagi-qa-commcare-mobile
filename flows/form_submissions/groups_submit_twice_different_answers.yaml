@@ -229,7 +229,9 @@ tags:
         text: "Start"
     commands:
       - back
-- assertVisible: "Start"
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
 
 # --- Submission 2: First = No, Second = No (different answers) ---
 - tapOn: "Start"

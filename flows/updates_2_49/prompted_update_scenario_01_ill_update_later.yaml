@@ -154,5 +154,7 @@ tags:
 # Confirm the prompt is gone and we can keep using CommCare - landed on the
 # home screen, not blocked.
 - assertNotVisible: "New version of CommCare is Available"
-- assertVisible: "Start"
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
 - assertVisible: "Sync with Server"

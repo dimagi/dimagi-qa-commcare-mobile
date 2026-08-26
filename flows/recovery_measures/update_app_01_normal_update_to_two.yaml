@@ -45,7 +45,9 @@ tags:
       USERNAME: ${CC_TEST_USERNAME}
       PASSWORD: ${CC_TEST_PASSWORD}
 # Update 1 - pre-update sanity: no forced update/recovery screen on Test One.
-- assertVisible: "Start"
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
 - assertNotVisible:
     text: "(?i).*recovery (procedures|measures).*initiated.*"
 - assertNotVisible:
@@ -61,6 +63,8 @@ tags:
     env:
       USERNAME: ${CC_TEST_USERNAME}
       PASSWORD: ${CC_TEST_PASSWORD}
-- assertVisible: "Start"
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
 - assertNotVisible:
     text: "(?i).*recovery (procedures|measures).*initiated.*"

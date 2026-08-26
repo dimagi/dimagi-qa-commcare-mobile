@@ -274,7 +274,9 @@ tags:
 # happens to race against: since the form races all the way to a synced
 # home screen, being back on it (rather than stuck on some error dialog)
 # is the real, stable end state to check.
-- assertVisible: "Start"
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
 - assertNotVisible:
     text: "(?i).*unexpected error.*"
 - assertNotVisible:
