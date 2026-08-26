@@ -70,23 +70,24 @@ tags:
 # than after the detail text appears) if this proves too fast to catch in
 # practice.
 # UPDATE (2026-08-10): "a measure already pending via out-of-scope HQ
-# setup" is now genuinely achievable, not out of scope - this uses the
-# SAME app/mechanism as update_app_02_forced_two_to_three.yaml (id
-# c49c34a1d74297ecb6ecef7a7c5d3f88, "Recovery: Reinstall and Update App").
+# setup" is now genuinely achievable, not out of scope.
 # UPDATE (2nd correction, 2026-08-10): this used to reach the pending-measure
 # state via a normal Test One -> Test Two update through the menu first
-# (update_app_via_menu.yaml) - removed, since that step needs Test Three
-# UN-released to land on Two specifically (confirmed live, see
-# update_app_01_normal_update_to_two.yaml's header), while THIS file's own
-# Retry-button test needs Three RELEASED for the forced measure to actually
-# be in flight to interrupt. Those are contradictory release states inside
-# one continuous session - installs Test Two directly instead (self-contained,
-# same fix applied to update_app_02_forced_two_to_three.yaml), tagged
-# `recovery_phase2` so it only ever runs with Three released.
+# (update_app_via_menu.yaml) - removed in favor of installing directly
+# (self-contained), tagged `recovery_phase2`.
+# UPDATE (2026-08-24), per direct user-supplied app link: moved from
+# APP_CODE_RU_TEST_TWO ("Recovery: Reinstall and Update App", which this
+# header used to claim shared a mechanism with
+# update_app_02_forced_two_to_three.yaml) to APP_CODE_CC_UPDATE_NEEDED
+# ("Recovery: CC Update Needed") - these two flows do NOT share an app
+# after all; see update_app_02's own UPDATE citation for why it moved to a
+# third, different app (Point Release). CC_UPDATE_NEEDED is a single-build
+# app (app_registry.py's own entry, unpinned - always the current top
+# build), so no Test-Two/Three split is needed here.
 - runFlow:
     file: ../common/install_app_by_code.yaml
     env:
-      APP_CODE: ${APP_CODE_RU_TEST_TWO}
+      APP_CODE: ${APP_CODE_CC_UPDATE_NEEDED}
 - runFlow:
     file: ../common/login.yaml
     env:
@@ -94,10 +95,31 @@ tags:
       PASSWORD: ${CC_TEST_PASSWORD}
 # Retry Recovery 2 (part 1) - recovery screen triggers automatically on login
 # because a measure is already pending (see header precondition).
+#
+# UPDATE (2026-08-26), confirmed live via a real failure screenshot (CI run
+# 32953501586): this app's pending measure is the SAME REINSTALL-AND-UPDATE
+# chooser type ("Choose Reinstall Method" / "REINSTALL USING CCZ" /
+# "ONLINE REINSTALL") already documented for update_app_02_forced_two_to_
+# three.yaml - not the plain dialog-less auto-update screen this row's own
+# narrative and the assertion below assumed. The "recovery...initiated"
+# background text WAS genuinely on screen in that evidence (visible behind
+# the dialog) - the assertion failed because the chooser dialog obscures it
+# from Maestro's own visibility check, not because the text is absent.
+# Reworked to handle the real dialog: assert on the dialog's own text (not
+# obscured), then tap "Online Reinstall" (same real button/behavior already
+# verified in reinstall_update_07_10_online_install_and_negative.yaml's own
+# source citation - doOnlineAppInstall(), which starts a real background
+# download) so there's something genuinely in-flight for the airplane-mode
+# toggle below to interrupt, matching this test's actual intent.
 - assertVisible:
-    text: "(?i).*recovery (procedures|measures).*initiated.*"
+    text: "Choose Reinstall Method"
+- assertVisible:
+    text: "(?i).*Online Reinstall.*"
+- tapOn:
+    text: "(?i).*Online Reinstall.*"
 # Retry Recovery 2 (part 2) - disable network mid-recovery. See header's
-# NETWORK TOGGLE MECHANISM and timing CAVEAT.
+# NETWORK TOGGLE MECHANISM and timing CAVEAT - same caveat applies here to
+# the Online Reinstall download just started above.
 - setAirplaneMode: enabled
 # Retry Recovery 2 (part 3) - verify the Retry button appears once the
 # in-flight measure fails due to no network.
@@ -126,6 +148,8 @@ tags:
     env:
       USERNAME: ${CC_TEST_USERNAME}
       PASSWORD: ${CC_TEST_PASSWORD}
-- assertVisible: "Start"
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
 - assertNotVisible:
     text: "(?i).*recovery (procedures|measures).*initiated.*"
