@@ -273,6 +273,37 @@ tags:
 # silently tolerating this would mean the row verifies nothing - if this is
 # a genuine product behavior difference, that's itself the real finding
 # this row should surface, not paper over.
+#
+# UPDATE (2026-08-26): the "genuine unexplained anomaly" theory above is
+# superseded - offline_09_uninstall_reinstall_test_two.yaml's own
+# 3rd-correction UPDATE (confirmed live a SECOND time via CI run
+# 32974908020, on retry_recovery_02_network_toggle_retry.yaml hitting this
+# identical plain-home-screen symptom) traced the real mechanism to a
+# concurrent, unrelated BrowserStack build's own HQ setup/teardown
+# transiently un-releasing the build this app needs "released" to look
+# stale, purely by timing coincidence - not a systemic App-Manager-reinstall
+# staleness gap. Since that race is transient (the other build's own
+# setup/teardown completes and re-releases normally), retry logout+login up
+# to 4 times to give the window time to pass before falling back to the
+# still-hard assertion below, mirroring ../common/login.yaml's own
+# established bounded-retry convention. logout.yaml's "run from the home
+# screen" precondition holds here because this loop's while-condition only
+# lets the body run when we're NOT on the chooser dialog, i.e. we're on the
+# plain home screen this symptom describes.
+- repeat:
+    times: 4
+    while:
+      notVisible:
+        text: "Choose Reinstall Method"
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - runFlow: ../common/logout.yaml
+      - runFlow:
+          file: ../common/login.yaml
+          env:
+            USERNAME: ${CC_TEST_USERNAME}
+            PASSWORD: ${CC_TEST_PASSWORD}
 - assertVisible: "Choose Reinstall Method"
 - assertVisible:
     text: "(?i).*Online Reinstall.*"

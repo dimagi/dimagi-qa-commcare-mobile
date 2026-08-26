@@ -111,6 +111,36 @@ tags:
 # source citation - doOnlineAppInstall(), which starts a real background
 # download) so there's something genuinely in-flight for the airplane-mode
 # toggle below to interrupt, matching this test's actual intent.
+# UPDATE (2026-08-26), confirmed live (real failure screenshot, CI run
+# 32974908020): the plain home screen (Start/Sync/Log out, no dialog)
+# appeared instead of "Choose Reinstall Method" here - the SAME confirmed
+# concurrent-build release-status race already diagnosed in offline_09_
+# uninstall_reinstall_test_two.yaml's 3rd-correction UPDATE (a DIFFERENT,
+# unrelated BrowserStack build's own HQ setup/teardown transiently
+# un-releases the build this app needs "released" to look stale, purely by
+# timing coincidence). Since the dialog-handling logic below is already
+# confirmed correct for when the measure DOES fire (CI run 32953501586),
+# this is a timing race, not a logic bug - retry logout+login up to 4 times
+# to give the other build's own release window time to pass, mirroring
+# ../common/login.yaml's own established bounded-retry convention.
+# logout.yaml's "run from the home screen" precondition holds here because
+# this loop's while-condition only lets the body run when we're NOT on the
+# "Choose Reinstall Method" dialog, i.e. we're on the plain home screen this
+# symptom describes.
+- repeat:
+    times: 4
+    while:
+      notVisible:
+        text: "Choose Reinstall Method"
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - runFlow: ../common/logout.yaml
+      - runFlow:
+          file: ../common/login.yaml
+          env:
+            USERNAME: ${CC_TEST_USERNAME}
+            PASSWORD: ${CC_TEST_PASSWORD}
 - assertVisible:
     text: "Choose Reinstall Method"
 - assertVisible:

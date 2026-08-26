@@ -170,6 +170,37 @@ tags:
     env:
       USERNAME: ${CC_TEST_USERNAME}
       PASSWORD: ${CC_TEST_PASSWORD}
+# UPDATE (4th correction, 2026-08-26), confirmed live a SECOND time (CI run
+# 32974908020, real failure screenshot on a DIFFERENT flow -
+# retry_recovery_02_network_toggle_retry.yaml - hitting the identical
+# plain-home-screen-instead-of-forced-screen symptom): the 3rd-correction
+# UPDATE above already diagnosed the real mechanism correctly (a
+# concurrently-running, unrelated BrowserStack build's own HQ setup/teardown
+# can transiently un-release the build this flow needs "released" to look
+# stale, purely by timing coincidence) - it just didn't yet act on that
+# diagnosis. Since the race window is real but transient (the other build's
+# own setup/teardown completes and re-releases normally), a bounded
+# logout+re-login retry gives it time to pass rather than failing hard on
+# what's already a well-understood, non-architectural timing race. Mirrors
+# ../common/login.yaml's own established bounded-retry convention for other
+# confirmed-real, non-deterministic HQ-timing issues. logout.yaml's "run
+# from the home screen" precondition holds here because this loop's own
+# while-condition only lets the body run when we're NOT on the forced-CCZ
+# screen, i.e. we're on the plain home screen this symptom describes.
+- repeat:
+    times: 4
+    while:
+      notVisible:
+        text: "(?i).*select ccz.*"
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - runFlow: ../common/logout.yaml
+      - runFlow:
+          file: ../common/login.yaml
+          env:
+            USERNAME: ${CC_TEST_USERNAME}
+            PASSWORD: ${CC_TEST_PASSWORD}
 - assertVisible:
     text: "(?i).*recovery (procedures|measures).*initiated.*"
 - assertVisible:
