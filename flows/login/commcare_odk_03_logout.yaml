@@ -23,7 +23,21 @@ tags:
     env:
       USERNAME: ${CC_TEST_USERNAME}
       PASSWORD: ${CC_TEST_PASSWORD}
-- assertVisible: "Start"
+# UPDATE (2026-08-26): hardened from a bare assertVisible (Maestro's
+# default, short-timeout form) to an extendedWaitUntil, same "tolerant wait
+# over zero-margin assertion" pattern already used elsewhere in this repo
+# (e.g. flows/common/login.yaml's own dialog_cancel_button wait) - real CI
+# evidence (runs 32882267873, 32927129337, 32942818928) showed this
+# specific assertion intermittently failing right after login, with the
+# device sometimes stuck on the plain Android home screen (matching a
+# systemic BrowserStack device-provisioning issue seen across many
+# unrelated flows in the same build, not a bug in this flow itself). A
+# longer wait can't fix a genuinely crashed session, but it does remove
+# this flow's own contribution to flakiness for the more common case of a
+# real but slow render.
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
 - runFlow: ../common/logout.yaml
 - assertVisible:
     id: "org.commcare.dalvik:id/edit_username"
