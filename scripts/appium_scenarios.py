@@ -613,9 +613,22 @@ def _complete_update_app(driver):
     of 3" then later "1 done of 1"), unlike the earlier stalled-outright
     "2g-gprs-good" case where it never moved at all across a 30s vs 180s
     comparison. This is real progress, just needing more patience - raised
-    further rather than assuming a stall this time."""
+    further rather than assuming a stall this time.
+
+    UPDATE (3rd correction, 2026-08-26), confirmed live in CI (run
+    32944163637, session 8e6345c62bf1570db86c39589c1298eca8bc118c): even
+    300s wasn't enough - a real failure screenshot + hierarchy dump at
+    that exact moment showed "Updates found! Downloading new resource 3
+    done of 1" with "Stop checking" still visible (actively in-progress,
+    not stuck on an error/dialog) - a DIFFERENT progress state than either
+    prior evidence point ("1 done of 3", "1 done of 1"), confirming this
+    is the same genuine-progress-just-needs-more-time pattern each earlier
+    correction already found, not a stall. Raised again rather than
+    reducing the network throttle (which risks reopening the original
+    problem this throttle exists to solve - see run_scenario_2's own
+    citation on why an interrupt window needs it at all)."""
     _open_update_app_menu(driver)
-    h.wait_visible_text(driver, r"Update to version.*log out", timeout=300, regex=True)
+    h.wait_visible_text(driver, r"Update to version.*log out", timeout=480, regex=True)
     h.tap_by_text(driver, r"Update to version.*log out", regex=True)
 
 
