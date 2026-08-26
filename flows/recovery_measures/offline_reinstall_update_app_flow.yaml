@@ -2,7 +2,19 @@ appId: org.commcare.dalvik
 tags:
   - recovery_measures
   - partial
+  - superseded_by_appium
 ---
+# UPDATE (2026-08-25): SUPERSEDED by scripts/appium_offline_ccz_scenarios.py's
+# run_offline_reinstall_update_app_flow (dispatched via
+# scripts/run_appium_offline_ccz_suite.py, wired into CI's group-c job) -
+# this flow's own real gap below (no way to get a .ccz file onto the device)
+# is exactly what that Appium-based module solves via a real push_file() call,
+# something Maestro is structurally unable to do. Tagged
+# `superseded_by_appium` and excluded from normal tag-based dispatch (see
+# scripts/run_suite.py's select_flow_files) - kept on disk for reference
+# only; expect it to keep failing if ever run directly or via --tag
+# superseded_by_appium.
+#
 # Master Mobile Plan (2026) > Recovery Measures > Recovery: Offline
 # Reinstall and Update App (Setup 1, Recovery (offline) 10, 11 - the
 # Automatable rows this file actually covers). Recovery (offline) 1 and 3

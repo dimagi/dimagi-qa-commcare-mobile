@@ -98,6 +98,19 @@ def select_flow_files(tags=None, explicit_flows=None):
             # testing them against the wrong (current, not old) binary.
             if "requires_old_client_apk" in flow_tags and (not tags or "requires_old_client_apk" not in tags):
                 continue
+            # UPDATE (2026-08-25): same exclusion pattern again -
+            # offline_06_select_ccz_via_picker/offline_08_move_ccz_to_
+            # downloads/offline_reinstall_update_app_flow/reinstall_update_05_
+            # 06_chooser_and_ccz are all structurally blocked (Maestro can't
+            # push a .ccz file onto the device) and now have real, passing
+            # coverage via scripts/appium_offline_ccz_scenarios.py instead
+            # (see each file's own UPDATE header) - dispatching them
+            # alongside their Appium replacements would just show 4
+            # permanent, misleading "failures" in every recovery_measures
+            # report. Kept on disk (not deleted) for reference; still
+            # runnable directly via --flow or --tag superseded_by_appium.
+            if "superseded_by_appium" in flow_tags and (not tags or "superseded_by_appium" not in tags):
+                continue
             if not tags:
                 selected.add(path)
                 continue

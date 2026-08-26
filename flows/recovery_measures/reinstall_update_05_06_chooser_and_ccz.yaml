@@ -3,7 +3,21 @@ tags:
   - recovery_measures
   - recovery_phase2
   - partial
+  - superseded_by_appium
 ---
+# UPDATE (2026-08-25): SUPERSEDED by scripts/appium_offline_ccz_scenarios.py's
+# run_reinstall_05_06_ccz_branch (dispatched via
+# scripts/run_appium_offline_ccz_suite.py, wired into CI's group-c job) -
+# this file's real gap (no way to get a .ccz file onto the device before
+# tapping "Reinstall Using CCZ") is exactly what that Appium-based module
+# solves via a real push_file() call, something Maestro is structurally
+# unable to do. This file's entire remaining scope (Reinstall/Update 5, 6
+# below) is the CCZ branch specifically - the Appium replacement covers it
+# fully, not partially. Tagged `superseded_by_appium` and excluded from
+# normal tag-based dispatch (see scripts/run_suite.py's select_flow_files) -
+# kept on disk for reference only; expect it to keep failing if ever run
+# directly or via --tag superseded_by_appium.
+#
 # Master Mobile Plan (2026) > Recovery Measures > Recovery: Reinstall and
 # Update App > "Reinstall/Update 5, 6" - reinstall-needed chooser appears
 # once on Test Two with Test Three released; reinstall via CCZ, expect
