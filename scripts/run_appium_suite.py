@@ -119,9 +119,19 @@ def _run_one_scenario(bs, name, old_app_url, new_app_url, device, os_version, bu
     result = None
     start = time.monotonic()
     try:
+        # UPDATE (2026-08-26): session_name used to be the raw internal
+        # scenario key ("scenario_2" etc.) - that's what BrowserStack's own
+        # dashboard shows as the test name (same generic-name issue confirmed
+        # live via a real screenshot for run_appium_offline_ccz_suite.py's
+        # equivalent scenarios), even though report_generator.DISPLAY_NAMES
+        # already has a proper human-readable entry for each of these 3
+        # scenarios' "_appium" stem. Reuse that same mapping so BrowserStack's
+        # dashboard and this repo's own report.html/Slack output agree.
+        display_name = report_generator.display_name(
+            f"updates_partial_failed/{name}_appium", workflow="updates_partial_failed")
         driver = bs.start_session(
             old_app_url, device, os_version,
-            build_name=build_name, session_name=name,
+            build_name=build_name, session_name=display_name,
             mid_session_apps=[new_app_url],
             network_profile=network_profile,
         )

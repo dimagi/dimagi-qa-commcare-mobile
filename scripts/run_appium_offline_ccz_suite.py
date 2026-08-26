@@ -123,7 +123,17 @@ def _run_one_scenario(bs, name, workflow, app_url, device, os_version, build_nam
     result = None
     start = time.monotonic()
     try:
-        driver = bs.start_session(app_url, device, os_version, build_name=build_name, session_name=name)
+        # UPDATE (2026-08-26): session_name used to be the raw internal
+        # scenario key ("offline_08" etc.) - that's exactly what BrowserStack's
+        # own dashboard shows as the test name (confirmed live via a real
+        # screenshot of that dashboard), so it rendered unhelpfully generic
+        # there even though report_generator.DISPLAY_NAMES already has a
+        # proper human-readable entry for each of these 4 scenarios' "_appium"
+        # stem. Reuse that same mapping here so the BrowserStack dashboard and
+        # this repo's own report.html/Slack output show identical, readable
+        # names for the same test.
+        display_name = report_generator.display_name(f"{workflow}/{name}_appium", workflow=workflow)
+        driver = bs.start_session(app_url, device, os_version, build_name=build_name, session_name=display_name)
         fn(driver)
         result = report_generator.TestResult(
             name=f"{workflow}/{name}_appium",

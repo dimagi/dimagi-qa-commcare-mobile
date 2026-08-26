@@ -81,6 +81,9 @@ DISPLAY_NAMES = {
     "offline_06_appium": "Offline: Select CCZ via Picker (Appium)",
     "offline_reinstall_update_appium": "Offline: Reinstall + Update (Appium)",
     "reinstall_05_06_appium": "Reinstall/Update: Chooser + CCZ Branch (Appium)",
+    "scenario_1_appium": "Scenario 1: Staged Update Auto-Apply (Appium)",
+    "scenario_2_appium": "Scenario 2: Manual Update After Interrupted Download (Appium)",
+    "scenario_5_appium": "Scenario 5: Re-login Auto-Update Verification (Appium)",
 }
 
 
