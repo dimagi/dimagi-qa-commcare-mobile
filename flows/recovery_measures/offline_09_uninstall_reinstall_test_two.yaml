@@ -196,11 +196,55 @@ tags:
       - waitForAnimationToEnd:
           timeout: 3000
       - runFlow: ../common/logout.yaml
-      - runFlow:
-          file: ../common/login.yaml
-          env:
-            USERNAME: ${CC_TEST_USERNAME}
-            PASSWORD: ${CC_TEST_PASSWORD}
+      # UPDATE (5th correction, 2026-08-26), confirmed live via a real failure
+      # screenshot (CI run 32982037505, session 16a27e19...72709666): the
+      # retry loop's own detection worked exactly as intended - the "Select
+      # CCZ" screen this loop is waiting for WAS genuinely on-screen at the
+      # moment of failure - but the shared ../common/login.yaml call used for
+      # the retry's re-login hard-failed first, because it unconditionally
+      # taps edit_username and waits up to ~17s for it. For an app with a
+      # pending recovery measure, logging back out and back in can land
+      # DIRECTLY on the forced screen (skipping the login form) rather than
+      # always showing it first - a real, evidenced race between login.yaml's
+      # tap and the app's own async redirect to the measure screen.
+      # login.yaml itself must stay strict for every OTHER caller (its
+      # retry-on-server-error hardening depends on reliably reaching the
+      # post-login screen), so this loop uses its own tolerant, LOCAL
+      # re-login sequence instead of the shared one - every tap optional, so
+      # landing on the forced screen mid-attempt is treated as fine (the
+      # outer while-condition will simply see it on the next check) rather
+      # than a hard failure.
+      - tapOn:
+          id: "org.commcare.dalvik:id/edit_username"
+          optional: true
+      - tapOn:
+          text: "Skip"
+          optional: true
+      - tapOn:
+          id: "org.commcare.dalvik:id/edit_username"
+          optional: true
+      - eraseText
+      - inputText: "${CC_TEST_USERNAME}"
+      - tapOn:
+          id: "org.commcare.dalvik:id/edit_password"
+          optional: true
+      - tapOn:
+          text: "Skip"
+          optional: true
+      - tapOn:
+          id: "org.commcare.dalvik:id/edit_password"
+          optional: true
+      - eraseText
+      - inputText: "${CC_TEST_PASSWORD}"
+      - hideKeyboard
+      - tapOn:
+          id: "org.commcare.dalvik:id/login_button"
+          optional: true
+      - extendedWaitUntil:
+          notVisible:
+            id: "org.commcare.dalvik:id/dialog_cancel_button"
+          timeout: 30000
+          optional: true
 - assertVisible:
     text: "(?i).*recovery (procedures|measures).*initiated.*"
 - assertVisible:
