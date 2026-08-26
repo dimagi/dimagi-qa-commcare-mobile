@@ -2,4 +2,12 @@ requests>=2.31
 python-dotenv>=1.0
 PyYAML>=6.0
 matplotlib>=3.8
-Appium-Python-Client>=3
+# Pinned exactly (2026-08-25), not >=: an unpinned upper bound let CI
+# silently install 6.0.0 while local testing had been against 5.2.4,
+# and 6.0.0 dropped push_file()'s classic-endpoint fallback entirely
+# (confirmed via its real published source) - passed locally, failed in
+# CI. scripts/appium_browserstack_client.py's own push_file() no longer
+# depends on this library's push_file() implementation at all (calls the
+# classic REST endpoint directly instead), but pinning here still avoids
+# the same class of surprise for anything else that isn't as defensive.
+Appium-Python-Client==6.0.0

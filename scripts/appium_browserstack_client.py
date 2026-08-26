@@ -190,14 +190,39 @@ class AppiumBrowserStackClient:
         several flows/recovery_measures/offline_*.yaml files' own
         "REQUIRED MANUAL/CI PRE-STEP (not run by Maestro)" headers).
 
-        UPDATE (2026-08-25), confirmed live: `mobile: pushFile` (the newer
-        extension-command form used by install_mid_session's own note above
-        for installApp) failed outright with UnknownMethodException on this
-        session's Appium server (1.22.0) - unlike installApp, there's no
-        newer-form fallback needed here anyway, since Appium-Python-Client's
-        classic `driver.push_file(path, base64data)` method (the older
-        dedicated PUSH_FILE endpoint, same vintage as install_app's own
-        fallback) worked directly on the first real attempt."""
+        UPDATE (2026-08-25): `mobile: pushFile` (the newer extension-command
+        form) fails outright with UnknownMethodException on this session's
+        real BrowserStack Appium server (1.22.0) - confirmed via its own
+        error listing every supported mobile: command, pushFile not among
+        them. Appium-Python-Client 5.2.4 (what was installed locally while
+        first building this) has a built-in try/except around exactly this:
+        tries `mobile: pushFile`, catches UnknownMethodException, falls back
+        to the classic PUSH_FILE REST endpoint - which is why local testing
+        passed cleanly. requirements.txt only pins `Appium-Python-Client>=3`
+        (no upper bound), so CI's fresh install pulled 6.0.0 instead - a
+        REAL CI failure (build a721c168.../job 97914407945, all 4 offline-
+        ccz scenarios) confirmed that version's own push_file() (per its
+        real published source, appium/webdriver/extensions/remote_fs.py)
+        calls ONLY `mobile: pushFile` now, with the fallback entirely
+        removed (5.2.4's own code marks it "# TODO: Remove the fallback" -
+        6.0.0 is where that happened) - and no longer even registers the
+        classic REST endpoint's URL mapping on the command executor
+        (_add_commands() itself is gone), so calling driver.push_file()
+        fails locally in exactly the way CI did, and there's no supported
+        client method left to fall back to manually either.
+
+        Reimplements the classic call directly instead of depending on
+        whichever push_file() implementation happens to be installed:
+        registers the same route older client versions used to
+        (POST /session/$sessionId/appium/device/push_file, confirmed from
+        Appium-Python-Client 5.2.4's own real _add_commands() source) via
+        the command executor's own add_command() (a stable Selenium API,
+        not an Appium-version-specific one), then invokes it with the same
+        {"path", "data"} payload shape 5.2.4's fallback used - independent
+        of whatever Appium-Python-Client version requirements.txt happens
+        to resolve to in the future."""
         with open(local_file_path, "rb") as f:
             payload = base64.b64encode(f.read()).decode()
-        driver.push_file(device_path, payload)
+        driver.command_executor.add_command(
+            "pushFile", "POST", "/session/$sessionId/appium/device/push_file")
+        driver.execute("pushFile", {"path": device_path, "data": payload})
