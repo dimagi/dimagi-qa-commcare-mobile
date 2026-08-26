@@ -87,6 +87,29 @@ appId: org.commcare.dalvik
     id: "org.commcare.dalvik:id/edit_profile_location"
 - inputText: "${APP_CODE}"
 - hideKeyboard
+# UPDATE (2026-08-26): confirmed live across multiple independent CI
+# sessions today (e.g. login/commcare_odk_03_logout, right_to_left_text/
+# case_list_01_load_case_list, and 20+ other completely unrelated flows,
+# spanning different apps/app-codes/workflows) that a bare tapOn here can
+# time out - Maestro's own default implicit wait isn't always enough for
+# start_install to actually become enabled (it starts DISABLED, per this
+# file's own citation above, and only flips on via a TextWatcher once
+# inputText above has genuinely registered) under whatever device
+# conditions BrowserStack is serving that session. Same real evidence
+# every one of those failures showed: types the code, hides the keyboard,
+# then the tap itself times out ~17s later with nothing else different.
+# Same extendedWaitUntil-then-tapOn idiom this file already uses lower
+# down (screen_multimedia_retry) - gives Maestro a longer, explicit window
+# to catch the button once it's actually ready, rather than relying on
+# tapOn's own shorter implicit wait. Can't fix a genuinely crashed/dead
+# session (that needs the existing build-level retry), but removes this
+# step's own contribution to flakiness for the more common "just slow"
+# case, which is common to virtually every flow in this repo since they
+# all install through this same file.
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/start_install"
+    timeout: 45000
 - tapOn:
     id: "org.commcare.dalvik:id/start_install"
 - tapOn:
