@@ -58,8 +58,15 @@ class TestResult:
 # render_failed_tests_txt already derives that stem) - covers recovery_measures
 # in full (including cc_reinstall_needed_flow/cc_update_needed_flow, the
 # pre-split names still needed to render older reports/history.json entries
-# correctly) plus this session's new Appium-based offline CCZ scenarios. Not
-# yet extended to every workflow in the repo - display_name()'s own fallback
+# correctly). The 4 Appium-based offline CCZ scenarios (run_appium_offline_
+# ccz_suite.py) reuse these SAME entries - each is named after the exact
+# Maestro flow stem it ports (see that script's own FLOW_STEM mapping), not a
+# separate "_appium" key, since it's the same test case under a different
+# execution mechanism. scenario_1/2/5 (run_appium_suite.py) DO get their own
+# "_appium"-suffixed keys below, because those add coverage ALONGSIDE their
+# same-named Maestro flow rather than replacing it, so reusing the bare stem
+# would collide in the merged report. Not yet extended to every workflow in
+# the repo - display_name()'s own fallback
 # (title-cased, underscores to spaces) keeps anything unmapped readable
 # without requiring an exhaustive rename-everything pass up front.
 DISPLAY_NAMES = {
@@ -77,13 +84,9 @@ DISPLAY_NAMES = {
     "reinstall_update_07_10_online_install_and_negative": "Reinstall/Update: Online Install + Negative Check",
     "retry_recovery_02_network_toggle_retry": "Retry Recovery: Network Toggle",
     "update_app_02_forced_two_to_three": "Update App: Forced (Two to Three)",
-    "offline_08_appium": "Offline: CCZ in Downloads (Appium)",
-    "offline_06_appium": "Offline: Select CCZ via Picker (Appium)",
-    "offline_reinstall_update_appium": "Offline: Reinstall + Update (Appium)",
-    "reinstall_05_06_appium": "Reinstall/Update: Chooser + CCZ Branch (Appium)",
-    "scenario_1_appium": "Scenario 1: Staged Update Auto-Apply (Appium)",
-    "scenario_2_appium": "Scenario 2: Manual Update After Interrupted Download (Appium)",
-    "scenario_5_appium": "Scenario 5: Re-login Auto-Update Verification (Appium)",
+    "scenario_1_staged_update_auto_apply_appium": "Scenario 1: Staged Update Auto-Apply (Appium)",
+    "scenario_2_manual_update_after_interrupted_download_appium": "Scenario 2: Manual Update After Interrupted Download (Appium)",
+    "scenario_5_relogin_autoupdate_verification_appium": "Scenario 5: Re-login Auto-Update Verification (Appium)",
 }
 
 

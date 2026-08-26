@@ -53,6 +53,22 @@ OLD_APK_PATH = REPO_ROOT / "resources" / "commcare_2.45_release.apk"
 
 SCENARIOS = ("scenario_1", "scenario_2", "scenario_5")
 
+# UPDATE (2026-08-26), per direct user feedback on run_appium_offline_ccz_
+# suite.py's identical naming issue: BrowserStack session names/TestResult
+# names used to be the short internal key + "_appium" ("scenario_2_appium")
+# - not descriptive. Unlike the offline-CCZ scenarios, these 3 don't replace
+# an existing Maestro flow (flows/updates_partial_failed/scenario_1_staged_
+# update_auto_apply.yaml etc. still run separately, covering the
+# post-precondition steps only) - so this can't just reuse that flow's own
+# name outright without colliding in the merged report. Named after that
+# flow's own real stem instead of the short key, with "_appium" kept as a
+# suffix to distinguish this ADDITIONAL (not superseding) coverage.
+FLOW_STEM = {
+    "scenario_1": "scenario_1_staged_update_auto_apply_appium",
+    "scenario_2": "scenario_2_manual_update_after_interrupted_download_appium",
+    "scenario_5": "scenario_5_relogin_autoupdate_verification_appium",
+}
+
 
 def _split_device(devices_arg):
     """"Samsung Galaxy S26-16.0" -> ("Samsung Galaxy S26", "16.0") - same
@@ -118,52 +134,43 @@ def _run_one_scenario(bs, name, old_app_url, new_app_url, device, os_version, bu
     driver = None
     result = None
     start = time.monotonic()
+    stem = FLOW_STEM[name]
     try:
-        # UPDATE (2026-08-26): session_name used to be the raw internal
-        # scenario key ("scenario_2" etc.) - that's what BrowserStack's own
-        # dashboard shows as the test name (same generic-name issue confirmed
-        # live via a real screenshot for run_appium_offline_ccz_suite.py's
-        # equivalent scenarios), even though report_generator.DISPLAY_NAMES
-        # already has a proper human-readable entry for each of these 3
-        # scenarios' "_appium" stem. Reuse that same mapping so BrowserStack's
-        # dashboard and this repo's own report.html/Slack output agree.
-        display_name = report_generator.display_name(
-            f"updates_partial_failed/{name}_appium", workflow="updates_partial_failed")
         driver = bs.start_session(
             old_app_url, device, os_version,
-            build_name=build_name, session_name=display_name,
+            build_name=build_name, session_name=stem,
             mid_session_apps=[new_app_url],
             network_profile=network_profile,
         )
         fn(driver)
         result = report_generator.TestResult(
-            name=f"updates_partial_failed/{name}_appium",
+            name=f"updates_partial_failed/{stem}",
             workflow="updates_partial_failed",
             status="passed",
             duration_ms=int((time.monotonic() - start) * 1000),
             device=f"{device}-{os_version}",
         )
     except appium_scenarios.ScenarioFailure as exc:
-        _save_failure_evidence(driver, name)
+        _save_failure_evidence(driver, stem)
         result = report_generator.TestResult(
-            name=f"updates_partial_failed/{name}_appium",
+            name=f"updates_partial_failed/{stem}",
             workflow="updates_partial_failed",
             status="failed",
             duration_ms=int((time.monotonic() - start) * 1000),
             device=f"{device}-{os_version}",
             error=str(exc.original),
-            failed_step=f"{name}_appium.py - {exc.step_name}: {exc.original}",
+            failed_step=f"{stem} - {exc.step_name}: {exc.original}",
         )
     except Exception as exc:  # noqa: BLE001 - session-level infra failure (upload/session-start/etc.)
-        _save_failure_evidence(driver, name)
+        _save_failure_evidence(driver, stem)
         result = report_generator.TestResult(
-            name=f"updates_partial_failed/{name}_appium",
+            name=f"updates_partial_failed/{stem}",
             workflow="updates_partial_failed",
             status="failed",
             duration_ms=int((time.monotonic() - start) * 1000),
             device=f"{device}-{os_version}",
             error=str(exc),
-            failed_step=f"{name}_appium.py - session/infra error: {exc}",
+            failed_step=f"{stem} - session/infra error: {exc}",
         )
     finally:
         if driver is not None:

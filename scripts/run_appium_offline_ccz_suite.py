@@ -71,6 +71,22 @@ _SCENARIO_META = {
     "reinstall_05_06": ("recovery_measures", "RU_TEST_TWO", offline_scenarios.run_reinstall_05_06_ccz_branch),
 }
 
+# UPDATE (2026-08-26), per direct user feedback: TestResult.name/BrowserStack
+# session names used to be "<key>_appium" ("offline_08_appium" etc.) - a name
+# not shared by anything else in the repo. Each of these 4 Appium scenarios is
+# a straight port of ONE specific, now-superseded Maestro flow's own on-device
+# steps (see each scenario fn's own docstring / that flow's own
+# superseded_by_appium header) - naming this run after THAT flow's real stem,
+# same lowercase_with_underscores convention every other recovery_measures
+# test already uses, keeps one consistent identity for "this test case"
+# across both execution mechanisms instead of inventing a second name for it.
+FLOW_STEM = {
+    "offline_08": "offline_08_move_ccz_to_downloads",
+    "offline_06": "offline_06_select_ccz_via_picker",
+    "offline_reinstall_update": "offline_reinstall_update_app_flow",
+    "reinstall_05_06": "reinstall_update_05_06_chooser_and_ccz",
+}
+
 
 def _split_device(devices_arg):
     """"Samsung Galaxy S26-16.0" -> ("Samsung Galaxy S26", "16.0") - same
@@ -122,47 +138,38 @@ def _run_one_scenario(bs, name, workflow, app_url, device, os_version, build_nam
     driver = None
     result = None
     start = time.monotonic()
+    stem = FLOW_STEM[name]
     try:
-        # UPDATE (2026-08-26): session_name used to be the raw internal
-        # scenario key ("offline_08" etc.) - that's exactly what BrowserStack's
-        # own dashboard shows as the test name (confirmed live via a real
-        # screenshot of that dashboard), so it rendered unhelpfully generic
-        # there even though report_generator.DISPLAY_NAMES already has a
-        # proper human-readable entry for each of these 4 scenarios' "_appium"
-        # stem. Reuse that same mapping here so the BrowserStack dashboard and
-        # this repo's own report.html/Slack output show identical, readable
-        # names for the same test.
-        display_name = report_generator.display_name(f"{workflow}/{name}_appium", workflow=workflow)
-        driver = bs.start_session(app_url, device, os_version, build_name=build_name, session_name=display_name)
+        driver = bs.start_session(app_url, device, os_version, build_name=build_name, session_name=stem)
         fn(driver)
         result = report_generator.TestResult(
-            name=f"{workflow}/{name}_appium",
+            name=f"{workflow}/{stem}",
             workflow=workflow,
             status="passed",
             duration_ms=int((time.monotonic() - start) * 1000),
             device=f"{device}-{os_version}",
         )
     except appium_scenarios.ScenarioFailure as exc:
-        _save_failure_evidence(driver, name)
+        _save_failure_evidence(driver, stem)
         result = report_generator.TestResult(
-            name=f"{workflow}/{name}_appium",
+            name=f"{workflow}/{stem}",
             workflow=workflow,
             status="failed",
             duration_ms=int((time.monotonic() - start) * 1000),
             device=f"{device}-{os_version}",
             error=str(exc.original),
-            failed_step=f"{name}_appium.py - {exc.step_name}: {exc.original}",
+            failed_step=f"{stem} (Appium) - {exc.step_name}: {exc.original}",
         )
     except Exception as exc:  # noqa: BLE001 - session-level infra failure (upload/session-start/push_file/etc.)
-        _save_failure_evidence(driver, name)
+        _save_failure_evidence(driver, stem)
         result = report_generator.TestResult(
-            name=f"{workflow}/{name}_appium",
+            name=f"{workflow}/{stem}",
             workflow=workflow,
             status="failed",
             duration_ms=int((time.monotonic() - start) * 1000),
             device=f"{device}-{os_version}",
             error=str(exc),
-            failed_step=f"{name}_appium.py - session/infra error: {exc}",
+            failed_step=f"{stem} (Appium) - session/infra error: {exc}",
         )
     finally:
         if driver is not None:
