@@ -137,9 +137,17 @@ def _pick_ccz_from_custom_folder_picker(driver):
     real picker navigation away from the default Recent view, which is
     this flow's actual point, distinct from offline_08's zero-navigation
     straight-from-Recent tap."""
-    h.tap_by_text(driver, "Show roots", timeout=10)
-    h.tap_by_text(driver, "Downloads", timeout=10)
-    h.tap_by_exact_text_coords(driver, "test.ccz", timeout=10)
+    # UPDATE (2026-08-26), confirmed live in the 2.64.1 full CI run
+    # (32953501586): a real failure screenshot showed "Downloads" fully
+    # visible and tappable in the roots drawer at the exact moment this
+    # tap's own 10s timeout expired - not a missing element, just a drawer
+    # that took longer than 10s to render under that session's device
+    # conditions (same class of slowness seen across many unrelated flows
+    # today). Raised to a more generous timeout rather than assuming a
+    # real regression.
+    h.tap_by_text(driver, "Show roots", timeout=20)
+    h.tap_by_text(driver, "Downloads", timeout=20)
+    h.tap_by_exact_text_coords(driver, "test.ccz", timeout=20)
 
 
 def run_offline_08_downloads_happy_path(driver, appium_client, app_code, local_ccz_path):
