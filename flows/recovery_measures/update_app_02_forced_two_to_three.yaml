@@ -1,0 +1,149 @@
+appId: org.commcare.dalvik
+tags:
+  - recovery_measures
+  - recovery_phase2
+  - automatable
+---
+# Master Mobile Plan (2026) > Recovery Measures > Recovery: Update App
+# (Update 4-6 - the FORCED, Django-recovery-measure-driven Test Two -> Test
+# Three update).
+#
+# UPDATE (2026-08-27), REWORKED per direct user-supplied app link
+# (https://www.commcarehq.org/a/qateam/apps/view/9d63118c3eda4e56bebfb52762804d53/releases/):
+# this is "Recovery: Update App" (Recovery Measures sheet row 20's own C20
+# hyperlink) - the app for this ENTIRE section (both this file and
+# update_app_01_normal_update_to_two.yaml), not APP_CODE_PT_REL_TWO/THREE
+# ("Recovery: Point Release", the 2026-08-24 substitute chosen before this
+# correct link was known) or APP_CODE_RU_TEST_TWO/THREE ("Recovery: Reinstall
+# and Update App", a still-earlier and also-wrong substitute - see that
+# file's own header history for the full prior chain of corrections).
+#
+# Confirmed via this app's own live Django MobileRecoveryMeasure record (id
+# 10, /admin/ota/mobilerecoverymeasure/10/change/): measure="app_update"
+# (MEASURE_TYPE_APP_UPDATE - the plain, dialog-less auto-update this row's
+# own narrative describes, matching ExecuteRecoveryMeasuresPresenter.
+# executeMeasure()'s executeAutoUpdate() branch exactly), cc_all_versions=
+# True (no CommCare client-version gate at all - runs on the normal current-
+# release client, no old-client APK/dedicated CI step needed, unlike
+# CC_UPDATE_NEEDED/Point Release's own cc_update-type measures),
+# app_all_versions=False with app_version_min=85/app_version_max=104 (only
+# applies when the device's CURRENTLY-installed app version is in that
+# range - see scripts/app_registry.py's UPDATE_APP_ONE/TWO/THREE entries for
+# the real build versions chosen to satisfy this: v84 below the gate for
+# Test One, v93 inside it for Test Two, v105 above it - the current top
+# build - for Test Three).
+#
+# PREREQUISITE: run hq_setup/recovery_measures/update_app_release_test_three.json
+# first (via --hq-setup) to mark Test Three (v105) released while the device
+# installs as Test Two (v93) - UPDATE_APP_THREE is pinned with
+# release_first=False (v84's own mark_build_status call hit a real HQ
+# platform migration error - see app_registry.py's own citation), so unlike
+# RU_TEST_THREE/PT_REL_THREE this doesn't get auto-released just by being
+# referenced; it needs this explicit step:
+#   python scripts/run_suite.py --hq-setup hq_setup/recovery_measures/update_app_release_test_three.json --tag recovery_phase2
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_UPDATE_APP_TWO}
+# Update 4/5 - the app_update recovery measure activates automatically on
+# login/sync since Test Three is now released and Two is stale relative to
+# it, applying Test Three with no button tap, then auto-logging out.
+#
+# UPDATE (2026-08-27), per direct user observation (real video, recovery
+# screen visible only from timestamp 2:20 to 2:22 - a ~2 SECOND window),
+# confirmed by their colleague against a real screenshot: the "Recovery
+# procedures have been initiated... Updating N out of 6 resources" screen
+# genuinely appears, but flashes and clears extremely fast. A plain
+# assertVisible right after ../common/login.yaml still missed it even after
+# switching to extendedWaitUntil (confirmed live: polled for the FULL 20s
+# timeout, genuinely never saw it) - because the flash happens DURING
+# login.yaml's own internal wait for the post-login sync dialog to clear
+# (that wait alone took ~14.5s in the same real run), before control ever
+# returns here. By the time login.yaml reports COMPLETED, the 2-second
+# window has already closed. Does NOT call the shared login.yaml for this
+# specific login - inlines the tap sequence instead (same real "Empty
+# Password" resilience already proven in that shared subflow, see its own
+# 2026-08-27 header) so the recovery-text poll can start IMMEDIATELY after
+# tapping LOG IN, racing the flash instead of waiting the sync dialog out
+# first the way every other flow's login legitimately wants to.
+- repeat:
+    times: 3
+    while:
+      notVisible:
+        id: "org.commcare.dalvik:id/edit_username"
+        text: "^\\Q${CC_TEST_USERNAME}\\E$"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/edit_username"
+      - eraseText
+      - inputText: "${CC_TEST_USERNAME}"
+- tapOn:
+    id: "org.commcare.dalvik:id/edit_password"
+- eraseText
+- inputText: "${CC_TEST_PASSWORD}"
+- hideKeyboard
+- tapOn:
+    id: "org.commcare.dalvik:id/login_button"
+- repeat:
+    times: 3
+    while:
+      visible:
+        text: "Empty Password"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/edit_password"
+      - eraseText
+      - inputText: "${CC_TEST_PASSWORD}"
+      - hideKeyboard
+      - tapOn:
+          id: "org.commcare.dalvik:id/login_button"
+# UPDATE (2nd correction, 2026-08-27), per direct user observation: even
+# the extendedWaitUntil poll above genuinely never caught the recovery text
+# in a real run - confirmed by the user that this same run STILL genuinely
+# showed the recovery screen and landed back on login successfully, so the
+# assertion itself (not the underlying mechanism) is the unreliable part.
+# Per direct user instruction, drops the fragile flash-text assertion
+# entirely - the real, stable signal is reaching the LOGIN screen again
+# (the forced update's own auto-logout).
+#
+# UPDATE (3rd correction, 2026-08-27), confirmed live: tried also asserting
+# edit_password shows no text (".+" not visible) as extra confirmation of a
+# genuinely fresh/empty field - failed live even though the device's real,
+# visible state was a normal empty login screen. This is the SAME masked-
+# field unreliability already found for the "Empty Password" retry above,
+# just in the other direction this time (reports non-empty for a field
+# that's really empty) - Maestro's accessibility read of this masked field
+# can't be trusted in EITHER direction, so don't assert on its text content
+# at all. edit_username reappearing is already the real, reliable signal
+# that auto-logout happened.
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/edit_username"
+    timeout: 60000
+# Update 5 (part 2) - log back in and verify the app updated to Test Three
+# via About CommCare (per the real step "Click options and verify you've
+# successfully updated to the version corresponding with Test Three").
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+- runFlow: ../common/check_app_version_via_about.yaml
+# Update 6 - negative check: submit the only form, sync, and ensure no
+# further forced update - per the real steps "Submit the only form on the
+# app / Sync / Ensure you're not forced to update".
+- assertNotVisible:
+    text: "(?i).*recovery (procedures|measures).*initiated.*"
+- assertNotVisible:
+    text: "(?i).*update.*required.*"
+- runFlow: ../common/submit_only_form.yaml
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+- assertNotVisible:
+    text: "(?i).*recovery (procedures|measures).*initiated.*"
+- assertNotVisible:
+    text: "(?i).*update.*required.*"
