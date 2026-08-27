@@ -98,16 +98,6 @@ def select_flow_files(tags=None, explicit_flows=None):
             # testing them against the wrong (current, not old) binary.
             if "requires_old_client_apk" in flow_tags and (not tags or "requires_old_client_apk" not in tags):
                 continue
-            # UPDATE (2026-08-27): same exclusion pattern again -
-            # update_app_02_trigger_on_old_client.yaml needs a DIFFERENT old
-            # CommCare binary (resources/commcare_2.50.2_release.apk) than
-            # requires_old_client_apk's own resources/commcare_2.45_release.apk
-            # - Point Release's MobileRecoveryMeasure is version-gated
-            # 2.49.5-2.51.1, which 2.45 falls below entirely (confirmed via
-            # the app's own Django admin record - see that file's header).
-            if ("requires_point_release_old_client_apk" in flow_tags
-                    and (not tags or "requires_point_release_old_client_apk" not in tags)):
-                continue
             # UPDATE (2026-08-25): same exclusion pattern again -
             # offline_06_select_ccz_via_picker/offline_08_move_ccz_to_
             # downloads/offline_reinstall_update_app_flow/reinstall_update_05_

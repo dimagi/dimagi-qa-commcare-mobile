@@ -35,10 +35,20 @@ tags:
 # reintroduce the exact bug this split fixes (confirmed live, 2026-08-10,
 # build 0283bbe253c324fe9837272928b5a079ed91840a - an earlier draft of this
 # very comment did exactly that).
+#
+# UPDATE (2026-08-27), per direct user-supplied app link
+# (https://www.commcarehq.org/a/qateam/apps/view/9d63118c3eda4e56bebfb52762804d53/releases/):
+# switched from APP_CODE_RU_TEST_ONE ("Recovery: Reinstall and Update App",
+# A6's own link - the WRONG app for this row, confirmed against the Recovery
+# Measures sheet's OWN C20 hyperlink for this section) to
+# APP_CODE_UPDATE_APP_ONE ("Recovery: Update App" - see app_registry.py's
+# UPDATE_APP_ONE/TWO/THREE entries for the full citation, including this
+# app's real Django MobileRecoveryMeasure record confirming measure=
+# "app_update", matching this row's own plain-auto-update narrative exactly).
 - runFlow:
     file: ../common/install_app_by_code.yaml
     env:
-      APP_CODE: ${APP_CODE_RU_TEST_ONE}
+      APP_CODE: ${APP_CODE_UPDATE_APP_ONE}
 - runFlow:
     file: ../common/login.yaml
     env:

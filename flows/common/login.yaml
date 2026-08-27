@@ -87,6 +87,40 @@ appId: org.commcare.dalvik
 - hideKeyboard
 - tapOn:
     id: "org.commcare.dalvik:id/login_button"
+# UPDATE (2026-08-27), confirmed live (4 real BrowserStack failures in a
+# row, builds 3bda833b.../aa69e2de.../f2b9c12830...,
+# update_app_02_forced_two_to_three.yaml on a freshly-registered app): a
+# real, on-screen "Empty Password" error (in red, right under LOG IN)
+# appeared even though the password self-verify loop above genuinely
+# reported the field non-empty every time - a real discrepancy between
+# Maestro's own accessibility-tree read of the masked field (unreliable,
+# per this file's own earlier-tried-and-abandoned .+ non-empty check) and
+# the app's real internal EditText value at the moment LOG IN is tapped.
+# Verified against commcare-android source (read-only reference, not
+# modified): LoginActivity.doLogin() checks `"".equals(passwordOrPin)`
+# (the field's REAL committed text, read fresh at tap time) and calls
+# raiseLoginMessage(StockMessages.Auth_EmptyPassword, false) then returns
+# immediately - no network call, login_button stays enabled/tappable
+# afterward, same as the Bad Server Response/Server Error/Couldn't Reach
+# Server cases below. Real string confirmed in android_translatable_
+# strings.txt: login.attempt.fail.empty.pw.title=Empty Password. Unlike
+# the pre-tap field check (which can't reliably tell real content from
+# whatever Maestro's own accessibility read happens to show), this checks
+# the app's OWN post-tap verdict directly - a signal proven reliable by
+# this real evidence - and retypes+retaps if it fires.
+- repeat:
+    times: 3
+    while:
+      visible:
+        text: "Empty Password"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/edit_password"
+      - eraseText
+      - inputText: "${PASSWORD}"
+      - hideKeyboard
+      - tapOn:
+          id: "org.commcare.dalvik:id/login_button"
 # UPDATE, confirmed live (2026-08-08, real BrowserStack failure on BOTH the
 # main attempt and its --retry-failed re-run, build
 # af73a71fe00d14a20fc6d59a0b3a2da22c1211a0, on

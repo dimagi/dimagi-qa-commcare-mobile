@@ -184,6 +184,38 @@ APP_REGISTRY = {
     # (same class of bug already hit twice today).
     "PT_REL_TWO": ("qateam", "df1c05ddfb640f32c9d453f780442ce4", "8ab3f997208c4c6899e48817037d27b1", False),
     "PT_REL_THREE": ("qateam", "df1c05ddfb640f32c9d453f780442ce4", "b0833a601b404dda969e47e4a4b0589b", False),
+    # UPDATE (2026-08-27), per direct user-supplied app link
+    # (https://www.commcarehq.org/a/qateam/apps/view/9d63118c3eda4e56bebfb52762804d53/releases/):
+    # this is "Recovery: Update App" (Recovery Measures sheet row 20's own
+    # C20 hyperlink) - the REAL app for update_app_01_normal_update_to_two.
+    # yaml + update_app_02's Test One -> Two -> Three narrative, not
+    # RU_TEST_ONE/TWO/THREE (which belongs to the DIFFERENT "Recovery:
+    # Reinstall and Update App" per A6's own link) or PT_REL_TWO/THREE
+    # (a 2026-08-24 substitute chosen before this correct link was known).
+    # Confirmed via its own live Django MobileRecoveryMeasure record
+    # (id 10, /admin/ota/mobilerecoverymeasure/10/change/): measure="app_update"
+    # (MEASURE_TYPE_APP_UPDATE - the plain, dialog-less auto-update this
+    # row's own narrative describes), cc_all_versions=True (no CommCare
+    # client-version gate at all - no old-client APK needed, unlike
+    # CC_UPDATE_NEEDED/Point Release), app_all_versions=False with
+    # app_version_min=85/app_version_max=104 (the measure only applies when
+    # the DEVICE's currently-installed app version is in that range).
+    # Verified via HQClient.list_releases(9d63118c3eda4e56bebfb52762804d53):
+    # v84 (released, requires CC 2.54.0) sits just below the gate floor - a
+    # real "not yet applicable" baseline for Test One; v93 (released,
+    # requires CC 2.54.0) sits inside the gate - Test Two; v105 (released,
+    # requires CC 2.56.0) sits above the gate ceiling (105 > 104) - the
+    # current top build, Test Three.
+    # UPDATE (2026-08-27), confirmed live: v84 (Test One) hit a real HQ
+    # platform migration error on mark_build_status ("The mobile UCR restore
+    # version for v84 needs to be updated to V2.0") - same class of error
+    # already documented for MOBILE2_47 below. All three builds are already
+    # released (confirmed via list_releases), so release_first=False on all
+    # three avoids ever calling mark_build_status on them at all, same
+    # precedent as PT_REL_TWO/THREE above.
+    "UPDATE_APP_ONE": ("qateam", "9d63118c3eda4e56bebfb52762804d53", "a7c03555aae246c9ae22036cedc5d76c", False),
+    "UPDATE_APP_TWO": ("qateam", "9d63118c3eda4e56bebfb52762804d53", "2944cb21e6dd41ba9107b2f94eb25d38", False),
+    "UPDATE_APP_THREE": ("qateam", "9d63118c3eda4e56bebfb52762804d53", "ab2fc77a762643cab4025c9607e66040", False),
     "HEARTBEAT": ("qateam", "35b9a60884c8f8e69e507c56cbe8f370"),
     # A genuinely different, unregistered app from "Basic Tests" - see
     # capture_01_gather_signature.yaml's own header for the full root-cause
