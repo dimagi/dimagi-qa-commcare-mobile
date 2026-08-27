@@ -575,8 +575,19 @@ def _open_update_app_menu(driver, start_download=True):
     # precedent for this identical underlying HQ-propagation-delay
     # phenomenon - raised to match it exactly rather than a shorter,
     # unproven number.
-    for _ in range(4):
-        if h.wait_visible_text(driver, "New version of the application is available", timeout=45, optional=True):
+    # UPDATE (3rd correction, 2026-08-27), confirmed live via a real CI
+    # failure (run 33055924961, group-b, session
+    # 33909c12b2aafd6e333e583718ee7dee144eb1f3): the 4x45s=180s budget
+    # above STILL wasn't enough - the failure screenshot showed this exact
+    # "App is up to date" / "Recheck" screen, confirming the underlying
+    # HQ-propagation delay (not a different bug) just took longer than
+    # 180s this time, under real concurrent-CI-run load (many other flows'
+    # own hq_setup/teardown scripts hitting HQ at the same time). Raised to
+    # match _login_and_wait_for_forced_blocker's own already-proven
+    # attempts=6/wait_seconds=60 (360s total) budget for this identical
+    # class of delay, rather than guessing a new number.
+    for _ in range(6):
+        if h.wait_visible_text(driver, "New version of the application is available", timeout=60, optional=True):
             break
         if not h.tap_by_text(driver, "Recheck", optional=True, timeout=3):
             break
@@ -800,13 +811,30 @@ def _login_and_wait_for_forced_blocker(driver, username, password, attempts=6, w
     sharing the same mid-flow HQ action - says this is a real, currently
     slower propagation path, not generic flakiness that a modest retry
     absorbs. Raised to attempts=6/wait_seconds=60 (6 minutes total) based on
-    that evidence rather than re-guessing the original recording's number."""
+    that evidence rather than re-guessing the original recording's number.
+
+    UPDATE (2026-08-27), confirmed live via a real CI failure (run
+    33055924961, group-c, failure evidence
+    scenario_02_forced_ccz_update_1787833124.png): the actual on-screen
+    state at failure was the OPTIONAL prompt ("New version of the
+    application is available" / "UPDATE TO THE LATEST APP VERSION" /
+    "I'LL UPDATE LATER") - i.e. app_prompt hadn't propagated to forced yet
+    on that attempt, exactly the delay this loop already retries for - but
+    _logout()'s own h.tap_by_text(driver, "Log out of CommCare") assumes a
+    plain home screen (the 5-tile grid), which this optional-prompt
+    full-screen dialog is NOT, so the tap itself failed outright ("never
+    became tappable within 10s") instead of the loop's own, more
+    descriptive RuntimeError ever getting a chance to fire. Dismisses the
+    optional prompt first (tap "I'LL UPDATE LATER", best-effort) so
+    _logout() always has a real home screen to work with regardless of
+    which prompt variant HQ's current propagation state happens to show."""
     for attempt in range(attempts):
         _login(driver, username, password)
         if h.wait_visible_text(driver, "New version of the application is required",
                                 timeout=wait_seconds, optional=True):
             return
         if attempt < attempts - 1:
+            h.tap_by_text(driver, "I'LL UPDATE LATER", optional=True, timeout=3)
             _logout(driver)
     raise RuntimeError(
         f"Forced update blocker never appeared after {attempts} relogin attempts "
