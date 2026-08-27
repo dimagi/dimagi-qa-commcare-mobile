@@ -758,6 +758,7 @@ def run_pre_step(spec: dict, client: HQClient = None, current_apk_version: str =
         "create_new_build": client.create_new_build,
         "set_custom_properties": client.set_custom_properties,
         "set_prompt_update_settings": client.set_prompt_update_settings,
+        "get_prompt_update_settings": client.get_prompt_update_settings,
     }
     results = []
     last_build_id = None
