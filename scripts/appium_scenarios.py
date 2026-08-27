@@ -651,10 +651,66 @@ def _complete_update_app(driver):
     scenario_1/2's earlier mid-download interrupt while completing fully
     in ~20s. Lowered this wait back down to match - keeping a real margin
     over the ~20s observed, not the 480s a genuinely much-slower throttle
-    needed."""
+    needed.
+
+    UPDATE (5th correction, 2026-08-27), confirmed live via a real CI
+    failure (run 33078637793, session
+    c08d59201ab89c196377cec0aee89eddbbfd5126): NOT a timing issue at all
+    this time - the device logs show the update genuinely completing
+    successfully within the 90s window (progress advanced resource 7 -> 16
+    of 18, then "App update successfully applied!" appeared and the app's
+    own title changed to reflect the new version, i.e. real, confirmed
+    success) - but this wait was only ever looking for "Update to version
+    ${0} & log out" (updates.staged.version, android_translatable_strings.txt:16
+    - the STAGED/ready-to-apply prompt a user must tap to continue) and
+    never found it, because this run's real completion path auto-applied
+    without ever showing that staged prompt at all, going straight to
+    "App update successfully applied!" (login.update.install.success,
+    android_translatable_strings.txt:192, raised from LoginActivity.java:910
+    - a genuine completion signal, not a staged one, confirmed via source).
+    Both are real, valid completion signals for different paths the update
+    can take depending on speed/timing. The staged-prompt path's own tap
+    logs out as a side effect (the button's own name/behavior); the
+    auto-applied path does NOT log out on its own (confirmed by the same
+    real evidence - the device stayed on the new version's home screen,
+    "Log out of CommCare" as an ordinary tile, across many repeated polls)
+    - every caller of this function (e.g. run_scenario_2's own next step)
+    expects to find a login screen afterward, so explicitly logs out for
+    that path too, keeping this function's contract the same regardless
+    of which real path the update took.
+
+    UPDATE (6th correction, 2026-08-27), confirmed live via a real local
+    verification failure (session 0d4560c6f241b39f0d8844326ce8d7fdb8cb849c):
+    a THIRD valid terminal state - the failure screenshot showed "App is
+    up to date" / "Current version: 71" (71 being the actual TARGET
+    version, not the old one) - i.e. the update had ALREADY silently
+    auto-applied by the time this step opened the menu, the exact same
+    async auto-apply race run_scenario_2's own 2nd-correction UPDATE
+    already documented (CommCare's normal login/restore flow can complete
+    a pending update on its own, independent of whether/when this
+    function's own menu-driven flow gets to it) - just this time landing
+    AFTER Update 4's "not yet applied" check instead of before it. Nothing
+    left to apply, so this is success too - BUT unlike the auto-applied
+    path, this one is NOT the real home screen: confirmed live via a
+    second local verification failure (session
+    d5a04014f95dc8a417ae4c33c7c19cd1ebf3461d) that after this fix's own
+    "App is up to date" branch called _logout() directly, the SAME
+    "App is up to date" screen was still on-screen and _logout()'s tap for
+    "Log out of CommCare" failed outright - it's the update-check results
+    sub-screen (an overlay on top of Start), not the 5-tile home grid, so
+    "Log out of CommCare" genuinely isn't present until it's dismissed.
+    Same `back`-to-dismiss pattern flows/update/update_target_developer_
+    options_flow.yaml's own Maestro flow already established for this
+    exact screen."""
     _open_update_app_menu(driver)
-    h.wait_visible_text(driver, r"Update to version.*log out", timeout=90, regex=True)
-    h.tap_by_text(driver, r"Update to version.*log out", regex=True)
+    h.wait_visible_text(driver, r"Update to version.*log out|App update successfully applied|App is up to date",
+                         timeout=90, regex=True)
+    if h.is_text_visible(driver, r"Update to version.*log out", regex=True):
+        h.tap_by_text(driver, r"Update to version.*log out", regex=True)
+    else:
+        if h.is_text_visible(driver, "App is up to date"):
+            h.back(driver)
+        _logout(driver)
 
 
 def _wait_for_update_in_progress(driver, timeout=20):
