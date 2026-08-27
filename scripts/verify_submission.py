@@ -42,6 +42,11 @@ def main():
                               "so you don't match a stale submission from an earlier run.")
     parser.add_argument("--require-multimedia", action="store_true",
                          help="Fail if the matched form has no multimedia attachment.")
+    parser.add_argument("--require-location", action="store_true",
+                         help='Fail if the matched form\'s metadata "location" field is empty '
+                              '(HQ renders an unset location as the literal string "---") - use for '
+                              'rows like Geoservice 2 ("Auto Capture Location") that need to confirm '
+                              'a geopoint was actually captured into the submission.')
     parser.add_argument("--domain", default=os.environ.get("HQ_DOMAIN", "qateam"))
     args = parser.parse_args()
 
@@ -71,6 +76,9 @@ def main():
 
     if args.require_multimedia and not metadata.get("has_multimedia"):
         raise SystemExit("Expected multimedia attached to this form, but none was found.")
+
+    if args.require_location and metadata.get("location", "---") == "---":
+        raise SystemExit("Expected a captured location on this form, but metadata.location is empty.")
 
     print("Submission verified OK.")
 
