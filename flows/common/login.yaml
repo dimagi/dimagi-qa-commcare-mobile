@@ -266,6 +266,22 @@ appId: org.commcare.dalvik
 # checks had already passed - so re-check for all three known error texts
 # one more time here, late, and retry the login tap if any of them showed
 # up after all.
+#
+# UPDATE (2026-08-27), confirmed live in CI (run 33078641030, single-tag
+# prompted_updates dispatch, prompted_updates/varying_prompt_01_update_
+# frequency.yaml): recurred a THIRD time, past even this late re-check -
+# the failure screenshot showed the device still on LoginActivity with
+# "Bad Server Response" visible, but this repeat's own immediate (zero-
+# wait) check had already sampled and found nothing visible, same
+# SKIPPED-then-arrives-later race as the 2026-08-21 UPDATE above, just a
+# beat slower still. Every fix here so far has been "check at one more
+# point in time", each eventually beaten by a later-still response - adds
+# a real settling pause immediately before sampling, giving an in-flight
+# response actual time to render before this check reads the screen,
+# instead of relying on catching it via yet another single instantaneous
+# sample.
+- waitForAnimationToEnd:
+    timeout: 5000
 - repeat:
     times: 5
     while:
