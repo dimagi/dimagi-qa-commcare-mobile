@@ -145,8 +145,23 @@ def _pick_ccz_from_custom_folder_picker(driver):
     # conditions (same class of slowness seen across many unrelated flows
     # today). Raised to a more generous timeout rather than assuming a
     # real regression.
-    h.tap_by_text(driver, "Show roots", timeout=20)
-    h.tap_by_text(driver, "Downloads", timeout=20)
+    # UPDATE (2026-08-27), confirmed live via a real CI failure (run
+    # 33078644576, session 2e95c32819bc7f1b7b14b1fee44ebebb7399352c): the
+    # device log's own hierarchy dump at the moment "test.ccz" never
+    # became tappable showed "Can't load content at the moment" - a real
+    # Android DocumentsUI/SAF content-provider error rendering the
+    # Downloads listing itself, not a missing file or wrong path (the push
+    # target and this tap's target already agree, both DOWNLOADS_PATH).
+    # Genuinely transient OS-level flakiness, not a logic bug - retries
+    # the whole roots-drawer-to-Downloads navigation (a fresh query) a few
+    # times if this specific error text appears, rather than giving up on
+    # one failed content-provider query.
+    for attempt in range(3):
+        h.tap_by_text(driver, "Show roots", timeout=20)
+        h.tap_by_text(driver, "Downloads", timeout=20)
+        if not h.is_text_visible(driver, "Can.t load content at the moment", regex=True):
+            break
+        h.checkpoint(driver, f"downloads_content_provider_error_attempt_{attempt}")
     h.tap_by_exact_text_coords(driver, "test.ccz", timeout=20)
 
 
