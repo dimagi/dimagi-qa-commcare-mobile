@@ -626,9 +626,23 @@ def _complete_update_app(driver):
     correction already found, not a stall. Raised again rather than
     reducing the network throttle (which risks reopening the original
     problem this throttle exists to solve - see run_scenario_2's own
-    citation on why an interrupt window needs it at all)."""
+    citation on why an interrupt window needs it at all).
+
+    UPDATE (4th correction, 2026-08-27): every escalation above (30s ->
+    180s -> 300s -> 480s) was solving the wrong variable. A real, direct
+    diagnostic (not another guessed number) confirmed run_appium_suite.py's
+    own "3g-umts-good" throttle - the ACTUAL bottleneck the whole time -
+    makes real, steady, monotonic progress but needs an estimated 20-30+
+    minutes total for this app's real 18 resources, which no timeout
+    short of that was ever going to satisfy. Switched to
+    "3.5g-hspa-plus-good" instead (see run_appium_suite.py's own citation)
+    - confirmed live to still leave a real multi-resource window for
+    scenario_1/2's earlier mid-download interrupt while completing fully
+    in ~20s. Lowered this wait back down to match - keeping a real margin
+    over the ~20s observed, not the 480s a genuinely much-slower throttle
+    needed."""
     _open_update_app_menu(driver)
-    h.wait_visible_text(driver, r"Update to version.*log out", timeout=480, regex=True)
+    h.wait_visible_text(driver, r"Update to version.*log out", timeout=90, regex=True)
     h.tap_by_text(driver, r"Update to version.*log out", regex=True)
 
 

@@ -321,7 +321,27 @@ def main():
     # tier up from the 2g one that stalled - meaningfully slower than an
     # unthrottled connection without (hopefully) dropping below whatever
     # throughput floor caused the stall.
-    network_profiles = {"scenario_2": "3g-umts-good"}
+    #
+    # UPDATE (2026-08-27), confirmed live via a real, direct diagnostic
+    # (not guessed): "3g-umts-good" (400/100 Kbps per BrowserStack's own
+    # docs) genuinely never stalls - it makes real, steady, monotonic
+    # progress ("resource 7 of 18" -> "8" -> "10" -> "13" -> "14" over 764s
+    # of live polling) - it's just far too slow for this app's real 18
+    # resources, needing an estimated 20-30+ minutes total, which is why
+    # every earlier timeout escalation (30s -> 180s -> 300s -> 480s) kept
+    # failing regardless of how high it went; the fix was never "wait
+    # longer" for this specific number. Also confirmed live:
+    # "4g-lte-good" (18000/9000 Kbps) is too fast the OTHER way - the
+    # entire download completed before the very first poll (t=0.0s),
+    # recreating the exact original problem this whole throttle exists to
+    # solve (no window left for a code-level mid-download interrupt to
+    # land in). "3.5g-hspa-plus-good" (7000/1500 Kbps) sits between the
+    # two and is confirmed to work correctly for both needs: a real, live
+    # diagnostic caught it genuinely mid-progress ("resource 16 of 18") on
+    # the very first check, then completed fully in ~20.6s total - a real,
+    # multi-resource window for the interrupt (unlike 4g-lte-good) with a
+    # practical, CI-reasonable completion time (unlike 3g-umts-good).
+    network_profiles = {"scenario_2": "3.5g-hspa-plus-good"}
 
     results = []
     for name in scenarios_to_run:
