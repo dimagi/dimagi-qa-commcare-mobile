@@ -2,8 +2,21 @@ appId: org.commcare.dalvik
 tags:
   - recovery_measures
   - recovery_phase2
-  - automatable
+  - not_automatable
 ---
+# UPDATE (2026-08-27): tag changed from `automatable` to `not_automatable`
+# and excluded from default/--tag recovery_measures runs (see
+# scripts/run_suite.py's select_flow_files(), same exclusion pattern as
+# superseded_by_appium) - this flow's own precondition (a pending
+# MEASURE_TYPE_CC_UPDATE recovery measure) is structurally unreachable
+# against the current CommCare release under test (Django record 14's own
+# cc_version_min/max=2.45-2.54 gate vs. 2.64.1+ - see the Master Mobile
+# Plan's Recovery Measures row 59 for the full citation). Was still tagged
+# `automatable` this whole time despite being documented Not Automatable in
+# the Plan, so it kept running and permanently failing in every CI report
+# regardless. Kept on disk (not deleted) for reference/if the version gate
+# is ever revisited; still runnable directly via --flow or
+# --tag not_automatable.
 # Master Mobile Plan (2026) > Recovery Measures > Retry Recovery
 # (Test Case ID "Retry Recovery 2" - "Reopen CommCare, recovery screen
 # triggers, disable network mid-recovery, verify Retry button present and

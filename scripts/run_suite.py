@@ -111,6 +111,18 @@ def select_flow_files(tags=None, explicit_flows=None):
             # runnable directly via --flow or --tag superseded_by_appium.
             if "superseded_by_appium" in flow_tags and (not tags or "superseded_by_appium" not in tags):
                 continue
+            # UPDATE (2026-08-27): same exclusion pattern again -
+            # retry_recovery_02_network_toggle_retry.yaml is structurally
+            # blocked (its precondition needs a CommCare-client version
+            # range, 2.45-2.54, that's below the current release under
+            # test) and was permanently failing in every recovery_measures
+            # report despite being documented Not Automatable in the
+            # Master Mobile Plan - its own flow tag just never matched
+            # that documentation until now. Kept on disk (not deleted) for
+            # reference; still runnable directly via --flow or
+            # --tag not_automatable.
+            if "not_automatable" in flow_tags and (not tags or "not_automatable" not in tags):
+                continue
             if not tags:
                 selected.add(path)
                 continue
