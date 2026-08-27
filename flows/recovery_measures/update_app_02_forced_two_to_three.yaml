@@ -120,6 +120,38 @@ tags:
     visible:
       id: "org.commcare.dalvik:id/edit_username"
     timeout: 60000
+# UPDATE (2026-08-27, 4th correction), confirmed live via a real CI failure
+# (group-c-retry build, session f8d0d99b750a34aefcf821d0614c0fc96e9f928852ef8ee9):
+# the extendedWaitUntil above timed out at 60s, and the failure screenshot
+# showed a perfectly normal, already-synced Home screen ("Logged In: test1",
+# "You last synced with the server") - the measure never fired at all this
+# time, not a slow-but-eventual auto-logout. This is the SAME class of
+# transient HQ release-status propagation race already documented and
+# retry-wrapped for offline_09_uninstall_reinstall_test_two.yaml's 3rd
+# correction and retry_recovery_02_network_toggle_retry.yaml's 2026-08-26
+# UPDATE (both confirmed live failures where the release/build state HQ
+# reports lags what was actually just set, purely a timing coincidence
+# under concurrent CI load) - this flow just never had the same defensive
+# wrapper. Home-screen "Start" visible and edit_username visible are the
+# two genuinely distinguishable outcomes (confirmed by this same failure
+# screenshot), so retries logout+login, mirroring retry_recovery_02's own
+# established idiom, instead of a single un-retried wait.
+- repeat:
+    times: 4
+    while:
+      notVisible:
+        id: "org.commcare.dalvik:id/edit_username"
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - runFlow: ../common/logout.yaml
+      - runFlow:
+          file: ../common/login.yaml
+          env:
+            USERNAME: ${CC_TEST_USERNAME}
+            PASSWORD: ${CC_TEST_PASSWORD}
+- assertVisible:
+    id: "org.commcare.dalvik:id/edit_username"
 # Update 5 (part 2) - log back in and verify the app updated to Test Three
 # via About CommCare (per the real step "Click options and verify you've
 # successfully updated to the version corresponding with Test Three").
