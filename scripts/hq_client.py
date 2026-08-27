@@ -427,6 +427,56 @@ class HQClient:
             )
         return resp
 
+    def create_device_log_request(self, domain, username):
+        """
+        Master Mobile Plan (2026) > Trigger device logs > "Device Logs 2" -
+        "Device Log info": a plain Django-admin "add" form, not an app
+        action, so it doesn't take an app_id.
+        GET/POST /admin/ota/devicelogrequest/add/
+        Standard django.contrib.admin add view - unlike the /a/<domain>/apps/
+        endpoints above (which accept the session's csrftoken cookie as a
+        bare X-CSRFToken header), django.contrib.admin's CsrfViewMiddleware
+        needs the page's own embedded csrfmiddlewaretoken form field plus a
+        same-origin Referer, confirmed live 2026-08-27 (a bare header-only
+        POST was never tried against this endpoint - this is the working
+        shape, found by reading the real add-form's fields first rather than
+        guessing). Success is a 302 redirect to the changelist
+        (/admin/ota/devicelogrequest/); the admin re-renders the same form
+        (200) on validation failure. DeviceLogRequest enforces a unique-
+        together(domain, username) constraint - confirmed live 2026-08-27,
+        re-submitting the same pair re-renders the form with errorlist text
+        "Device log request with this Domain and Username already exists."
+        The test case's actual intent is "a request is pending for this
+        domain/user", which already holds in that case, so it's treated as
+        success (idempotent), not a failure.
+        """
+        url = f"{self.base_url}/admin/ota/devicelogrequest/add/"
+        get_resp = self.session.get(url)
+        get_resp.raise_for_status()
+        token_match = re.search(r'name="csrfmiddlewaretoken" value="([^"]+)"', get_resp.text)
+        if not token_match:
+            raise RuntimeError("create_device_log_request: csrfmiddlewaretoken not found on add form")
+        resp = self.session.post(
+            url,
+            data={
+                "csrfmiddlewaretoken": token_match.group(1),
+                "domain": domain,
+                "username": username,
+                "_save": "Save",
+            },
+            headers={"Referer": url},
+            allow_redirects=False,
+        )
+        if resp.status_code == 302:
+            return {"domain": domain, "username": username, "redirect": resp.headers.get("Location"),
+                    "already_existed": False}
+        if resp.status_code == 200 and "already exists" in resp.text:
+            return {"domain": domain, "username": username, "already_existed": True}
+        raise RuntimeError(
+            f"create_device_log_request failed: expected a 302 redirect to the changelist, "
+            f"got {resp.status_code} (form likely re-rendered with validation errors)"
+        )
+
     def get_prompt_update_settings(self, app_id):
         """
         Read back the Manage Update Settings tab's actually-SAVED values
@@ -759,6 +809,7 @@ def run_pre_step(spec: dict, client: HQClient = None, current_apk_version: str =
         "set_custom_properties": client.set_custom_properties,
         "set_prompt_update_settings": client.set_prompt_update_settings,
         "get_prompt_update_settings": client.get_prompt_update_settings,
+        "create_device_log_request": client.create_device_log_request,
     }
     results = []
     last_build_id = None
