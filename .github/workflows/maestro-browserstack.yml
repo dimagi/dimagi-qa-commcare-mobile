@@ -513,6 +513,48 @@ jobs:
             --apk resources/commcare_2.45_release.apk \
             --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-old-client-recovery-measures"
 
+      # Runs update_app_02_trigger_on_old_client.yaml (tagged
+      # requires_point_release_old_client_apk, excluded from the main
+      # tag-based dispatch above - same reasoning as the step just above,
+      # but this flow needs a DIFFERENT old CommCare binary
+      # (resources/commcare_2.50.2_release.apk) than that step's
+      # commcare_2.45_release.apk - Point Release's MobileRecoveryMeasure is
+      # version-gated 2.49.5-2.51.1 (confirmed via its own Django admin
+      # record), which 2.45 falls below entirely, so the two apps' old-client
+      # needs don't overlap and can't share one dispatch. Gated identically
+      # to the step above.
+      - name: Run Maestro suite (Update App - Point Release old CommCare client)
+        if: always() && (matrix.name == 'group-c' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'requires_point_release_old_client_apk')))
+        env:
+          BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
+          BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
+          HQ_API_USERNAME: ${{ secrets.HQ_API_USERNAME }}
+          HQ_API_PASSWORD: ${{ secrets.HQ_API_PASSWORD }}
+          HQ_SESSION_COOKIE: ${{ secrets.HQ_SESSION_COOKIE }}
+          HQ_DOMAIN: qateam
+          CC_TEST_USERNAME: ${{ secrets.CC_TEST_USERNAME }}
+          CC_TEST_PASSWORD: ${{ secrets.CC_TEST_PASSWORD }}
+          HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
+          HQ_WEB_USER_PASSWORD: ${{ secrets.HQ_WEB_USER_PASSWORD }}
+        run: |
+          declare -A ANDROID_DEVICE_MAP=(
+            ["16.0"]="Samsung Galaxy S26"
+            ["15.0"]="Samsung Galaxy S25"
+            ["14.0"]="Samsung Galaxy S24"
+            ["13.0"]="Samsung Galaxy S23"
+            ["12.0"]="Samsung Galaxy S22"
+            ["11.0"]="Samsung Galaxy S21"
+            ["10.0"]="Samsung Galaxy S20"
+          )
+          ANDROID_VERSION="${{ github.event.inputs.android_version || '16.0' }}"
+          DEVICES="${{ github.event.inputs.devices }}"
+          if [ -z "$DEVICES" ]; then
+            DEVICES="${ANDROID_DEVICE_MAP[$ANDROID_VERSION]}-$ANDROID_VERSION"
+          fi
+          python scripts/run_suite.py --devices "$DEVICES" --tag requires_point_release_old_client_apk \
+            --apk resources/commcare_2.50.2_release.apk \
+            --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-point-release-old-client"
+
       # Runs the 4 Recovery Measures scenarios that genuinely need a real
       # .ccz file pushed onto the device's filesystem before the "Select
       # CCZ" system file picker (Storage Access Framework) can find one -

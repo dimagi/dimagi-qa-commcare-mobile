@@ -1,0 +1,76 @@
+appId: org.commcare.dalvik
+tags:
+  - recovery_measures
+  - automatable
+  - requires_point_release_old_client_apk
+---
+# Master Mobile Plan (2026) > Recovery Measures > Recovery: Update App
+# (Test Case IDs "Update 4"/"Update 5" under this section).
+#
+# UPDATE (2026-08-27), REWORKED: the 2026-08-24 fix (moving from RU_TEST_TWO/
+# THREE to PT_REL_TWO/THREE) assumed Point Release's own MobileRecoveryMeasure
+# was configured as the plain MEASURE_TYPE_APP_UPDATE type ("auto, no
+# chooser") - never actually verified against the live Django admin record.
+# Checked directly this session (https://www.commcarehq.org/admin/ota/
+# mobilerecoverymeasure/15/change/, app_id df1c05ddfb640f32c9d453f780442ce4):
+# it's genuinely MEASURE_TYPE_CC_UPDATE ("cc_update"), version-gated
+# cc_version_min=2.49.5/cc_version_max=2.51.1 with cc_all_versions unchecked -
+# the EXACT same measure type/mechanism already correctly automated for
+# CC_UPDATE_NEEDED by cc_update_needed_01_trigger_on_old_client.yaml (see
+# that file's own header for the fuller citation), just a different app and
+# a different CommCare-client version window.
+#
+# Verified against commcare-android source (read-only reference, never
+# modified by this repo) - RecoveryMeasure.java's applicableToCommCareVersion()
+# and ExecuteRecoveryMeasuresPresenter.executeMeasure()'s own switch:
+#   case MEASURE_TYPE_CC_UPDATE:
+#     if (AppUtils.notOnLatestCCVersion()) {
+#       launchActivity(PromptApkUpdateActivity.class, ...);
+#     }
+# i.e. this measure fires purely based on the CommCare CLIENT BINARY version
+# (must be non-latest AND within cc_version_min/max) - applicableToAppVersion()
+# is only consulted for MEASURE_TYPE_APP_UPDATE/APP_REINSTALL_AND_UPDATE, so
+# the APP CONTENT version (Test Two vs Three) is irrelevant to this measure
+# type entirely. Simplified accordingly: installs a single Point Release
+# build (no Test Two->Three transition needed) on the OLD client - same
+# minimal shape as cc_update_needed_01's own design, for the same real reason.
+#
+# Dispatch this file with `--apk resources/commcare_2.50.2_release.apk` (see
+# the `requires_point_release_old_client_apk` tag) - a DIFFERENT old client
+# than the `requires_old_client_apk` tag's resources/commcare_2.45_release.apk
+# (2.45 is below this measure's own 2.49.5 floor, so it wouldn't trigger this
+# one - confirmed the two apps' gates don't overlap).
+#
+# UPDATE (2026-08-27), confirmed live: APP_CODE_PT_REL_TWO's own pinned
+# build (saved_app_id 8ab3f997..., version 11) requires CommCare >= 2.61.4 -
+# a HARD install-time block on the 2.50.2 client this file needs (real
+# device screenshot: "The application requires CommCare version 2.61.4. You
+# are currently running 2.50.2", not dismissable). Checked every build of
+# this app_id via HQClient.list_releases(df1c05ddfb640f32c9d453f780442ce4):
+# APP_CODE_PT_REL_THREE's own pinned build (saved_app_id b0833a60..., version
+# 14, released) only requires CommCare 2.49.3 - genuinely installable on the
+# 2.50.2 client - so this uses PT_REL_THREE instead, even though its label
+# says "three" (that Two/Three naming reflects the PRIOR, now-superseded
+# app-content-version narrative for this measure - see the note above: app
+# content version is irrelevant to MEASURE_TYPE_CC_UPDATE, so which specific
+# pinned build is used only matters for install-time CommCare compatibility).
+#
+# See update_app_02_verify_on_new_client.yaml for the negative-check half.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_PT_REL_THREE}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+# "Update 4/5" - the forced "CommCare needs to be updated" message
+# (PromptApkUpdateActivity.apk.update.required.title, per
+# android_translatable_strings.txt - same real string already confirmed for
+# cc_update_needed_01_trigger_on_old_client.yaml's identical measure type).
+- assertVisible: "New version of CommCare is Required"
+- assertVisible:
+    text: "(?i).*play store.*"
+- tapOn:
+    text: "(?i).*update.*play store.*"

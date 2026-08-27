@@ -35,6 +35,15 @@ flows.zip
 # FileNotFoundError on resources/commcare_2.45_release.apk.
 !resources/commcare_2.45_release.apk
 
+# Exception: the "old" CommCare build update_app_02_trigger_on_old_client.yaml
+# needs (~37MB) - Point Release's own MobileRecoveryMeasure (Django admin
+# record id 15) is version-gated to CommCare client 2.49.5-2.51.1, a
+# DIFFERENT window than commcare_2.45_release.apk's own 2.45-2.54 gate for
+# CC_UPDATE_NEEDED (2.45 falls below this one's 2.49.5 floor), so the two
+# apps' old-client needs can't share one file. Committed directly, same
+# reasoning as commcare_2.45_release.apk above.
+!resources/commcare_2.50.2_release.apk
+
 # BrowserStack / run artifacts
 artifacts/
 *.log

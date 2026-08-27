@@ -1,0 +1,37 @@
+appId: org.commcare.dalvik
+tags:
+  - recovery_measures
+  - automatable
+---
+# Master Mobile Plan (2026) > Recovery Measures > Recovery: Update App
+# (Test Case ID "Update 6" under this section - the negative check).
+#
+# UPDATE (2026-08-27): split out of update_app_02_forced_two_to_three.yaml
+# (now retired) alongside update_app_02_trigger_on_old_client.yaml - same
+# rationale as cc_update_needed_02_verify_on_new_client.yaml: just needs the
+# default/current CommCare client this repo already dispatches with, no
+# special --apk flag, since MEASURE_TYPE_CC_UPDATE only ever fires on a
+# non-latest client (see the trigger file's own header for the full
+# citation) - on the current release client, RecoveryMeasure.
+# applicableToCommCareVersion() returns false and the measure is skipped
+# entirely, which is exactly what this negative check verifies. Fresh
+# install here matches this repo's own "each flow runnable in isolation"
+# convention (docs/FRAMEWORK.md).
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_PT_REL_TWO}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+# "Update 6" - negative check: on a current client, no forced update
+# prompt, home screen loads normally.
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+- assertNotVisible:
+    text: "(?i).*recovery (procedures|measures).*initiated.*"
+- assertNotVisible:
+    text: "(?i).*update.*required.*"
