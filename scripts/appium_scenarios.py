@@ -939,6 +939,27 @@ def run_prompted_update_scenario_01_optional_ccz_update(driver, hq_client, app_i
     return _run_steps(steps)
 
 
+def _complete_forced_binary_update(driver):
+    """After tapping "UPDATE TO THE LATEST APP VERSION" on the forced-
+    blocker screen: same 3-real-completion-states handling as
+    _complete_update_app's own 2026-08-27 UPDATE (see that function's
+    docstring for the full citation) - the staged "Update to version X &
+    log out" prompt is not the only real outcome; the update can also
+    auto-apply or find the device already up to date before that prompt
+    ever renders. Only taps the staged prompt if that's what actually
+    appeared; explicitly logs out for the other two paths (neither logs
+    out on its own), matching _complete_update_app's own behavior."""
+    h.wait_visible_text(
+        driver, r"Update to version.*log out|App update successfully applied|App is up to date",
+        timeout=60, regex=True)
+    if h.is_text_visible(driver, r"Update to version.*log out", regex=True):
+        h.tap_by_text(driver, r"Update to version.*log out", regex=True)
+    else:
+        if h.is_text_visible(driver, "App is up to date"):
+            h.back(driver)
+        _logout(driver)
+
+
 def run_prompted_update_scenario_02_forced_ccz_update(driver, hq_client, app_id, latest_build_id, username, password, app_code):
     """Prompted Updates Scenario 2: forced CCZ update blocker screen. Same
     mid-session-HQ-action mechanism as scenario_01_optional_ccz_update
@@ -980,10 +1001,16 @@ def run_prompted_update_scenario_02_forced_ccz_update(driver, hq_client, app_id,
          lambda: h.assert_visible_text(driver, "New version of the application is required")),
         ("Tap Update to the Latest App Version",
          lambda: h.tap_by_text(driver, r"(?i)update to the latest app version", regex=True)),
-        ("Wait for Update to version X & log out",
-         lambda: h.wait_visible_text(driver, r"Update to version.*log out", timeout=30, regex=True)),
-        ("Tap Update to version X & log out",
-         lambda: h.tap_by_text(driver, r"Update to version.*log out", regex=True)),
+        # UPDATE (2026-08-28), confirmed live via real CI failure (run
+        # 33145369258, group-c): the old single-step wait here assumed the
+        # staged "Update to version X & log out" prompt is the ONLY real
+        # completion signal, timing out at 30s when the update auto-applies
+        # (or is already up to date) before ever showing that staged
+        # prompt - same class of bug already found/fixed in
+        # _complete_update_app's own 2026-08-27 UPDATE. See
+        # _complete_forced_binary_update's own docstring for the fix.
+        ("Complete forced binary update (staged prompt, auto-applied, or already up to date)",
+         lambda: _complete_forced_binary_update(driver)),
         ("Relogin (confirm no more prompt)", lambda: _login(driver, username, password)),
         ("Assert no forced blocker",
          lambda: h.assert_not_visible_text(driver, "New version of the application is required")),
