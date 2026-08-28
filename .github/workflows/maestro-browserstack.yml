@@ -121,6 +121,21 @@ jobs:
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.prepare.outputs.matrix) }}
+    # UPDATE (2026-08-28), confirmed live (CI run 33178278102, group-a):
+    # scripts/download_apk.py's own GitHub API calls (resolving/downloading
+    # the CommCare release APK, called by every run_suite.py/run_appium_*.py
+    # invocation below) were UNAUTHENTICATED - it already supports adding a
+    # GITHUB_TOKEN Authorization header if the env var is set (raises
+    # GitHub's API rate limit from 60/hour to 5000/hour), but this workflow
+    # never actually set it, so every job here shared the same 60/hour
+    # unauthenticated ceiling. A real "HTTP Error 403: rate limit exceeded"
+    # crashed this exact job (traced directly to download_apk.py's
+    # get_release_by_tag call) under today's unusually heavy CI dispatch
+    # volume. Set at the job level (not per-step) so every step in this job
+    # that might call download_apk.py is covered - GITHUB_TOKEN is provided
+    # free by GitHub Actions for every job, no extra secret needed.
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
