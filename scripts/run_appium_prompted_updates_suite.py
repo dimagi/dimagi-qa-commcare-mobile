@@ -289,6 +289,29 @@ def main():
             result = _run_one_scenario(bs, name, app_url, device, os_version, args.build_name, scenario_fns[name])
             print(f"  {name}: {result.status}" + (f" - {result.failed_step}" if result.status == "failed" else ""))
             results.append(result)
+
+        # RETRY-FAILED (2026-08-28), per direct user instruction: same
+        # rationale/mechanism as scripts/run_appium_suite.py's own
+        # RETRY-FAILED block added the same day - see that file's own
+        # citation. Inside the try (not after it) so it runs before the
+        # finally block's shared-HQ-state cleanup below - retrying a
+        # scenario needs that same shared app/build state still in its
+        # mid-run condition, not already reset. Each scenario function
+        # already re-asserts its own precondition ("ensure latest build is
+        # In Test") as its first action (see run_prompted_update_scenario_
+        # 02_forced_ccz_update's own 2026-08-22 UPDATE), so a plain re-call
+        # is safe/idempotent here, not just a blind repeat.
+        failed_names = [name for name, r in zip(scenarios_to_run, results) if r.status == "failed"]
+        if failed_names:
+            print(f"Retrying {len(failed_names)} failed scenario(s): {', '.join(failed_names)} ...")
+            retry_results = []
+            for name in failed_names:
+                print(f"Running {name} (Appium, mid-session HQ action, retry) ...")
+                retry_result = _run_one_scenario(bs, name, app_url, device, os_version, args.build_name, scenario_fns[name])
+                print(f"  {name}: {retry_result.status}" +
+                      (f" - {retry_result.failed_step}" if retry_result.status == "failed" else ""))
+                retry_results.append(retry_result)
+            results = report_generator.merge_rerun(results, retry_results)
     finally:
         # UPDATE (2026-08-20), per direct user instruction: Setup 2/3 above
         # change PERSISTENT, SHARED HQ state on "[Master] Basic Tests" - an

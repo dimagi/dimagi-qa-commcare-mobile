@@ -354,6 +354,35 @@ def main():
         print(f"  {name}: {result.status}" + (f" - {result.failed_step}" if result.status == "failed" else ""))
         results.append(result)
 
+    # RETRY-FAILED (2026-08-28), per direct user instruction: the Maestro
+    # track (scripts/run_suite.py) has always had a --retry-failed pass
+    # that re-triggers only the flows that genuinely failed once, so a
+    # transient hiccup doesn't count as a real failure - this Appium track
+    # never had an equivalent, despite this session repeatedly finding the
+    # exact same class of transient, real-infrastructure flakiness here
+    # (HQ mark_build_status propagation delays, BrowserStack session-level
+    # hiccups) that the Maestro retry exists to absorb. Retries each
+    # scenario that failed once, in place, then reclassifies a
+    # failed-then-passed scenario as "rerun" (flaky, not a hard failure)
+    # via the same report_generator.merge_rerun() helper run_suite.py's
+    # own --retry-failed path already uses - one shared, proven semantic
+    # for "failed once but passed on retry" across both tracks' reports.
+    failed_names = [name for name, r in zip(scenarios_to_run, results) if r.status == "failed"]
+    if failed_names:
+        print(f"Retrying {len(failed_names)} failed scenario(s): {', '.join(failed_names)} ...")
+        retry_results = []
+        for name in failed_names:
+            print(f"Running {name} (Appium, mid-session binary swap, retry) ...")
+            retry_result = _run_one_scenario(
+                bs, name, old_app_url, new_app_url, device, os_version, args.build_name,
+                os.environ, scenario_fns[name],
+                network_profile=network_profiles.get(name),
+            )
+            print(f"  {name}: {retry_result.status}" +
+                  (f" - {retry_result.failed_step}" if retry_result.status == "failed" else ""))
+            retry_results.append(retry_result)
+        results = report_generator.merge_rerun(results, retry_results)
+
     # UPDATE (2026-08-20), same fix as scripts/run_suite.py's own UPDATE
     # comment: a custom --apk has no release tag, so apk_commcare_version
     # stays None and this used to skip writing reports/apk_version.txt

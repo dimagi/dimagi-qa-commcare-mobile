@@ -254,6 +254,31 @@ def main():
         print(f"  {name}: {result.status}" + (f" - {result.failed_step}" if result.status == "failed" else ""))
         results.append(result)
 
+    # RETRY-FAILED (2026-08-28), per direct user instruction - same
+    # rationale/mechanism as scripts/run_appium_suite.py's own RETRY-FAILED
+    # block added the same day (see that file's own citation): retries
+    # each scenario that failed once, then reclassifies a failed-then-
+    # passed scenario as "rerun" via report_generator.merge_rerun(), the
+    # same helper scripts/run_suite.py's own --retry-failed path uses.
+    failed_names = [name for name, r in zip(scenarios_to_run, results) if r.status == "failed"]
+    if failed_names:
+        print(f"Retrying {len(failed_names)} failed scenario(s): {', '.join(failed_names)} ...")
+        retry_results = []
+        for name in failed_names:
+            workflow, app_key, fn = _SCENARIO_META[name]
+            app_code = app_codes[app_key]
+            local_ccz_path = ccz_paths[app_key]
+            print(f"Running {name} (Appium, real CCZ push: {local_ccz_path}, retry) ...")
+            retry_result = _run_one_scenario(
+                bs, name, workflow, app_url, device, os_version, args.build_name,
+                lambda driver, fn=fn, app_code=app_code, local_ccz_path=local_ccz_path:
+                    fn(driver, bs, app_code, local_ccz_path),
+            )
+            print(f"  {name}: {retry_result.status}" +
+                  (f" - {retry_result.failed_step}" if retry_result.status == "failed" else ""))
+            retry_results.append(retry_result)
+        results = report_generator.merge_rerun(results, retry_results)
+
     (REPO_ROOT / "reports").mkdir(exist_ok=True)
     apk_version_path = REPO_ROOT / "reports" / "apk_version.txt"
     if not apk_version_path.exists():
