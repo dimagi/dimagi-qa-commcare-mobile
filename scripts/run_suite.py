@@ -418,7 +418,26 @@ def _run_build_once(bs, flow_files, app_url, args, env_variables, other_app_urls
     if args.no_wait:
         return build_id, None
     print(f"Waiting for build {build_id} ...")
-    result = bs.wait_for_build(build_id)
+    # UPDATE (2026-08-28), confirmed live in CI (run 33168843300, form_
+    # submissions/2.64.0): a real BrowserStack build got stuck "running"
+    # for the full 5400s (90 min) wait_for_build timeout, which raised a
+    # bare, UNCAUGHT TimeoutError - crashing the whole run_suite.py process
+    # before it ever wrote reports/latest_results.json, losing every other
+    # chunk's results too (this tag had a 2nd part that never even got a
+    # chance to run) despite this file's own DEFAULT_WALL_CLOCK_BUDGET_
+    # SECONDS/deadline machinery existing specifically to make one bad
+    # chunk non-fatal to the rest of the run. That machinery only works if
+    # this call site actually returns instead of raising. Treated the same
+    # way a missing build_id already is (falsy result, same
+    # synthesize_missing() fallback in run_all_builds picks it up) - a
+    # genuinely hung build isn't worth the normal parse-error retry/
+    # per-file-fallback treatment (it already burned 90 real minutes), so
+    # this reports it and moves on rather than retrying immediately.
+    try:
+        result = bs.wait_for_build(build_id)
+    except TimeoutError as exc:
+        print(f"Build {build_id} timed out waiting for BrowserStack: {exc}")
+        return build_id, None
     print(json.dumps(result, indent=2))
     return build_id, result
 
