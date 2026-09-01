@@ -1,0 +1,160 @@
+appId: org.commcare.dalvik
+tags:
+  - updates_2_49_apk_prompt
+  - automatable
+---
+# Master Mobile Plan (2026) > Updates > "Prompted Update Scenario 1" (2.49
+# grab-bag section). NOTE: this is a distinct row from the "Prompted Update
+# Scenario 1" in the Prompted Updates tab (that one is Partial and about the
+# optional CCZ/app-content update prompt - see
+# flows/prompted_updates/varying_prompt_01_update_frequency.yaml). This one
+# is about the optional CommCare (APK) update prompt, and per
+# coverage_matrix.csv is Automatable - no HQ pre-step needed for the
+# on-device interaction itself.
+#
+# ASSUMES a released version of the "[Master] Basic Tests NS Copy" app has
+# already been installed on the device (via
+# hq_setup/updates_2_49/setup_02_commcare_version_plus_one.json, which sets
+# apk_prompt=on AND app_prompt=on - "both dropdowns on" - and apk_version to
+# whichever build HQ's Manage Update Settings dropdown currently labels
+# "(dev)", resolved dynamically via hq_client.py's find_dev_apk_version() so
+# this never hardcodes a version number that goes stale next release) and an
+# optional APK update has been made available to prompt for. Only the
+# on-device login -> prompt (assert BOTH the Play-Store option and "I'll
+# update later" are visible) -> "I'll update later" -> home-screen
+# interaction is scripted below.
+#
+# UPDATE (2026-08-24, 2nd correction), per direct user instruction: retagged
+# from "updates_2_49" to "updates_2_49_apk_prompt" (a tag no CI matrix group
+# selects by) so run_suite.py's normal --tag updates_2_49 bulk dispatch
+# (group-a's main Maestro step, which also runs auto_cc_update_03/
+# rate_limit_02_04 against the SAME shared app) never sweeps this file in
+# with the wrong (or no) HQ pre-step applied. This flow is only ever run via
+# an explicit --flow reference in its own dedicated CI step (see
+# .github/workflows/maestro-browserstack.yml's "Run Maestro suite
+# (prompted_update_scenario_01, apk-prompt on)" step), scheduled to run
+# AFTER group-a's main dispatch so the mutated Manage Update Settings window
+# never overlaps with auto_cc_update_03/capture_01/capture_02 - confirmed
+# live this app_update-setting mutation is genuinely global per-app_id, so
+# any flow sharing this app_id running concurrently is a real hazard, not a
+# theoretical one.
+#
+# UPDATE (2026-08-24), per direct user instruction: combined with
+# prompted_update_scenario_02_forced_commcare_update.yaml as one logical
+# scenario - this half proves the OPTIONAL prompt shows both escape hatches
+# when apk_prompt=on; that file's own hq_setup
+# (prompted_update_scenario_02_forced.json) then flips apk_prompt to
+# "forced" (keeping the same apk_version target and app_prompt=on) and
+# proves "I'll update later" is now gone. Dispatched as two separate Maestro
+# builds, not one continuous device session - a Maestro/BrowserStack build
+# has no external control point mid-build to make that live HQ mutation
+# between two on-device phases (confirmed: scripts/run_suite.py's own
+# --hq-setup only ever runs once, before the whole build starts; see
+# scripts/run_appium_prompted_updates_suite.py for the one place in this
+# repo that DOES do a mid-session HQ mutation, via a persistent Appium
+# session instead of Maestro). Both dispatches target the same app_id/build
+# via the same dynamic apk_version resolution, so they exercise one
+# continuous HQ-side progression even though the device sessions are
+# separate. Always followed by
+# hq_setup/updates_2_49/prompted_update_scenario_teardown.json (restores
+# apk_prompt/app_prompt=off and apk_version back to the real release under
+# test) - this app_id is shared with other updates_2_49 flows that assume no
+# prompt is pending.
+#
+# Selectors/strings verified against commcare-android source (read-only
+# reference, not modified):
+#   app/src/org/commcare/heartbeat/UpdatePromptHelper.java:
+#     promptForUpdateIfNeeded() launches PromptApkUpdateActivity right after
+#     login when an optional APK update is pending and hasn't been shown yet
+#     this session (checks the APK update before the CCZ one).
+#   app/src/org/commcare/activities/PromptApkUpdateActivity.java:
+#     setUpTypeSpecificUIComponents() sets promptTitle to
+#     "apk.update.available.title" (non-forced case) and doLaterButton's
+#     text to "update.later.button.text".
+#   app/src/org/commcare/activities/PromptActivity.java:
+#     doLaterButton (R.id.do_later_button) just finish()es the activity,
+#     returning to whatever launched it (the home screen after login).
+#   app/assets/locales/android_translatable_strings.txt:
+#     apk.update.available.title = "New version of ${0} is Available" (${0}
+#       = the client name, "CommCare" for this build flavor) (line 27)
+#     update.later.button.text = "I'll update later" (line 34)
+#     home.start = "Start" (line 59) - used below as a home-screen landmark.
+#
+# A fresh BrowserStack session has no app installed until
+# install_app_by_code.yaml runs; see DispatchActivity.java's
+# CommCareSetupActivity routing when currentApp == null.
+#
+# UPDATE (2026-08-24), per direct user-supplied app link + screen
+# recording: moved from the shared APP_CODE_BASIC_TESTS_LATEST to
+# APP_CODE_BT_NS_COPY_LATEST ("[Master] Basic Tests NS Copy", a
+# dedicated copy) - see scripts/app_registry.py's own BASIC_TESTS_NS_COPY/
+# BT_NS_COPY_LATEST entries for the full citation on why (avoids mutating
+# the shared Basic Tests app's update-prompt settings out from under every
+# other flow in this repo that also installs it, and on the shortened key
+# name - "APP_CODE_BASIC_TESTS_NS_COPY_LATEST" hit the confirmed 30-char
+# setEnvVariables key limit with a real 422). Still the unfiltered/
+# "_LATEST" variant for the same original reason: this test's whole point
+# is the CommCare-APK-version-mismatch dialog below actually appearing,
+# which needs the single most recent build (whatever its own HQ pre-step
+# set its required CommCare version to), not a build deliberately chosen
+# to avoid triggering that dialog. See scripts/app_registry.py's
+# NO_VERSION_FILTER_KEYS for the full reasoning.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_BT_NS_COPY_LATEST}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+# UPDATE (2026-08-24), confirmed live (real failure right after wiring up
+# this test's own real hq_setup - set_prompt_update_settings - moments
+# before dispatch): a bare 20s wait right after the first login isn't
+# enough - this is the exact same real HQ-propagation-delay class already
+# confirmed live, repeatedly, for prompted_updates' own scenario_01/02
+# today (up to several minutes after a set_prompt_update_settings/
+# mark_build_status call before the device-side prompt actually reflects
+# it). Retries via logout+relogin, matching the same pattern already
+# proven for that scenario (and for varying_prompt_03/04's own warmup-
+# relogin cycles) - the first wait below is the fast/common-case path
+# (skips the loop entirely if the prompt is already up), the repeat loop
+# only kicks in if it genuinely wasn't ready yet.
+- extendedWaitUntil:
+    visible: "New version of CommCare is Available"
+    timeout: 20000
+    optional: true
+- repeat:
+    times: 4
+    while:
+      notVisible: "New version of CommCare is Available"
+    commands:
+      - runFlow: ../common/logout.yaml
+      - runFlow:
+          file: ../common/login.yaml
+          env:
+            USERNAME: ${CC_TEST_USERNAME}
+            PASSWORD: ${CC_TEST_PASSWORD}
+      - extendedWaitUntil:
+          visible: "New version of CommCare is Available"
+          timeout: 45000
+          optional: true
+- assertVisible: "New version of CommCare is Available"
+# --- Confirm BOTH options are on screen (optional, not forced): the
+# Play-Store escape hatch AND "I'll update later" - see
+# prompted_update_scenario_02_forced_commcare_update.yaml's own
+# "no I'll update later escape hatch" assertion for the mirror-image
+# forced-mode check (this same button text, gone). String source:
+# app/assets/locales/android_translatable_strings.txt's apk.update.action =
+# "Update ${0} via the Play Store" -> "Update CommCare via the Play Store"
+# (${0} = getCurrentClientName(), "CommCare" for this build flavor - see
+# scenario_02's own header for the full PromptApkUpdateActivity.java citation).
+- assertVisible: "Update CommCare via the Play Store"
+- tapOn: "I'll update later"
+# Confirm the prompt is gone and we can keep using CommCare - landed on the
+# home screen, not blocked.
+- assertNotVisible: "New version of CommCare is Available"
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+- assertVisible: "Sync with Server"

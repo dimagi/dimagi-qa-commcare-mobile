@@ -1,0 +1,110 @@
+appId: org.commcare.dalvik
+tags:
+  - session_expiration
+  - partial
+---
+# Master Mobile Plan (2026) > Session Expiration > "Setup 2" - Restore User:
+# log in, verify the session-expiration notification appears, and confirm
+# the app actually logs out (back to the login screen) once the session's
+# 45-second window elapses (per this tab's own "Test Area" note: "This
+# application is set up to log you out automatically after 45 seconds").
+#
+# PARTIAL: same HQ web-user dependency as setup_01_install_application.yaml
+# (this flow re-installs rather than assuming setup_01 ran first in the same
+# session, per this repo's "each flow runnable in isolation" convention).
+#
+# Verified against commcare-android source (read-only reference, not modified):
+#   app/instrumentation-tests/src/org/commcare/androidTests/SessionExpirationTests.kt
+#     testRestoreUser(): logs in as test_session_1/123 (this app's own test
+#     user, distinct from the shared CC_TEST_USERNAME used elsewhere in this
+#     repo), then uiDevice.openNotification() + waits for text starting
+#     "Logged Into Commcare"/"Logged Into Session Expiration Test" and
+#     "Session Expires:", clicks that notification, waits up to 45000ms for
+#     "Welcome" (the login screen re-appearing), then re-opens notifications
+#     and waits for text ending "Login Expire".
+#   app/res/values/strings.xml line 63: session_expire_notification =
+#     "CommCare Login Expired" - the string behind that final "Login Expire"
+#     substring check.
+# UPDATE, confirmed live (2026-08-08, real CI parse-error failure, run
+# 31259796789): the header's own prior claim that `openNotifications` is "a
+# documented Maestro command" was simply WRONG and never actually verified -
+# `maestro check-syntax` rejects it ("Invalid Command: openNotifications"),
+# and maestro-orchestra-models.jar's own command class listing has no
+# notification-related command at all. Maestro has no dedicated "open
+# notification shade" action; every occurrence below is replaced with the
+# documented workaround, a coordinate swipe from the very top edge of the
+# screen downward (the same real-device gesture a user would perform).
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_SESSION_EXPIRATION}
+- tapOn:
+    id: "org.commcare.dalvik:id/edit_username"
+- inputText: "test_session_1"
+- tapOn:
+    id: "org.commcare.dalvik:id/edit_password"
+- inputText: "123"
+- hideKeyboard
+- tapOn:
+    id: "org.commcare.dalvik:id/login_button"
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+- swipe:
+    start: "50%, 1%"
+    end: "50%, 60%"
+# UPDATE, confirmed live (2026-08-19, Android 16/Samsung Galaxy S26, full
+# CI run 32178919171): the failure hierarchy dump showed a genuine
+# Android 16 OS-level onboarding overlay ("Swipe down from the top right
+# corner of the screen to open the quick settings panel. Swipe down from
+# anywhere else on the top of the screen to open the notification
+# panel.", "OK" button) covering the notification shade after this exact
+# top-edge swipe gesture - a first-time system coachmark, not app content,
+# same class of Android 16 overlay already fixed after clearState in
+# flows/common/install_app_by_code.yaml/install_app_as_web_user.yaml (see
+# those files' own UPDATE comments for the full citation). Dismiss it
+# defensively before asserting on the real notification text.
+- tapOn:
+    text: "OK"
+    optional: true
+- assertVisible:
+    text: "(?i)Logged Into.*"
+- assertVisible:
+    text: "Session Expires:.*"
+# UPDATE (2026-08-19, 2nd correction), confirmed live (build
+# batch2-regressions-fix-v1): the single tap+wait below failed - the
+# failure hierarchy dump showed we never actually left the notification
+# shade at all (still showing this SAME shade, now also carrying
+# CommCare's own "CommCare Login Expired"/"Click here to log back into
+# your session" notification, proving the real 45s session timeout had
+# elapsed while still sitting here) - the one tap on "Session Expires:.*"
+# didn't reliably bring the app to the foreground. Retries the tap
+# (matching either the original notification text or the "Login Expired"
+# one it can turn into once the session actually times out mid-wait)
+# instead of a single one-shot attempt, bounded generously past the real
+# 45s window.
+- repeat:
+    times: 4
+    while:
+      notVisible:
+        id: "org.commcare.dalvik:id/edit_username"
+    commands:
+      - tapOn:
+          text: "(?i)(Session Expires:.*|.*Login Expired.*)"
+          optional: true
+      - extendedWaitUntil:
+          visible:
+            id: "org.commcare.dalvik:id/edit_username"
+          timeout: 15000
+          optional: true
+- swipe:
+    start: "50%, 1%"
+    end: "50%, 60%"
+# Same defensive Android 16 onboarding-overlay dismiss as the UPDATE
+# (2026-08-19) comment above - see that for the full citation.
+- tapOn:
+    text: "OK"
+    optional: true
+- assertVisible:
+    text: ".*Login Expire.*"
+- back

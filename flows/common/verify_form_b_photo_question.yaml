@@ -1,0 +1,84 @@
+appId: org.commcare.dalvik
+---
+# Reusable: from the home screen, open FORM_NAME and verify it opens without
+# error and (per the sheet's "Update 15/19 - Unchanged form verification")
+# contains a photo-upload question, then exits without saving - lands back
+# on the home screen.
+# Params: FORM_NAME - the sheet always calls this "Form B".
+#
+# GENERIC/BEST-EFFORT CAVEAT: the sheet describes this as "a question asking
+# to upload a picture". The real image widget
+# (app/src/org/commcare/views/widgets/ImageWidget.java) exposes TWO buttons,
+# both created programmatically with NO fixed resource id (so text is the
+# only way to target them):
+#   - mCaptureButton, text = R.string.capture_image = "Take Picture"
+#     (app/res/values/strings.xml line 174) - opens the camera.
+#   - mChooseButton, text = R.string.choose_image = "Choose Image"
+#     (app/res/values/strings.xml line 223) - opens a gallery/file picker,
+#     the closer match to the sheet's "upload a picture" wording (see also
+#     flows/common/pick_first_gallery_image.yaml for the picker-side
+#     follow-up, not needed here since we only verify the question is
+#     present, not actually attach an image).
+# This asserts on either button's text and is also POSITION-ASSUMED (checks
+# the form's first screen), since the real question order in the
+# pre-provisioned "Mobile Updates Test 4/5 Master" QA app could not be
+# verified against any source in this repo.
+#
+# Selectors verified against commcare-android source (read-only reference,
+# never modified by this repo) - same citations as
+# flows/common/navigate_form_no_errors.yaml:
+#   HomeButtons.java (home.start) -> screen_suite_menu.xml
+#     (id/screen_suite_menu_list); screen_form_entry.xml +
+#     FormNavigationUI.java -> id/nav_btn_next; strings.xml ->
+#     quit_form_title="Exit Form?", do_not_save="EXIT WITHOUT SAVING".
+# UPDATE (2026-08-21), confirmed live via a real failure screenshot: this
+# app ("Mobile2.47_test4_5_linked_app") has the same intermediate-module
+# gap as flows/common/navigate_form_no_errors.yaml's own callers - tapping
+# "Start" lands on a module list showing only "Surveys", not FORM_NAME
+# directly. Taps through it first (optional, so this stays a no-op for
+# any flat single-level app that never shows it).
+- tapOn: "Start"
+- tapOn:
+    text: "Surveys"
+    optional: true
+- tapOn: "${FORM_NAME}"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_next"
+    timeout: 5000
+- assertVisible:
+    text: "(?i).*(take picture|choose image).*"
+- assertNotVisible:
+    text: "(?i).*unexpected error.*"
+- assertNotVisible:
+    text: "(?i).*commcare will now restart.*"
+- back
+- tapOn:
+    text: "(?i).*exit without saving.*"
+    optional: true
+# UPDATE (2026-08-21), same fix as navigate_form_no_errors.yaml's own
+# citation: a fixed back count can overshoot (or undershoot) depending on
+# whether the "Surveys" module tap above actually fired - presses back
+# only WHILE "Start" is not yet visible (bounded) instead.
+#
+# UPDATE (2026-08-21, 2nd correction), confirmed live via a failure
+# screenshot on this same fix in verify_form_a_questions.yaml: a SECOND
+# back() here (needed to unwind the "Surveys" module) can trigger "Exit
+# Form?" again - Android's system back on that dialog acts as CANCEL,
+# not real navigation, so without re-dismissing it every iteration, a
+# 2-deep unwind gets stuck showing the dialog forever. Re-dismisses it
+# (harmless no-op once it's actually gone) before each back below.
+- repeat:
+    times: 3
+    while:
+      notVisible:
+        text: "Start"
+    commands:
+      - tapOn:
+          text: "(?i).*exit without saving.*"
+          optional: true
+      - back
+- extendedWaitUntil:
+    visible:
+      text: "Start"
+    timeout: 5000

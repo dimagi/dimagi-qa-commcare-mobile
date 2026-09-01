@@ -1,0 +1,11 @@
+{
+  "_comment": "Master Mobile Plan (2026) > Recovery Measures > Recovery: Offline Reinstall and Update App > 'Recovery (offline) 9' - 'Uninstall/reinstall Test Two + mark Test Three released'. This is the HQ half only, per task scope (the on-device uninstall/reinstall-via-App-Manager half is covered by flows/recovery_measures/offline_09_uninstall_reinstall_test_two.yaml, which this JSON's mark_build_status action should run BETWEEN that flow's uninstall step and its re-login step - same 'split into two Maestro runs' convention as every other Partial HQ pre-step in this directory). Marking Test Three released again here (mirroring offline_4_mark_test_three.json) is what makes the reinstalled Test Two device trip the offline reinstall-and-update measure a second time on next login. saved_app_id is the SAME Test Three build id used by offline_4_mark_test_three.json - mark_build_status(is_released=true) on an already-released build is a no-op per release_build()'s source, so re-running this is safe/idempotent if Test Three was never un-released in between. app_id/saved_app_id values are placeholders - refresh them each QA cycle per the sheet's reconfiguration note, do not reuse from a prior run.",
+  "actions": [
+    {
+      "type": "mark_build_status",
+      "app_id": "REPLACE_WITH_RECOVERY_OFFLINE_APP_ID",
+      "saved_app_id": "REPLACE_WITH_TEST_THREE_BUILD_ID",
+      "is_released": true
+    }
+  ]
+}

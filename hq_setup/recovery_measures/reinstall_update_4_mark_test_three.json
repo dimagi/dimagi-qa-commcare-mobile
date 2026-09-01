@@ -1,0 +1,11 @@
+{
+  "_comment": "Master Mobile Plan (2026) > Recovery Measures > Recovery: Reinstall and Update App > 'Reinstall and update 4' - 'Mark Test Three released'. Run this after the mobile device has updated to Test Two ('Reinstall and update 3', reinstall_update_03_update_to_test_two.yaml) and before re-logging in to observe the reinstall-needed message ('Reinstall and update 5', asserted in reinstall_update_app_flow.yaml). Releasing Test Three while the device is still on Test Two is what makes AppUtils.notOnLatestAppVersion() report true and trips MEASURE_TYPE_APP_REINSTALL_AND_UPDATE's showInstallMethodChooser() on next login (see ExecuteRecoveryMeasuresPresenter.executeMeasure() in commcare-android). saved_app_id here must be the Test Three build id produced by reinstall_update_2_mark_test_two.json's create_new_build action (or your own bookkeeping if you ran that step manually) - it is NOT the same build id as reinstall_update_2's Test Two release. app_id/saved_app_id values are placeholders - refresh them each QA cycle per the sheet's reconfiguration note, do not reuse from a prior run.",
+  "actions": [
+    {
+      "type": "mark_build_status",
+      "app_id": "REPLACE_WITH_RECOVERY_REINSTALL_APP_ID",
+      "saved_app_id": "REPLACE_WITH_TEST_THREE_BUILD_ID",
+      "is_released": true
+    }
+  ]
+}

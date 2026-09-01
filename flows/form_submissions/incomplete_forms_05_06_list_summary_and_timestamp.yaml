@@ -1,0 +1,168 @@
+appId: org.commcare.dalvik
+tags:
+  - form_submissions
+  - partial
+---
+# Master Mobile Plan (2026) > Form Submissions > "Incomplete Forms 5" and "6"
+# - the same save-incomplete/resume/submit narrative as
+# flows/form_submissions/incomplete_forms_01_03_save_resume_submit.yaml (see
+# that file's header for the full source-citation list this one reuses),
+# but additionally checking that the "Incomplete Forms" list entry shows a
+# form-summary text and a timestamp underneath the form name, not just the
+# name itself. Both sheet rows describe the identical extra on-screen check,
+# so one file covers both (same convention as pin_01/fuzzy_search_01_03/
+# incomplete_forms_01_03 above).
+#
+# FIXED (2026-08-08, live BrowserStack evidence, build
+# af73a71fe00d14a20fc6d59a0b3a2da22c1211a0, test
+# e4c3ec923b0ad37805250109aede2c9d8c6888604db43c9b): the header below used
+# to hedge that formrecord_txt_btm's content for "Question Types" was
+# "unknown/likely blank-ish" and asserted it visible anyway. A real run
+# proved that guess right in the worst way for that assertion:
+# assertVisible on formrecord_txt_btm FAILED outright (not just
+# empty-text-but-present - genuinely not visible), and the failure
+# screenshot confirms it: the "Incomplete" list row shows only the
+# "Question Types" name and the "13:52:09" timestamp on the right
+# (formrecord_txt_right) - there is NO second line of text below the form
+# name at all.
+# Root cause, confirmed in source: IncompleteFormRecordView.setParams()
+# (app/src/org/commcare/views/IncompleteFormRecordView.java lines 68-70)
+# only calls `mLowerTextView.setText(dataTitle)` `if (dataTitle != null)` -
+# there is no else branch, so when dataTitle is null the TextView is left
+# exactly as inflated from formrecordview.xml (lines 77-82), which gives it
+# no android:text and wrap_content dimensions - i.e. zero-size/absent, not
+# merely blank. "Question Types" (modules-0/forms-1.xml, confirmed by grep)
+# has no Pragma-Form-Descriptor anywhere, and in fact NO form under the
+# "Basic Form Tests" module (m0) has one (grepped every modules-0/forms-*.xml
+# for Pragma-Form-Descriptor - zero matches), so formrecord_txt_btm can
+# never be populated for anything reachable via this row's "Basic Form
+# Tests" navigation. Asserting it visible was asserting something the real
+# app never does for this form - fixed by dropping that assertion and
+# keeping the (confirmed-live) formrecord_txt_right timestamp check, which
+# is the part of the sheet's row this app can actually satisfy here.
+#
+# KNOWN GAP (not fixed here, flagged as follow-up): the Master Plan's
+# "Incomplete Forms 6" row (row 32) explicitly says to use "Case Tests ->
+# Create a Case", NOT "Basic Form Tests -> Question Types" - and unlike
+# Question Types, modules-3/forms-0.xml's "Create a Case" form DOES have a
+# Pragma-Form-Descriptor (`Form Summary: <output value="/data/casename"/>
+# [English]`), so it WOULD show a real, non-empty formrecord_txt_btm. This
+# flow (following this repo's existing "one narrative covers both sheet
+# rows" convention, since both rows were assumed identical when this file
+# was first written) only exercises Question Types, so it cannot verify a
+# populated summary the way row 6 literally describes. Left as a documented
+# gap rather than an in-place rewrite, since a "Create a Case" pass changes
+# more of this flow's structure than this fix's evidence covers and can't
+# be validated live without triggering a new BrowserStack build (out of
+# scope for this fix).
+#
+# Verified against commcare-android source (read-only reference, not
+# modified) - same citations as incomplete_forms_01_03_save_resume_submit.yaml,
+# plus:
+#   IncompleteFormRecordView.java setParams(): mLowerTextView (id
+#     formrecord_txt_btm) <- dataTitle param, only when non-null;
+#     mRightTextView (id formrecord_txt_right) <-
+#     DateUtils.formatSameDayTime(timestamp, ...) (or "Never" if
+#     timestamp == 0, not applicable here since the record was just saved).
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: ".*Basic Tests$") - a
+# fresh BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
+# null.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_BASIC_TESTS}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: "test1"
+      PASSWORD: "123"
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+
+# --- Answer 2 of ~20+ questions, save incomplete. ---
+- tapOn: "Start"
+- tapOn: "Basic Form Tests"
+- tapOn: "Question Types"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+- inputText: "MaestroIncompleteText2"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+- inputText: "7"
+- hideKeyboard
+- back
+- assertVisible: "Exit Form?"
+- tapOn: "SAVE INCOMPLETE"
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+
+# --- Incomplete Forms 5/6: list entry shows a summary text + timestamp
+# below the form name, not just the name. ---
+- tapOn:
+    text: "(?i)incomplete.*"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/screen_entity_select_list"
+    timeout: 10000
+- assertVisible: "Question Types"
+- assertVisible:
+    id: "org.commcare.dalvik:id/formrecord_txt_right"
+
+# --- Resume: verify prior answer persisted, then fully submit. ---
+- tapOn: "Question Types"
+# Reopening a saved form always lands on FormHierarchyActivity first - see
+# incomplete_forms_01_03_save_resume_submit.yaml's header for the full
+# source citation (FormEntryActivity.java's handleFormLoadCompletion()).
+# Jump back to the beginning of the form to resume normal question-entry
+# navigation before the nav_btn_next taps below.
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/jumpBeginningButton"
+    timeout: 10000
+- tapOn:
+    id: "org.commcare.dalvik:id/jumpBeginningButton"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+    optional: true
+- assertVisible: "MaestroIncompleteText2"
+# UPDATE, confirmed live (2026-08-08, real BrowserStack failure + user
+# screen recording on this same "Question Types" form's identical pattern -
+# see incomplete_forms_01_03_save_resume_submit.yaml's header for the full
+# root-cause writeup): nav_btn_next and nav_btn_finish are two DISTINCT
+# views (nav_btn_next is never removed from the tree even once
+# nav_btn_finish covers it), and a genuine auto-submit path exists
+# (FormEntryActivityUIController.java's EVENT_END_OF_FORM/repeat-dialog
+# "Skip" handling) that submits the form without nav_btn_finish's
+# visibility ever changing - this form has a repeat group (see
+# flows/form_submissions/question_types_01_03_answer_and_submit.yaml's own
+# choice_dialog_panel_3 handling for the same "Question Types" content).
+# Fixed: loop on nav_btn_finish's own appearance (bounded, with a
+# defensive repeat-group dialog dismiss) instead of nav_btn_next's, and
+# make the trailing finish-tap optional since exiting the loop doesn't
+# guarantee nav_btn_finish caused it - "Start" below remains the real
+# success criterion.
+- repeat:
+    times: 30
+    while:
+      notVisible:
+        id: "org.commcare.dalvik:id/nav_btn_finish"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/choice_dialog_panel_3"
+          optional: true
+      - tapOn:
+          id: "org.commcare.dalvik:id/nav_btn_next"
+          optional: true
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"
+    optional: true
+# Per explicit guidance: a form submission can land on EITHER the "Start"
+# home screen OR the calling module screen ("Basic Form Tests", the module
+# "Question Types" lives in) depending on context - accept either as the
+# real success signal rather than assuming just one.
+- assertVisible:
+    text: "(?i)^(Start|Basic Form Tests)$"

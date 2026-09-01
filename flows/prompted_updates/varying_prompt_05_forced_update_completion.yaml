@@ -1,0 +1,40 @@
+appId: org.commcare.dalvik
+tags:
+  - prompted_updates
+  - automatable
+---
+# Master Mobile Plan (2026) > Prompted Updates > "Varying Prompt 5" - Test a
+# forced .ccz update. (In the source sheet this reuses steps 11-13 of
+# Prompted Update Scenario 2 - clicking through the forced-update completion
+# and confirming no further prompt - rather than introducing new UI.)
+#
+# UPDATE (2026-08-20), same app-code fix as varying_prompt_01_update_frequency.yaml
+# - see that file's own UPDATE comment for the full citation (was
+# installing the wrong app; the actual prompt fires on "Case
+# Managements!").
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: ".*Case Managements.*") -
+# a fresh BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
+# null. Only needed once, before the first login below - the later
+# re-logins in this same flow reuse the app that's still installed.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_CASE_MGMT_VP}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+# UPDATE (2026-08-21), confirmed live via a real failure (same fix as
+# varying_prompt_01_update_frequency.yaml - see that file's own citation):
+# update_app_via_menu.yaml's own final action ("Update to version X & log
+# out") already logs the device out. No separate logout.yaml call needed.
+- runFlow: ../common/update_app_via_menu.yaml
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- assertNotVisible: "New version of the application is available"

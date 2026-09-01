@@ -1,0 +1,609 @@
+appId: org.commcare.dalvik
+tags:
+  - conditional_enum_in_case_list
+  - partial
+---
+# Master Mobile Plan (2026) > Conditional Enum in Case List > "Conditional ID
+# Mapping 1" through "6", run as one sequential flow since the sheet's rows
+# are clearly a single narrative (same convention as
+# flows/updates_2_49/rate_limit_02_04_popup_dont_show_toast.yaml): create
+# two cases (Test One - age 16, appointment today; Test Two - age 21,
+# appointment yesterday), verify each's computed case-detail properties,
+# answer the follow-up question for each, then verify the final computed
+# property.
+#
+# Setup 1 ("Enable Feature Preview") and Setup 2 ("Verify Feature Preview")
+# are deliberately OUT of scope - both are pure HQ app-builder web UI
+# actions (enabling the "Conditional ID Mapping in Case List" Add-on,
+# checking a Display Property's Format dropdown), nothing to automate here
+# via Maestro. See coverage_matrix.csv for those rows.
+#
+# PARTIAL: "Test Two"'s appointment date must be set to YESTERDAY in a
+# native DatePicker (spinner mode - see DateWidget below) that defaults to
+# TODAY. There is no Maestro-native "set date" action for a spinner
+# DatePicker (unlike a plain text field); the swipe gesture below is a
+# best-effort, UNVERIFIED-against-a-live-run attempt to decrement the day
+# column by one - flag for correction once actually run on a real device.
+# "Test One" needs no date interaction at all (the widget already defaults
+# to today), so that half is fully Automatable.
+#
+# SECOND PARTIAL CAVEAT, confirmed live (2026-08-08, real BrowserStack
+# failure, build 6088f0f4e51f008e98bcec32581ae4d4c85e7231): "Test One"'s
+# "Appointment Date" showed "Not Today" instead of the expected "Today" -
+# i.e. this run's `tapOn: "Test One"` (even with the scrollUntilVisible fix
+# just above) opened a case with TEST TWO's data. This shared, never-pruned
+# qateam-domain case list accumulates a NEW "Test One"/"Test Two" pair on
+# EVERY run of this flow (case creation isn't scoped to a unique per-run
+# name), so a plain text match against "Test One" is ambiguous once enough
+# stale duplicates from prior runs exist - there is no reliable way from
+# this flow alone to guarantee it lands on the specific case THIS run just
+# created rather than an older one with different (possibly Test-Two-like)
+# data. Not fixed further here since it's an environmental/test-hygiene
+# issue (unbounded case accumulation across runs), not a Maestro selector
+# bug - flagging for whoever owns test-data cleanup for this domain.
+#
+# Verified against commcare-android source (read-only reference, not modified):
+#   app/src/org/commcare/views/widgets/DateWidget.java: wraps a plain
+#     android.widget.DatePicker inflated from R.layout.date_widget, which
+#     the fresh CCZ extracted for this app confirms is
+#     android:datePickerMode="spinner" (day/month/year NumberPicker
+#     columns, not a calendar grid) - initializes to the current date
+#     unless otherwise set.
+#   The CCZ's own default/app_strings.txt + modules-0/forms-{0,1}.xml
+#     (extracted read-only from resources/qateam - Conditional Enum in Case
+#     List - v48.ccz, never committed/modified): modules.m0="Case List",
+#     forms.m0f0="Register form" (questions in order: Case Name,
+#     Appointment Date, Case Age), forms.m0f1="Followup" (case-detail
+#     screen with "Case Age"/"Case Age Even/Odd"/"Appointment Date" headers
+#     per m0.case_long.* keys, a "Continue" button - m0_select_text -, then
+#     a "Did patient show up to their appointment?" yes/no question,
+#     relevant-only "Illness, injury or checkup?" question when yes).
+#   ConditionalEnumInCaseListTests.kt confirms test1/123 as valid
+#     credentials and the exact case-property verification sequence this
+#     flow mirrors (though that instrumentation test computes today's/
+#     yesterday's actual day-of-month via java.util.Calendar and drives a
+#     real PickerActions.setDate - Maestro has no equivalent structured
+#     date-set action, hence the swipe-based best-effort here instead).
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_CONDITIONAL_ENUM}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+
+# UPDATE (2026-08-17): confirmed live via a user-supplied recording - the
+# SECOND PARTIAL CAVEAT above was worse than estimated: a search for "Test
+# One" in this domain's Followup list showed "2 of 5405 results", not just
+# "a dozen+ duplicates". At that scale a plain "Test One"/"Test Two" name
+# genuinely can't be trusted to resolve to THIS run's own case rather than
+# an older one already carrying different (already-answered) computed
+# state - exactly the mismatch that produced the live "Assert that 'Child'
+# is visible" failure. Fixed properly this time: generate a real unique
+# suffix once, on the test-runner side (Date.now(), not device-derived),
+# and use "Test One <suffix>"/"Test Two <suffix>" everywhere below instead
+# of the literal sheet names - the only way to guarantee this run's own
+# case is the one found, no matter how large this shared domain's case
+# list grows.
+- runScript:
+    file: assets/generate_run_suffix.js
+
+# === Conditional ID Mapping 1 (part 1): create "Test One <suffix>" (age 16, today). ===
+- tapOn: "Start"
+- tapOn: "Case List"
+- tapOn: "Register form"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+    optional: true
+- inputText: "Test One ${output.runSuffix}"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+# Appointment Date - defaults to today already, no interaction needed.
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+# UPDATE, confirmed live 2026-08-12: hardened against the same
+# already-advanced-past-Finish race fixed elsewhere in this repo today -
+# every nav_btn_finish tap in this file is now optional, with a fallback
+# wait on the real end state (Start), instead of a bare tap + immediate
+# assertVisible.
+- inputText: "16"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"
+    optional: true
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 15000
+
+# === Conditional ID Mapping 1 (part 2): create "Test Two <suffix>" (age 21, yesterday). ===
+- tapOn: "Start"
+- tapOn: "Case List"
+- tapOn: "Register form"
+- inputText: "Test Two ${output.runSuffix}"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+# BEST-EFFORT/UNVERIFIED: decrement the day-of-month NumberPicker column by
+# one to reach yesterday. Swiping downward on a NumberPicker typically
+# decrements its value by one tick - not confirmed against a live run.
+- swipe:
+    start: "50%, 45%"
+    end: "50%, 60%"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+- inputText: "21"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"
+    optional: true
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 15000
+
+# === Conditional ID Mapping 2: update Test One, verify computed properties. ===
+# UPDATE (10th correction, 2026-08-19), confirmed live (build
+# batch2-regressions-fix-v1): the 9th correction's single-shot
+# extendedWaitUntil below genuinely observed search_action_bar visible
+# once, but the very next command (inside the search/retry block further
+# down) still failed with "Element not found: search_action_bar" -
+# confirming the case list can render this chrome only MOMENTARILY before
+# bouncing back to "Start" (a real, transient screen flicker, not a
+# semantic problem with the id itself). A one-shot wait can't recover from
+# that; wrapped the whole "Start" -> "Case List" -> "Followup" navigation
+# in its own retry loop instead, so a bounce-back gets a fresh
+# re-navigation attempt rather than only ever waiting once.
+- repeat:
+    times: 3
+    while:
+      notVisible:
+        id: "org.commcare.dalvik:id/search_action_bar"
+    commands:
+      - tapOn: "Start"
+      - tapOn: "Case List"
+      - tapOn: "Followup"
+# UPDATE, confirmed live (2026-08-08, real BrowserStack failure, build
+# e45fd74a51806cffdf0c941f9ab6b2cec1663de3): "Tap on Test One" failed with
+# "Element not found" - the failing screenshot showed the Followup case
+# list's FIRST page full of OTHER cases (dated names like "14th august
+# 2025", "9th october 2025", etc. - this is a shared HQ domain that
+# accumulates cases across every test run over time), with "Test One"
+# nowhere in the visible viewport.
+# UPDATE (2nd correction), confirmed live (run 31276111657): scrollUntilVisible
+# itself then failed ("Scrolling DOWN until Test Two is visible: No visible
+# element found") - the failure screenshot showed PAGE AFTER PAGE of "Test
+# One" rows (several dozen visible, scrollbar barely moved from the top)
+# with no "Test Two" reached inside the timeout. This case list is sorted
+# alphabetically by case name (confirmed by the screenshot: every visible
+# row is "Test One"/"Test one", no "Test Two" interleaved) - since "One" <
+# "Two" alphabetically, EVERY "Test One" ever created across every past run
+# of this flow sorts before the FIRST "Test Two", so the list to scroll past
+# only grows longer with every CI run and any fixed scroll timeout
+# eventually stops being enough (same failure mode already seen in
+# flows/case_filters/fuzzy_search_01_03.yaml's own fuzzy-match scroll).
+# Fixed by using the case list's own search box instead of scrolling -
+# org.commcare.dalvik:id/search_action_bar is core CommCare chrome (not
+# app-specific), confirmed present on entity-select list screens via
+# fuzzy_search_01_03.yaml's own citation (CaseListSearchTest.kt) - typing a
+# name into it filters the list live, so the target case is found
+# immediately regardless of how large the backing list has grown. This does
+# NOT fully resolve the SECOND PARTIAL CAVEAT above (search still can't
+# distinguish which same-named duplicate is THIS run's own case) - it only
+# fixes the "never even finds a match before timing out" failure mode.
+# UPDATE (3rd correction), confirmed live (LOCAL-VERIFY-fixes-aug09): even
+# with search working, "Assert that Child is visible" failed right after -
+# the failure screenshot showed the search results screen STILL open,
+# keyboard still up, meaning `tapOn: "Test One"` never actually navigated.
+# Root cause: Maestro's bare-text tapOn matches by regex SUBSTRING, and the
+# results banner directly above the list literally reads `results for your
+# search: "Test One"` - that non-interactive banner contains "Test One" as
+# a substring too, and evidently won it over the real list row. Anchored
+# with ^...$ so it can only match a row whose ENTIRE text is exactly "Test
+# One", plus hideKeyboard first so the full results list has room to render
+# (same convention as flows/case_filters/fuzzy_search_01_03.yaml's own
+# fuzzy-match fix).
+# UPDATE (4th correction), confirmed live (run 31327848567): this section's
+# own search_action_bar tap + inputText "Test One" steps - the actual fix
+# described above - had gone missing (dropped by an earlier edit pass),
+# leaving only hideKeyboard + the anchored tap. Without ever typing into
+# the search box, "Tap on Followup" landed on the full, unfiltered,
+# alphabetically-sorted list, so the very next tap always failed
+# immediately (confirmed via the build's own command log: "Tap on
+# Followup" -> "Tap on ^Test One$" with nothing in between). Restored the
+# missing steps, matching Conditional ID Mapping 4/6 below which still had
+# theirs.
+# UPDATE (2026-08-17, 5th correction): confirmed live via BrowserStack's
+# own hierarchy dump (build 8d2334866d9f9580091421ecbef01be36657a0e7) -
+# the search itself worked perfectly (found exactly "1 of 5407 results"
+# for the unique suffixed name, confirming output.runSuffix substitution
+# IS working correctly despite the command log's own static description
+# always showing the unresolved "${output.runSuffix}" template - that's
+# just how BrowserStack renders the log line, not what actually executed).
+# The REAL bug: at the "Assert that 'Child' is visible" failure, the
+# hierarchy showed we were STILL on this search-results list screen with
+# the keyboard STILL open - hideKeyboard didn't reliably dismiss it before
+# the tap, so the tap likely landed on the keyboard overlay instead of the
+# list row underneath it (same class of hideKeyboard unreliability this
+# file's own 2nd/3rd/4th corrections already fought, just recurring here
+# too). First fix attempt (re-hiding the keyboard on every retry
+# iteration) made things WORSE for the Test Two case: confirmed live
+# (build d0d08a9715a371bc06443489ef3ea35d985a1875) that repeatedly calling
+# hideKeyboard once it was ALREADY closed sent a real back-press each
+# time, which cleared the search filter entirely and landed on the full,
+# unfiltered list instead - exactly the "hideKeyboard always back-presses
+# regardless of whether a keyboard is showing" bug this repo has fought
+# many times before (see e.g. flows/common/install_app_as_web_user.yaml's
+# own citation).
+#
+# UPDATE (6th correction, 2026-08-17): the "hideKeyboard exactly once,
+# then only retry the tap" fix above STILL failed live (build
+# 476d526ec5914ba3cf00d1f731a8a79ab8137807) - the hierarchy dump at the
+# "Assert Child" failure showed the search box's own EditText and the
+# full on-screen keyboard STILL rendered, meaning one hideKeyboard call
+# genuinely isn't always enough. The deeper bug: search_action_bar was
+# never a valid retry signal in the first place - it's just this list
+# screen's own toolbar chrome, present regardless of whether the keyboard
+# is open, so "while: visible: search_action_bar" could never actually
+# tell the loop whether the keyboard had closed.
+#
+# UPDATE (7th correction, 2026-08-17): switching to Samsung's own keyboard
+# root view (com.samsung.android.honeyboard:id/layout_honeyboard) ALSO
+# failed live (build e9522e60ad63ac61f7df8c83c472fca5c591cf5c) - the loop
+# reported completing (implying the id was never visible, so it exited
+# instantly without ever calling hideKeyboard), yet the hierarchy dump at
+# the SAME "Assert Child" failure still showed a full on-screen keyboard
+# rendered - i.e. this device/session didn't expose that specific IME
+# package id, even though a real keyboard was genuinely still up. Guessing
+# at IME package names is inherently fragile (it can vary by session).
+# Stopped trying to detect "is the keyboard gone" at all - instead loop on
+# the thing that actually matters: keep hiding the keyboard and retrying
+# the tap until the REAL destination content ("Child", confirmed to exist
+# only on the case-detail screen this tap is supposed to reach) actually
+# appears, regardless of which keyboard package is involved or why the
+# first tap didn't land.
+#
+# UPDATE (8th correction, 2026-08-17): the 7th correction's inner tap-retry
+# STILL failed live (build 2e4db48637ed6bc823d6650500939f21f688b5f4) - the
+# search itself worked perfectly (exactly "1 of 5417 results" for the full
+# "Test One <suffix>" query), but the keyboard was still fully rendered in
+# the failure dump after all 4 hideKeyboard+tap attempts, meaning the tap
+# never reached the real row underneath it even once. Two changes per
+# direct user guidance: (1) search by the bare run suffix alone instead of
+# "Test One <suffix>"/"Test Two <suffix>" - this still resolves to only
+# this run's own 2 cases (no other case on this shared domain can share
+# today's Date.now() suffix), so there's no ambiguity lost, while removing
+# any dependence on how CommCare's search tokenizes a name+number combo;
+# the row is still picked by its own anchored full-name text underneath.
+# (2) wrapped the whole search+retry in an outer retry that redoes the
+# search itself (erase + retype + re-loop) if the inner tap-retry still
+# hasn't reached the destination - if the keyboard problem is actually a
+# stuck/stale search-results render rather than just an unlucky tap
+# target, restarting the search from scratch gives it a fresh chance
+# rather than only ever retrying the tap against a possibly-stale list.
+# UPDATE (11th correction, 2026-08-19), confirmed live (build
+# batch2-regressions-fix-v2): even after the 10th correction's
+# re-navigation retry confirmed real arrival on this list, the very next
+# command (tapOn search_action_bar, right below) still occasionally hit
+# "Element not found" with the failure screen showing we'd bounced back to
+# "Start" yet again - a genuinely intermittent flicker, not a one-time
+# race a single retry can absorb. Re-running the same re-navigation retry
+# as the FIRST command of every outer iteration below means a bounce-back
+# mid-search gets a fresh re-arrival attempt too, not just the initial one.
+- repeat:
+    times: 2
+    while:
+      notVisible:
+        text: "Child"
+    commands:
+      - repeat:
+          times: 3
+          while:
+            notVisible:
+              id: "org.commcare.dalvik:id/search_action_bar"
+          commands:
+            - tapOn: "Start"
+            - tapOn: "Case List"
+            - tapOn: "Followup"
+      - tapOn:
+          id: "org.commcare.dalvik:id/search_action_bar"
+      - eraseText
+      - inputText: "${output.runSuffix}"
+      # UPDATE (13th correction, 2026-08-19), confirmed live via a
+      # downloaded BrowserStack test video (build batch2-regressions-fix-v4,
+      # frame-by-frame review around the Mapping 4 failure): this file's
+      # own 5th-correction UPDATE below already root-caused "hideKeyboard
+      # once it's already closed sends a real back-press" as the exact
+      # bug behind the Test Two failure, but the fix that shipped (6th/7th/
+      # 8th corrections) only added an OUTER retry wrapper around the
+      # search - it never actually stopped calling hideKeyboard on EVERY
+      # iteration of the INNER "times: 4" tap-retry below. The video
+      # confirms this directly: the search box genuinely finds both cases
+      # ("2 of 5453 results", both "Test One"/"Test Two <suffix>" visible)
+      # then, within the same few seconds, the search clears and the app
+      # backs out through Followup -> Case List -> the module list -> home
+      # - exactly 3-4 real back-presses, matching 3-4 repeated hideKeyboard
+      # calls once the keyboard was already down after the first
+      # iteration. Moved to a single hideKeyboard call before the retry
+      # loop instead of inside it.
+      # UPDATE (15th correction, 2026-08-19), per direct user observation:
+      # even a SINGLE hideKeyboard call here can still be the exact same
+      # bug (real back-press once the keyboard's already closing/closed on
+      # its own after typing) - dropped it entirely rather than continuing
+      # to chase how many calls are "safe". Maestro taps via the
+      # accessibility tree, not pixel coordinates, and this search reduces
+      # to only 1-2 results (a unique suffix), which render at the top of
+      # the list right below the search box - well clear of the keyboard's
+      # own footprint even while it's still open, so hiding it first was
+      # never actually necessary here.
+      # UPDATE (14th correction, 2026-08-19), confirmed live (build
+      # batch2-regressions-fix-v12): separately, the tap-retry loop also
+      # failed once because the search's live filter genuinely hadn't
+      # applied yet by the time the tap fired, right after typing with zero
+      # settle wait - the failure hierarchy dump showed the plain,
+      # unfiltered alphabetically-sorted list, not this search's own
+      # results. Added an extendedWaitUntil for a "results for your
+      # search" banner, guessed from a downloaded session video.
+      # UPDATE (16th correction, 2026-08-19), confirmed live (build
+      # batch2-regressions-fix-v13): that guessed banner text never
+      # actually matched (WARNED both times it ran, including on the
+      # search that went on to succeed anyway) - removed as dead weight
+      # rather than kept around not doing anything. The inner "times: 4"
+      # tap-retry loop below already re-attempts the tap with its own
+      # settling time between tries, which is the real defense against
+      # this timing gap.
+      - repeat:
+          times: 4
+          while:
+            notVisible:
+              text: "Child"
+          commands:
+            - tapOn:
+                text: "^Test One ${output.runSuffix}$"
+                optional: true
+- assertVisible: "Child"
+- assertVisible: "Even"
+- assertVisible: "Today"
+- tapOn: "Continue"
+
+# === Conditional ID Mapping 3: answer "yes", pick "Checkup". ===
+- assertVisible: "Did patient show up to their appointment?"
+- tapOn: "yes"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+- tapOn: "Checkup"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"
+    optional: true
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 15000
+# UPDATE (12th correction, 2026-08-19), per direct user instruction to
+# keep investigating rather than accept this as unfixably flaky: every
+# single failure across 3 dispatched builds bounced back to "Start" at
+# exactly the SAME point - Conditional ID Mapping 4's Followup re-visit,
+# right after THIS form submission - never on Mapping 2's own first
+# Followup visit. That consistency points at something real tied to this
+# specific submission, not a pure random race: CommCare typically shows a
+# transient "X form(s) sent to server!" toast right after a submission
+# (same toast this repo already documents timing caveats for elsewhere,
+# e.g. multiple_submissions_10x_background_sync.yaml) - if the very next
+# "Start" -> "Case List" -> "Followup" taps overlap with that toast/any
+# post-submit sync activity settling, one of them could plausibly miss
+# its real target. Waits for that toast to clear (best-effort/optional,
+# since it may already be gone) before Mapping 4's navigation starts.
+- extendedWaitUntil:
+    notVisible:
+      text: "(?i).*sent to server.*"
+    timeout: 8000
+    optional: true
+
+# === Conditional ID Mapping 4: update Test Two, verify computed properties. ===
+# UPDATE (10th correction, 2026-08-19): same retry-navigation fix as
+# Conditional ID Mapping 2's own UPDATE comment above - see that for the
+# full citation.
+- repeat:
+    times: 3
+    while:
+      notVisible:
+        id: "org.commcare.dalvik:id/search_action_bar"
+    commands:
+      - tapOn: "Start"
+      - tapOn: "Case List"
+      - tapOn: "Followup"
+# Search-box lookup instead of scrolling - same fix and reasoning as
+# "Test One" above (this list is alphabetically sorted, so "Test Two"'s
+# scroll position only gets deeper as more "Test One"s accumulate over
+# time).
+# Anchored tap + hideKeyboard - see Conditional ID Mapping 2's UPDATE
+# comment above for why (the results banner's own text contains "Test Two"
+# too, which a bare substring tapOn can match instead of the real row).
+# Same 8th-correction search-by-suffix-only + outer search-retry as
+# Conditional ID Mapping 2's own UPDATE comment above - see that for the
+# full writeup.
+# UPDATE (11th correction, 2026-08-19): same per-iteration re-navigation
+# retry as Conditional ID Mapping 2's own UPDATE comment above - see that
+# for the full citation.
+- repeat:
+    times: 2
+    while:
+      notVisible:
+        text: "Adult"
+    commands:
+      - repeat:
+          times: 3
+          while:
+            notVisible:
+              id: "org.commcare.dalvik:id/search_action_bar"
+          commands:
+            - tapOn: "Start"
+            - tapOn: "Case List"
+            - tapOn: "Followup"
+      - tapOn:
+          id: "org.commcare.dalvik:id/search_action_bar"
+      - eraseText
+      - inputText: "${output.runSuffix}"
+      # UPDATE (15th correction, 2026-08-19): same hideKeyboard removal as
+      # Conditional ID Mapping 2's own UPDATE comment above - see that for
+      # the full citation.
+      # UPDATE (16th correction, 2026-08-19): same removal of the
+      # never-actually-matching "results for your search" wait as
+      # Conditional ID Mapping 2's own UPDATE comment above - see that for
+      # the full citation.
+      - repeat:
+          times: 4
+          while:
+            notVisible:
+              text: "Adult"
+          commands:
+            - tapOn:
+                text: "^Test Two ${output.runSuffix}$"
+                optional: true
+- assertVisible: "Adult"
+- assertVisible: "Odd"
+- assertVisible: "Not Today"
+- tapOn: "Continue"
+
+# === Conditional ID Mapping 5: answer "no". ===
+- assertVisible: "Did patient show up to their appointment?"
+- tapOn: "no"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"
+    optional: true
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 15000
+# UPDATE (12th correction, 2026-08-19): same post-submission toast-settle
+# wait as Conditional ID Mapping 3's own UPDATE comment above - see that
+# for the full citation.
+- extendedWaitUntil:
+    notVisible:
+      text: "(?i).*sent to server.*"
+    timeout: 8000
+    optional: true
+
+# === Conditional ID Mapping 6: verify final "Appointment Attended?" values. ===
+# UPDATE (10th correction, 2026-08-19): same retry-navigation fix as
+# Conditional ID Mapping 2's own UPDATE comment above - see that for the
+# full citation.
+- repeat:
+    times: 3
+    while:
+      notVisible:
+        id: "org.commcare.dalvik:id/search_action_bar"
+    commands:
+      - tapOn: "Start"
+      - tapOn: "Case List"
+      - tapOn: "Followup"
+# Anchored tap + hideKeyboard - see Conditional ID Mapping 2's UPDATE
+# comment above for why.
+# Same 8th-correction search-by-suffix-only + outer search-retry as
+# Conditional ID Mapping 2's own UPDATE comment above - see that for the
+# full writeup.
+# UPDATE (11th correction, 2026-08-19): same per-iteration re-navigation
+# retry as Conditional ID Mapping 2's own UPDATE comment above - see that
+# for the full citation.
+- repeat:
+    times: 2
+    while:
+      notVisible:
+        text: "Seen by doctor"
+    commands:
+      - repeat:
+          times: 3
+          while:
+            notVisible:
+              id: "org.commcare.dalvik:id/search_action_bar"
+          commands:
+            - tapOn: "Start"
+            - tapOn: "Case List"
+            - tapOn: "Followup"
+      - tapOn:
+          id: "org.commcare.dalvik:id/search_action_bar"
+      - eraseText
+      - inputText: "${output.runSuffix}"
+      # UPDATE (15th correction, 2026-08-19): same hideKeyboard removal as
+      # Conditional ID Mapping 2's own UPDATE comment above - see that for
+      # the full citation.
+      # UPDATE (16th correction, 2026-08-19): same removal of the
+      # never-actually-matching "results for your search" wait as
+      # Conditional ID Mapping 2's own UPDATE comment above - see that for
+      # the full citation.
+      - repeat:
+          times: 4
+          while:
+            notVisible:
+              text: "Seen by doctor"
+          commands:
+            - tapOn:
+                text: "^Test One ${output.runSuffix}$"
+                optional: true
+- assertVisible: "Seen by doctor"
+# UPDATE (3rd correction, 2026-08-17): tried a single `back` to the
+# already-suffix-filtered search results (since that search already
+# contains both this run's cases) instead of re-navigating from Start -
+# confirmed live it's NOT reliable: in one run `back` landed on the
+# module menu, in another it went all the way past that to the true home
+# screen, and "Test Two" was never found either time. The back-stack
+# depth from this case-detail screen isn't deterministic. Per direct user
+# guidance: reverted to full re-navigation from Start for reliability,
+# with a higher retry count on the back-until-"Start"-visible loop
+# (rather than a fixed single/double back) to absorb that same
+# inconsistency instead of guessing an exact press count.
+- repeat:
+    times: 5
+    while:
+      notVisible: "Start"
+    commands:
+      - back
+# UPDATE (10th correction, 2026-08-19): same retry-navigation fix as
+# Conditional ID Mapping 2's own UPDATE comment above - see that for the
+# full citation.
+- repeat:
+    times: 3
+    while:
+      notVisible:
+        id: "org.commcare.dalvik:id/search_action_bar"
+    commands:
+      - tapOn: "Start"
+      - tapOn: "Case List"
+      - tapOn: "Followup"
+# UPDATE (11th correction, 2026-08-19): same per-iteration re-navigation
+# retry as Conditional ID Mapping 2's own UPDATE comment above - see that
+# for the full citation.
+- repeat:
+    times: 2
+    while:
+      notVisible:
+        text: "Needs followup"
+    commands:
+      - repeat:
+          times: 3
+          while:
+            notVisible:
+              id: "org.commcare.dalvik:id/search_action_bar"
+          commands:
+            - tapOn: "Start"
+            - tapOn: "Case List"
+            - tapOn: "Followup"
+      - tapOn:
+          id: "org.commcare.dalvik:id/search_action_bar"
+      - eraseText
+      - inputText: "${output.runSuffix}"
+      # UPDATE (15th correction, 2026-08-19): same hideKeyboard removal as
+      # Conditional ID Mapping 2's own UPDATE comment above - see that for
+      # the full citation.
+      # UPDATE (16th correction, 2026-08-19): same removal of the
+      # never-actually-matching "results for your search" wait as
+      # Conditional ID Mapping 2's own UPDATE comment above - see that for
+      # the full citation.
+      - repeat:
+          times: 4
+          while:
+            notVisible:
+              text: "Needs followup"
+          commands:
+            - tapOn:
+                text: "^Test Two ${output.runSuffix}$"
+                optional: true
+- assertVisible: "Needs followup"

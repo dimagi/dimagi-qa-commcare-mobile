@@ -1,0 +1,13 @@
+appId: org.commcare.dalvik
+---
+# Dismisses the "Create a PIN?" prompt via "No, and don't ask again", then
+# clears the follow-up "Setting A PIN Later" info dialog. Used as a setup
+# step by flows that need to reach the home screen via the menu-driven PIN
+# path (Set My PIN / Change My PIN) instead of the initial-login prompt.
+# Strings verified against app/assets/locales/android_translatable_strings.txt:
+#   pin.dialog.never = "No, and don't ask again"
+#   pin.dialog.set.later.title = "Setting A PIN Later"
+- assertVisible: "Create a PIN?"
+- tapOn: "No, and don't ask again"
+- assertVisible: "Setting A PIN Later"
+- tapOn: "OK"

@@ -1,0 +1,69 @@
+appId: org.commcare.dalvik
+tags:
+  - login
+  - partial
+---
+# Master Mobile Plan (2026) > Login > "CommCare ODK 2" - Check Session:
+# after logging in, open the notification shade and verify the
+# "Logged Into Commcare Session Expires: ..." banner is present.
+#
+# PARTIAL: the sheet also asks to verify the expiration time reads exactly
+# 24 hours from login - Maestro has no way to read/compute a live countdown
+# timestamp inside a notification's text, so only the banner's presence is
+# asserted here, not the specific duration. Same caveat category as this
+# repo's other "element visible, exact judgment skipped" Partial rows.
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: ".*Basic Tests$") - a fresh
+# BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
+# null.
+#
+# Verified against commcare-android source (read-only reference, not modified):
+#   Same "Logged Into ..." / "Session Expires:" notification text as
+#   flows/session_expiration/setup_02_restore_user_session_expires.yaml
+#   (SessionExpirationTests.kt) - this is CommCare's own core
+#   session-notification feature (app-agnostic), just with a much longer
+#   (24h, per this tab's own note) expiration window than Session
+#   Expiration Test's 45-second one, so only presence is checked here, not
+#   an actual wait-for-expiry.
+#
+# UPDATE, confirmed live (2026-08-08, real CI parse-error failure, run
+# 31259796789): the header above used to cite `openNotifications` as "a
+# documented Maestro mechanism", copied from setup_02_restore_user_session_expires.yaml's
+# own (equally wrong) claim - neither was ever actually verified against
+# the real Maestro CLI. `maestro check-syntax` rejects it ("Invalid
+# Command: openNotifications"); Maestro has no dedicated "open notification
+# shade" command at all. Replaced with the documented workaround, a
+# coordinate swipe from the very top edge of the screen downward.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_BASIC_TESTS}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+- swipe:
+    start: "50%, 1%"
+    end: "50%, 60%"
+# UPDATE (2026-08-19), confirmed live via a real CI run (build
+# QA-COMMCARE-MOBILE-group-b): the failure screenshot showed the exact
+# same Android 16 OS-level onboarding overlay ("Swipe down from the top
+# right corner..." coachmark, "OK" button) covering the notification
+# shade after this top-edge swipe as already fixed in
+# flows/session_expiration/setup_02_restore_user_session_expires.yaml
+# (see that file's own UPDATE comment for the full citation) - same
+# first-time-swipe system coachmark, not app content. Dismiss it
+# defensively before asserting on the real notification text.
+- tapOn:
+    text: "OK"
+    optional: true
+- assertVisible:
+    text: "(?i)Logged Into.*"
+- assertVisible:
+    text: "Session Expires:.*"
+- back

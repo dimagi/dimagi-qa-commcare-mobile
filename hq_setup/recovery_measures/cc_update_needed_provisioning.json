@@ -1,0 +1,9 @@
+{
+  "_comment": "Master Mobile Plan (2026) > Recovery Measures > CC Update Needed > Test Case ID 'CC Reinstall Needed 1' AS LABELED UNDER THE 'CC Update Needed step' SUMMARY IN coverage_matrix.csv - a different section from CC Reinstall Needed's own 'CC Reinstall Needed 1' row (see cc_reinstall_needed_provisioning.json for that one; this file is the CC Update Needed section's copy of the identical underlying gap, hence the separate filename). Summary per task: 'Uninstall the ccz, install 2.45'. THIS IS A DOCUMENTED GAP, NOT A RUNNABLE PRE-STEP, for exactly the same reason as cc_reinstall_needed_provisioning.json: no HQ API action or Maestro flow can produce a below-minimum-CC-version device state without an actual old CommCare binary already installed.\n\nUPDATE (2026-08-25): RESOLVED - same fix as cc_reinstall_needed_provisioning.json's own UPDATE. resources/commcare_2.45_release.apk is committed; cc_update_needed_01_trigger_on_old_client.yaml dispatches with `--apk resources/commcare_2.45_release.apk` (requires_old_client_apk tag).",
+  "gap": "Needs a specific historical CommCare APK (v2.45.x) installed on the test device BEFORE cc_update_needed_flow.yaml's precondition (device on an old CC binary, MEASURE_TYPE_CC_UPDATE pending) can be satisfied.",
+  "how_to_stage_it": [
+    "Same mechanism as cc_reinstall_needed_provisioning.json: python scripts/download_apk.py --tag commcare_2.45.<x> --out apks/commcare_2.45.<x>.apk, then adb install -r that APK onto the device manually/out-of-band before running this repo's Maestro flows - see that file for the full explanation of why this can't be scripted end-to-end here.",
+    "See cc_reinstall_needed_provisioning.json's 'tags_verified_via_gh_cli_2026_08_05' block for the real GitHub release tags that exist near 2.45 (commcare_2.45.0 / .1 / .2, confirmed live via gh CLI) - not re-verified separately in this file to avoid duplicating the same gh output twice."
+  ],
+  "actions": []
+}

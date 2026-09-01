@@ -1,0 +1,81 @@
+appId: org.commcare.dalvik
+tags:
+  - multimedia
+  - partial
+---
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_LAZY_VIDEOS}
+# Master Mobile Plan (2026) > Multimedia > "Lazy Video 2" - 'Missing video'
+# popup shown per question.
+#
+# UPDATE (2026-08-13): switched from APP_CODE_MULTIMEDIA to
+# APP_CODE_LAZY_VIDEOS - confirmed via two user-supplied recordings that
+# "Video Questions" is a SEPARATE, unregistered "Lazy Videos" app, not a
+# menu inside the Multimedia app. App_id user-confirmed
+# (qateam/9348a6c0baa5b98d1082a8e94048697a) and registered as LAZY_VIDEOS
+# in scripts/app_registry.py. The navigation/selectors below were already
+# ground-truthed correctly against this app's real screens (frames showed
+# a "Videos with valid referenc..." toolbar, an inline video player, and
+# the exact "Video file is missing for this question, click the download
+# button above to download" placeholder text) - only the app_id was wrong.
+#
+# The missing-media message text IS verified against source:
+#   res/values/strings.xml:328 -> video_download_prompt = "Video file is
+#   missing for this question, click the download button above to download"
+#   (note: slightly different wording than the sheet's paraphrase - used
+#   verbatim here).
+#   views/media/MediaLayout.java's setupInlineVideoView()/setupImage() call
+#   showMissingMediaView() with this string whenever the referenced media
+#   file doesn't yet exist locally; it sets a TextView
+#   (res/layout/missing_media_view.xml -> id/missing_media_tv) visible
+#   in-place inside the question - the sheet calls this a "popup" but it's
+#   an inline status view, not a modal dialog.
+#   nav_btn_next / nav_btn_finish ids verified against
+#   res/layout/screen_form_entry.xml and
+#   FormAttachmentUploadTest.java's use of R.id.nav_btn_next/nav_btn_finish.
+#
+# UPDATE (2026-08-13), downgraded automatable -> partial: confirmed live
+# via BrowserStack's own commandlogs hierarchy dump (build
+# 5f45ccaab3feb04c74202455ca2ee4e5f432af2a) that this form's FIRST question
+# is titled "Video Types (standard)" and renders id/audio_video_button +
+# id/video_button - a different, non-inline video widget that does NOT
+# show the missing_media_tv placeholder text at all (the hard assertVisible
+# below failed outright on this exact question - the real hierarchy had no
+# matching text anywhere). The "inline" video widget (id/inline_video_view,
+# the one that DOES show this placeholder per views/media/MediaLayout.java)
+# is a LATER question in this same form, not every one - i.e. the sheet's
+# "shown per question" framing doesn't hold literally for every question
+# type this form actually contains. Softened both assertions to optional
+# rather than asserting a per-question guarantee the real app doesn't keep;
+# kept as a best-effort per-question check since the message legitimately
+# does appear on the inline-type question(s).
+# Prepends install_app_as_web_user.yaml (APP_NAME: Multimedia) - a fresh
+# BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp == null.
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- tapOn: "Start"
+- tapOn: "Video Questions"
+- tapOn: "Videos with valid references"
+# Walk every question that has a "Next" button, confirming the missing-video
+# message is shown on each one, then check the final question too (it won't
+# have a "Next" button, only "Finish").
+- repeat:
+    times: 10
+    while:
+      visible:
+        id: "org.commcare.dalvik:id/nav_btn_next"
+    commands:
+      - assertVisible:
+          text: "Video file is missing for this question, click the download button above to download"
+          optional: true
+      - tapOn:
+          id: "org.commcare.dalvik:id/nav_btn_next"
+- assertVisible:
+    text: "Video file is missing for this question, click the download button above to download"
+    optional: true

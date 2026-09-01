@@ -1,0 +1,9 @@
+{
+  "_comment": "Master Mobile Plan (2026) > Updates (coverage_matrix.csv XLSX Tab 'Updates', 2.49 grab-bag section) > 'Setup 1' - 'Confirm config is visible' ('Go to the Basic Test app's deploy page, confirm the Manage Update Options tab is visible, note current settings so they can be reverted later'). Previously left Not automatable/N/A with no flow, on the assumption this needed a live browser click-through. It doesn't: hq_client.py's get_prompt_update_settings(app_id) (added 2026-08-24 as a readback check inside set_prompt_update_settings()) already does exactly this - an authenticated GET on the app's Releases page (the same page the 'Manage Update Options' tab renders on) and a regex parse of each <select>'s selected <option>, for apk_prompt/apk_version/app_prompt/app_version. A non-error, non-all-None result IS the confirmation the tab renders and is readable; the returned dict IS the 'note the settings' step, in machine-readable form ready for a teardown spec to restore later - the returned values were exactly what prompted_update_scenario_teardown.json (this same tab's own cleanup file) already restores by hand.\n\napp_id is '[Master] Basic Tests NS Copy' (app_registry.py's BASIC_TESTS_NS_COPY entry), matching Setup 2/Prompted Update Scenario 2/teardown - the same app every other flow on this tab already targets.\n\nRun via `python scripts/hq_client.py hq_setup/updates_2_49/setup_01_confirm_update_options_tab.json` before hq_setup/updates_2_49/setup_02_commcare_version_plus_one.json.",
+  "actions": [
+    {
+      "type": "get_prompt_update_settings",
+      "app_id": "8a04cdf1b9474ee2b090b1d7896b1bd7"
+    }
+  ]
+}

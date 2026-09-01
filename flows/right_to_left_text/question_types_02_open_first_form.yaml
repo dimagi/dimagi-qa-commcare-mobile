@@ -1,0 +1,75 @@
+appId: org.commcare.dalvik
+tags:
+  - right_to_left_text
+  - automatable
+---
+# Master Mobile Plan (2026) > Right to Left Text > "Question Types 2" - From
+# the home screen, select the green start button; select the first entry
+# (this is a form and should open immediately).
+# Pure navigation check: the actual RTL swipe-direction/progress-bar/mirroring
+# judgment for this screen lives in "Question Types 1/3-7" in
+# coverage_matrix.csv (all Not automatable - visual/gesture-direction
+# judgment), so this flow only proves the navigation itself still works and
+# deliberately does not switch to Arabic first (that's "Setup 3"'s job as a
+# real-sheet prerequisite; per this framework's self-contained-flow
+# convention a pure-navigation check doesn't need it).
+# Selectors:
+#  - "Start" button text: app/assets/locales/android_translatable_strings.txt
+#    home.start=Start (org/commcare/activities/HomeButtons.java
+#    homeMessageKey = "home.start"); also the literal string
+#    InstrumentationUtility.kt openModule() taps via onView(withText("Start")).
+#  - list rows: InstrumentationUtility.kt openModule()/openForm() ->
+#    clickListItem(R.id.screen_suite_menu_list, position). Maestro has no
+#    adapter-position API, so we index into the row title view instead - each
+#    row is app/res/layout/menu_list_item_modern.xml, whose title TextView id
+#    is row_txt (org/commcare/adapters/MenuAdapter.java ~line 341); index 0 =
+#    first entry.
+#  - confirming a form opened: nav_btn_next lives on
+#    app/res/layout/screen_form_entry.xml (InstrumentationUtility.kt
+#    nextPage() taps the same id).
+#  - exit-without-saving dialog: FormEntryDialogs.createQuitDialog() (invoked
+#    from FormEntryActivity's back-press handler) ->
+#    quit_form_title="Exit Form?", do_not_save="EXIT WITHOUT SAVING"
+#    (app/res/values/strings.xml).
+# Prepends install_app_as_web_user.yaml (APP_NAME: ".*Right to Left Tests!") - a
+# fresh BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp == null.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_RIGHT_TO_LEFT}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- tapOn: "Start"
+- tapOn:
+    id: "org.commcare.dalvik:id/row_txt"
+    index: 0
+- assertVisible:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+- hideKeyboard
+# UPDATE, confirmed live (run 31276111657): a single `back` press wasn't
+# enough - the failure screenshot showed the form still open on its first
+# question screen, "Exit Form?" never shown.
+# UPDATE (2nd correction), confirmed live (LOCAL-VERIFY-recovery-rtl):
+# bounding the back-press count with a repeat loop STILL didn't help - the
+# form stayed open through all 3 presses. This module's form renders with a
+# different top bar than the plain nav_btn_next/nav_btn_finish icon buttons
+# other Basic-Tests-style forms use (an X/">" swipe-style bar - the same
+# alternate style flows/externalapp_tests/external_app_02_start_commcare_submit_form.yaml
+# hit) - hardware `back` doesn't reliably reach FormEntryActivity's
+# onKeyDown()/quit-dialog handler in this display mode. No resource id was
+# found for the "X" icon itself in screen_form_entry.xml (it isn't part of
+# that layout at all - this is a different top bar), so this taps it by its
+# measured on-screen position instead - the same last-resort convention
+# already used elsewhere in this repo for controls with no stable
+# selector (e.g. flows/form_submissions/groups_submit_twice_different_answers.yaml's
+# radio-button taps). Coordinates measured off the real 1080x2400 failure
+# screenshot (X icon center ~68px/1080 horiz, ~330px/2400 vert).
+- tapOn:
+    point: "6%, 14%"
+- tapOn:
+    text: "EXIT WITHOUT SAVING"
+    optional: true

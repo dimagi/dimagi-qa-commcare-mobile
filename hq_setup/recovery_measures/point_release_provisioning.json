@@ -1,0 +1,18 @@
+{
+  "_comment": "Master Mobile Plan (2026) > Recovery Measures > Point Release > Test Case IDs 'CC Reinstall Needed 6' ('Install 2.49.4, verify no forced update') and 'CC Reinstall Needed 7' ('Install 2.49.5, verify forced-update message'), as labeled under the 'Point Release' section of coverage_matrix.csv (a third, separate reuse of the literal 'CC Reinstall Needed N' ID text - see point_release_flow.yaml's header for the sheet-quirk explanation; row 8 of this same section already has a flow). THIS IS A DOCUMENTED GAP, NOT A RUNNABLE PRE-STEP, for the same structural reason as cc_reinstall_needed_provisioning.json and cc_update_needed_provisioning.json: both rows need a specific historical CommCare APK physically installed before any on-device Maestro assertion is possible - no HQ API call substitutes for that.",
+  "gap": "Row 6 needs CommCare 2.49.4 installed and asserts NO forced-update prompt appears (i.e. 2.49.4 is presumably still >= whatever minimum CC version was configured at the time). Row 7 needs CommCare 2.49.5 installed and asserts the forced-update message DOES appear. Both require the exact historical APK staged on the device before the flow runs, same limitation as the CC Reinstall/Update Needed sections' row-1 gaps.",
+  "how_to_stage_it": [
+    "python scripts/download_apk.py --tag commcare_2.49.4 --out apks/commcare_2.49.4.apk   # for row 6",
+    "python scripts/download_apk.py --tag commcare_2.49.5 --out apks/commcare_2.49.5.apk   # for row 7",
+    "then adb install -r <apk> onto the device manually/out-of-band, same caveat as the 2.45 provisioning files: this repo's run_suite.py/browserstack_client.py pipeline only stages one current-under-test APK per BrowserStack build, with no wiring to also pre-install a second, older APK into that same session."
+  ],
+  "tags_verified_via_gh_cli_2026_08_05": {
+    "command": "gh release list --repo dimagi/commcare-android --limit 300 | grep -E '2\\.49\\.[45]'",
+    "result": [
+      "CommCare 2.49.5 [no extra note]        commcare_2.49.5  2020-08-10",
+      "CommCare 2.49.4 [June 28, 2020]        commcare_2.49.4  2020-07-01"
+    ],
+    "note": "Both tags exist and were confirmed live via gh CLI (not guessed) - commcare_2.49.4 and commcare_2.49.5, exactly matching the sheet's row 6/7 version numbers with no ambiguity (unlike the '2.45' case, there's no patch-digit guesswork here since the sheet already specifies .4 and .5). Whether each tag's GitHub release actually ships a usable .apk asset (per download_apk.py's asset-naming-inconsistency caveat) was not individually re-checked - verify with --tag before relying on it in a real run."
+  },
+  "actions": []
+}

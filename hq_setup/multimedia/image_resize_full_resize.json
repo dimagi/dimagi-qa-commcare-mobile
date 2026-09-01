@@ -1,0 +1,24 @@
+{
+  "_comment": "Master Mobile Plan (2026) > Multimedia > Image Resize 5 - Change the 'Basic Tests' app's Auto-Resize Images setting to 'Full Resize' on HQ, then cut and release a new build, so that Image Resize 6-9 (flows/multimedia/image_resize_06_09_full_resize.yaml) exercise the app under that setting. Run once via `python scripts/hq_client.py hq_setup/multimedia/image_resize_full_resize.json` before running that flow. app_id is a placeholder for the 'Basic Tests' Multimedia QA app - fill in from https://www.commcarehq.org/a/<domain>/apps/view/<app_id>/, confirming it's still current (app ids get recreated between QA cycles per this repo's other hq_setup/*.json files' own notes).",
+  "_unverified_key_warning": "REPLACE_WITH_AUTO_RESIZE_KEY below is NOT a confirmed custom_properties key name. 'Auto-Resize Images' is an Android-app-profile setting configured on HQ's app-builder Advanced Settings tab, but its underlying custom_properties key/value spelling could not be found anywhere in this repo (hq_client.py's set_custom_properties() only documents the num-views-before-reducing-frequency/reduced-show-frequency/regular-show-frequency keys used by the Prompted Updates flows - see hq_setup/prompted_updates/varying_prompt_setup.json) nor in the commcare-android source (that setting lives purely on the HQ/Django side, in corehq/apps/app_manager, which is outside this repo). Before running this, open the target app's Advanced Settings tab in a browser, find the real 'Auto-Resize Images' control, inspect its HTML <select>/<input> name attribute (or the corresponding entry in corehq/apps/app_manager/models.py's ApplicationBase profile field), and replace both the key and value below accordingly.",
+  "actions": [
+    {
+      "type": "set_custom_properties",
+      "app_id": "REPLACE_WITH_BASIC_TESTS_APP_ID",
+      "properties": {
+        "REPLACE_WITH_AUTO_RESIZE_KEY": "REPLACE_WITH_VALUE (Full Resize / Horizontal Resize / Half Resize / None)"
+      }
+    },
+    {
+      "type": "create_new_build",
+      "app_id": "REPLACE_WITH_BASIC_TESTS_APP_ID",
+      "comment": "Image Resize 5 - Auto-Resize Images = Full Resize"
+    },
+    {
+      "type": "mark_build_status",
+      "app_id": "REPLACE_WITH_BASIC_TESTS_APP_ID",
+      "saved_app_id": "$LAST_BUILD_ID",
+      "is_released": true
+    }
+  ]
+}

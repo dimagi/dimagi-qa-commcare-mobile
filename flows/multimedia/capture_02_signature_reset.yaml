@@ -1,0 +1,107 @@
+appId: org.commcare.dalvik
+tags:
+  - multimedia
+  - automatable
+---
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_BASIC_TESTS_NS_COPY}
+# Prepends install_app_as_web_user.yaml (APP_NAME: Basic Tests) - a fresh
+# BrowserStack session has no app installed until this runs; see DispatchActivity.java's
+# CommCareSetupActivity routing when currentApp == null.
+#
+# Master Mobile Plan (2026) > Multimedia > "Capture 2" - Signature Reset:
+# reopen a previously-captured signature, reset it, draw a new one, and
+# confirm the new signature replaces the old one.
+#
+# UPDATE (2026-08-13): switched from APP_CODE_BASIC_TESTS to
+# APP_CODE_BASIC_TESTS_NS_COPY, restoring the original signature-canvas
+# implementation from before commit eedbe28 - see
+# capture_01_gather_signature.yaml's own UPDATE comment for the full
+# root-cause writeup (app-identity mismatch, not a CommCare version
+# difference). App_id user-confirmed and registered as
+# BASIC_TESTS_NS_COPY in scripts/app_registry.py.
+#
+# The sheet's own wording ("Continue from previous test") makes this a direct
+# continuation of Capture 1 - per this repo's "each flow runnable in
+# isolation" convention (docs/FRAMEWORK.md), this flow redoes Capture 1's own
+# setup (login, navigate, capture an initial signature) itself rather than
+# depending on that flow having just run. See
+# flows/multimedia/capture_01_gather_signature.yaml for the full selector
+# citations (sign_button/save_and_close strings, DrawActivity.java's
+# btnFinishDraw, draw_layout.xml's unidentified DrawView canvas) - not
+# re-cited here to avoid drift between the two copies.
+#
+# Reset button verified against source (read-only reference, not modified):
+#   app/res/values/strings.xml: reset_image="Reset" (line 234).
+#   app/src/org/commcare/activities/DrawActivity.java line 196-198: the
+#     "Reset" action is id/btnResetDraw.
+#   app/src/org/commcare/views/widgets/SignatureWidget.java: reopening
+#     "Gather Signature" on a question that already has a saved answer passes
+#     the existing file into launchSignatureActivity() (line 143) - i.e. the
+#     draw canvas should come up pre-loaded with the PRIOR signature, matching
+#     the sheet's step 3 ("Verify you are seeing the previously recorded
+#     signature"). Not independently asserted here (the DrawView has no fixed
+#     id to inspect its contents against) - this flow proceeds on the
+#     documented behavior per source, same "can't screenshot-diff the canvas"
+#     limitation noted in capture_01's own citation.
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- tapOn: "Start"
+# UPDATE (3rd correction, 2026-08-13): the previous two "fixes" here
+# (launchApp relaunch, then a wait+gated-relogin) were both solving the
+# WRONG problem - see capture_01_gather_signature.yaml's own 3rd-correction
+# UPDATE comment for the full root-cause writeup (confirmed live via
+# BrowserStack's own commandlogs hierarchy dump: the screen was fully,
+# correctly rendered the whole time - the ONLY real problem is that this
+# app's module row literally reads "Basic_Form_Tests", underscored, not
+# "Basic Form Tests" with spaces). Reverted to a plain tap with the
+# correct text.
+- tapOn: "Basic_Form_Tests"
+# UPDATE, confirmed live (run 31276111657): "Multimedia Only" is below the
+# fold in this module's form list - see capture_01_gather_signature.yaml's
+# own UPDATE comment for the full citation/root-cause writeup.
+- scrollUntilVisible:
+    element:
+      text: "Multimedia Only"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Multimedia Only"
+# One tap past this form's own intro screen before "Gather Signature" is
+# reachable - see capture_01_gather_signature.yaml's own UPDATE comment for
+# the full root-cause writeup.
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+- tapOn: "Gather Signature"
+- swipe:
+    start: "20%, 80%"
+    end: "80%, 20%"
+- tapOn:
+    id: "org.commcare.dalvik:id/btnFinishDraw"
+- assertNotVisible: "Selected file is not a valid image"
+# UPDATE (2026-08-13): confirmed live via BrowserStack's own commandlogs
+# hierarchy dump - see capture_01_gather_signature.yaml's own UPDATE
+# comment for the full root-cause writeup (this app auto-advances to the
+# NEXT question after Save and Close, rather than staying on sig_cap with
+# a thumbnail as the source citation assumed). Step back one question to
+# reach sig_cap again before reopening it.
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_prev"
+
+# --- Reopen, verify the reset button is available, reset, redraw, save ---
+- tapOn: "Gather Signature"
+- tapOn:
+    id: "org.commcare.dalvik:id/btnResetDraw"
+- swipe:
+    start: "80%, 80%"
+    end: "20%, 20%"
+- tapOn:
+    id: "org.commcare.dalvik:id/btnFinishDraw"
+- assertNotVisible: "Selected file is not a valid image"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_prev"
+- assertVisible: "Gather Signature"

@@ -1,0 +1,50 @@
+appId: org.commcare.dalvik
+---
+# Reusable: from the home screen ("Start" visible), open "More options" >
+# "About CommCare" and dismiss the dialog with "OK".
+#
+# UPDATE (2026-08-19), per direct user instruction: this subflow used to
+# take an EXPECTED_VERSION param and assert the currently-seated app's
+# profile/build version matched it exactly. Every caller's own hardcoded
+# number was a paraphrase of some specific HQ build's version at the time
+# it was written (see e.g. reinstall_update_03_update_to_test_two.yaml's
+# own superseded comment, and scripts/appium_scenarios.py's
+# _check_app_version, fixed the same way) - that number drifts on its own
+# every time the underlying HQ app gets republished, unrelated to whether
+# the update-under-test actually worked, so a real CI run kept catching a
+# real version-drift mismatch rather than a real bug. Only confirms the
+# dialog itself opened correctly (title text + "OK" button) now; callers
+# no longer pass/need EXPECTED_VERSION.
+#
+# Selectors/text verified against commcare-android source (read-only
+# reference, never modified by this repo):
+#   app/src/org/commcare/activities/StandardHomeActivity.java line ~214-216:
+#     R.id.action_about -> showAboutCommCareDialog() - lives in the home
+#     screen's "More options" overflow menu (app/res/menu/menu_app_home.xml),
+#     title set at runtime via menu.findItem(R.id.action_about)
+#     .setTitle(Localization.get("home.menu.about")) ->
+#     android_translatable_strings.txt: home.menu.about=About CommCare.
+#   app/src/org/commcare/views/dialogs/DialogCreationHelpers.java lines 23-53:
+#     buildAboutCommCareDialog(activity) defaults showAppInfo=true ->
+#     AppUtils.getCurrentVersionString() (app/src/org/commcare/AppUtils.java
+#     lines 155-182) -> Localization key "version.id.long"
+#     (android_translatable_strings.txt line 211): 'CommCare Android, version
+#     "${0}"(${1}). App v${5}. CommCare Version ${2}. Build ${3}, built on:
+#     ${4}' where ${5} = profileVersion = Profile.getVersion() of the
+#     currently seated app - this is what surfaces the sheet's "Version
+#     1/2/4/6" numbering on-device (distinct from the CommCare binary
+#     version, which is what home screen's own overflow separately manages
+#     via the rarely-visible "Update CommCare"/action_update_commcare item -
+#     see flows/updates_partial_failed/scenario_3_reverted_app_versions.yaml
+#     for why that item isn't used here).
+#   android_translatable_strings.txt: dialog.ok=OK (dialog's positive
+#     button).
+#   flows/update/update_target_developer_options_flow.yaml already exercises
+#   this same "More options" > "About CommCare" > "OK" path with a
+#   version-agnostic regex ("(?i).*CommCare Android, version.*") - same
+#   shape this subflow now uses too, per the UPDATE above.
+- tapOn: "More options"
+- tapOn: "About CommCare"
+- assertVisible: "About CommCare"
+- assertVisible: "OK"
+- tapOn: "OK"

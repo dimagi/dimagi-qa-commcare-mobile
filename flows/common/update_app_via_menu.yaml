@@ -1,0 +1,38 @@
+appId: org.commcare.dalvik
+---
+# Reusable: from the home screen, trigger "Update App" and, if a CCZ update
+# prompt appears, click through "Update to the Latest App Version" and the
+# final "Update to version X & log out" confirmation.
+# Strings verified against android_translatable_strings.txt:
+#   home.menu.update = "Update App"
+#   ccz.update.available.title = "New version of the application is available"
+#   ccz.update.action = "Update to the Latest App Version"
+#   updates.staged.version = "Update to version ${0} & log out"
+#
+# UPDATE, confirmed live (2026-08-10, recovery_measures verification run
+# 5a4ec96afbc87c985933d00b4c7d649f32af7c4f): the "New version of the
+# application is available" banner + "Update to the Latest App Version"
+# button step is NOT always shown as a separate, catchable state - the
+# update_app_flow.yaml failure screenshot for this exact step showed the
+# device already sitting on the LATER "Update to version 163 & log out"
+# confirmation despite the "New version..." wait timing out first. Whatever
+# renders that intermediate banner does so too briefly to reliably catch (or
+# this app/CommCare-version combination skips straight to the confirm
+# dialog) - both steps are now optional so a build that skips them doesn't
+# fail the whole subflow; the final confirm-dialog wait remains a hard
+# requirement since that's the state every caller actually needs.
+- tapOn: "More options"
+- tapOn: "Update App"
+- extendedWaitUntil:
+    visible: "New version of the application is available"
+    timeout: 8000
+    optional: true
+- tapOn:
+    text: "Update to the Latest App Version"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      text: "Update to version.*log out"
+    timeout: 30000
+- tapOn:
+    text: "Update to version.*log out"

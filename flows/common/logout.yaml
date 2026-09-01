@@ -1,0 +1,13 @@
+appId: org.commcare.dalvik
+---
+# Reusable logout subflow, run from the home screen.
+# Selectors verified against InstrumentationUtility.kt -> logout():
+# the "Log out of CommCare" tile can require several swipes up the home
+# NestedScrollView (id/nsv_home_screen) to scroll into view.
+- repeat:
+    times: 4
+    commands:
+      - swipe:
+          direction: UP
+          id: "org.commcare.dalvik:id/nsv_home_screen"
+- tapOn: "Log out of CommCare"

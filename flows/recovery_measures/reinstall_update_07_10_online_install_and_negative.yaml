@@ -1,0 +1,394 @@
+appId: org.commcare.dalvik
+tags:
+  - recovery_measures
+  - recovery_phase2
+  - automatable
+---
+# PHASE 2 (2026-08-10): must run with Test Three released (the default -
+# resolve_app_codes releases it automatically since ${APP_CODE_RU_TEST_THREE}
+# never appears literally in this file's steps but IS referenced in a
+# comment purely so run_suite.py's needed_keys text-scan picks it up: see
+# update_app_02_forced_two_to_three.yaml's header for the mechanism). This
+# row's own reinstall/uninstall dance resets to Test Two by explicit app
+# code (not a normal update-check), so it isn't affected by the "highest
+# released build wins" overshoot bug - it just needs Three to genuinely be
+# released so step 8's reinstall-chooser has something newer to react to.
+# ${APP_CODE_RU_TEST_THREE}
+# Master Mobile Plan (2026) > Recovery Measures > Recovery: Reinstall and
+# Update App > "Reinstall and update 7, 8, 9, 10" - continues directly from
+# reinstall_update_app_flow.yaml's "Reinstall/Update 6" (which tapped
+# "Reinstall Using CCZ" and waited for the resulting auto-logout). Assumes
+# that flow has just run and the device is sitting at the login screen.
+#   7 - Uninstall/reinstall Test Two via App Manager
+#   8 - Trigger the reinstall message again
+#   9 - This time choose the ONLINE install option (not CCZ), verify version
+#  10 - Negative test: no forced update once on the latest (Test Three)
+#
+# UNVERIFIED TEXT WARNING: per this workflow's established convention (see
+# reinstall_update_app_flow.yaml's header), the reinstall-message assertions
+# below are still best-effort case-insensitive regex even though (per the
+# next paragraph) the button text was actually confirmed hardcoded.
+#
+# Verified against commcare-android source (read-only reference, never
+# modified by this repo) - app/res/values/strings.xml:
+#   recovery_measure_reinstall_method = "Choose Reinstall Method" (dialog
+#     title, StandardAlertDialog built by
+#     ExecuteRecoveryMeasuresPresenter.showInstallMethodChooser())
+#   recovery_measure_reinstall_detail = "Your app needs to be reinstalled
+#     due to a problem, please select a method for reinstalling."
+#   recovery_measure_reinstall_online_method = "Online Reinstall" - the
+#     dialog's POSITIVE button, wired to doOnlineAppInstall(). NOTE: the
+#     sheet's own wording for this row calls it "Online Install", but the
+#     real on-device button text (confirmed in source, not guessed) is
+#     "Online Reinstall" - asserted/tapped by its real text below rather
+#     than the sheet's paraphrase, per this repo's "prefer exact matches
+#     wherever verified" convention.
+#   recovery_measure_reinstall_offline_method = "Reinstall Using CCZ" - the
+#     NEGATIVE button (already used by reinstall_update_app_flow.yaml's
+#     "Reinstall/Update 6"; NOT tapped again here, since this row's point is
+#     to exercise the other branch of the same chooser dialog).
+#
+# App Manager uninstall path (step 7) verified against commcare-android
+# source:
+#   LoginActivity.onCreateOptionsMenu(): MENU_APP_MANAGER item, text
+#     Localization.get("login.menu.app.manager") =
+#     "Go To App Manager" (android_translatable_strings.txt:345) - only
+#     available from the LOGIN screen's "More options" overflow (there is no
+#     equivalent item on the logged-in home screen), which is why this flow
+#     does the uninstall/reinstall from the login screen reached after
+#     "Reinstall/Update 6"'s auto-logout, before logging back in.
+#   AppManagerActivity (res/layout/app_manager.xml): R.id.apps_list_view
+#     (ListView, one row per installed app - this flow assumes exactly one
+#     app is installed, the Recovery Measures test app, same single-row
+#     assumption flows/common/submit_only_form.yaml documents for its own
+#     screen_suite_menu_list taps) -> AppManagerActivity.onItemClick() ->
+#     SingleAppManagerActivity.
+#   single_app_view.xml: R.id.uninstall_button, text @string/uninstall_app =
+#     "Uninstall" -> SingleAppManagerActivity.rebootAlertDialog() shows a
+#     StandardAlertDialog titled @string/uninstalling = "Uninstalling your
+#     app" with message @string/uninstall_reboot_warning = "CommCare will
+#     uninstall your app and then reboot to save changes.", positive button
+#     @string/ok = "OK" -> uninstall() -> AppLifecycleUtils.uninstall().
+#   Reinstall: app_manager.xml R.id.install_app_button (@string/install_app
+#     = "Install an App") -> CommCareSetupActivity ->
+#     SelectInstallModeFragment (res/layout/select_install_mode_fragment.xml)
+#     R.id.enter_app_location -> SetupEnterURLFragment
+#     (fragment_setup_enter_url.xml) R.id.edit_profile_location (EditText) +
+#     R.id.start_install (button, @string/install_button_start = "Start
+#     Install") -> InstallConfirmFragment (install_confirm_fragment.xml)
+#     R.id.btn_start_install (same @string/install_button_start text, a
+#     DIFFERENT id on the confirm screen) -> triggers the resource-engine
+#     install, surfaced the same way flows/install/install_07_install_as_
+#     mobile_user.yaml already waits for it ("Setting Up App").
+#
+# CAVEAT (real gap, not just unverified text): SetupEnterURLFragment needs a
+# real profile/app-install URL typed into edit_profile_location - there is no
+# barcode to scan and no existing env var in this repo for "the Recovery
+# Measures test app's install URL" (checked .env.example and every hq_setup/
+# JSON; the closest analog, HQ_MOBILE_WORKER_USERNAME's install-from-list
+# path in install_07/08, goes through a completely different screen that
+# doesn't need a URL at all). RECOVERY_APP_INSTALL_URL below is a NEW env var
+# this flow introduces for that purpose - it is NOT wired up anywhere else
+# in this repo (not in .env.example, not read by any script) and must be
+# added by whoever owns the Recovery Measures HQ app before this flow can
+# run for real; until then this step will fail at the inputText call below.
+# It is also genuinely unclear from source alone whether re-fetching that
+# same profile URL right after uninstalling actually resolves back to "Test
+# Two" specifically (as "Reinstall and update 7"'s label implies) or to
+# whatever HQ currently has released (Test Three, per
+# reinstall_update_4_mark_test_three.json) - CommCareHQ's profile-reference
+# resolution is a live HQ-side behavior this repo's read-only access to
+# commcare-android source cannot settle either way. If it resolves to Test
+# Three instead of Test Two, "Reinstall and update 8" (trigger the reinstall
+# message again) simply won't fire, since the device would already be
+# current - treat that as a signal to re-check this assumption against a
+# real HQ domain rather than a flow bug.
+# UPDATE (2026-08-10): this row's own name is "Reset WITH TEST TWO" - the
+# starting install below installs Test Two directly (matching the
+# "continues from reinstall_update_app_flow.yaml, which already left the
+# device on Test Two" assumption above, but self-contained per this repo's
+# own "each flow runnable in isolation" convention) rather than Test One.
+# The App Manager uninstall/reinstall further down also uses the pinned
+# Test Two code, genuinely resetting back to it - see
+# scripts/app_registry.py's RU_TEST_ONE/TWO/THREE entries for
+# the real saved_app_ids and citation. Test Three is released upfront
+# alongside Test One/Two, so once Test Two is reinstalled it's immediately
+# stale relative to it, which is exactly what triggers "Reinstall and
+# update 8"'s reinstall-chooser dialog on the next login below.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_RU_TEST_TWO}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+# UPDATE (2026-08-25), confirmed live in CI (real failure hierarchy dump):
+# the plain logout.yaml call below assumed this login always lands on the
+# normal home screen (with a "Log out of CommCare" tile to tap) - it can
+# instead land straight on "Choose Reinstall Method" if Test Two is already
+# stale relative to the released Test Three by this point (Test Three is
+# released alongside Test One/Two from the very start, per this file's own
+# header), same as the offline family's own documented "no home screen ever
+# reachable" behavior (see offline_reinstall_update_app_flow.yaml's header).
+#
+# UPDATE (2nd correction, 2026-08-25), confirmed live via a SECOND real
+# dispatch: this is genuinely non-deterministic run to run (the same class
+# of HQ-propagation-timing variance already hit repeatedly elsewhere this
+# session) - one dispatch hit the dialog immediately, the very next one
+# landed on the completely normal home screen instead. A hard assertVisible
+# on either outcome is wrong; handles BOTH real, confirmed possibilities:
+# if the dialog is already up, consume it via "Online Reinstall" (proven to
+# work later at "Reinstall and update 9" below, and doesn't need a local
+# CCZ file the way "Reinstall Using CCZ" does - see reinstall_update_05_06_
+# chooser_and_ccz.yaml's own real failure evidence for that gap); otherwise
+# fall through to the normal logout.yaml path (inlined here rather than via
+# runFlow, since runFlow itself has no `optional` flag to skip it when the
+# dialog branch already reached the login screen on its own). Either path
+# ends on the same login screen logout.yaml was always trying to reach.
+- extendedWaitUntil:
+    visible: "Choose Reinstall Method"
+    timeout: 10000
+    optional: true
+- tapOn:
+    text: "(?i).*Online Reinstall.*"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/edit_username"
+    timeout: 60000
+    optional: true
+- repeat:
+    times: 4
+    while:
+      notVisible:
+        id: "org.commcare.dalvik:id/edit_username"
+    commands:
+      - swipe:
+          direction: UP
+          id: "org.commcare.dalvik:id/nsv_home_screen"
+      - tapOn:
+          text: "Log out of CommCare"
+          optional: true
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/edit_username"
+    timeout: 15000
+# "Reinstall and update 7" - uninstall Test Two via the App Manager, reached
+# from the login screen's overflow menu.
+- tapOn: "More options"
+- tapOn: "Go To App Manager"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/apps_list_view"
+    timeout: 15000
+- tapOn:
+    id: "org.commcare.dalvik:id/apps_list_view"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/uninstall_button"
+    timeout: 10000
+- tapOn:
+    id: "org.commcare.dalvik:id/uninstall_button"
+- assertVisible: "Uninstalling your app"
+- tapOn: "OK"
+# Uninstall triggers a CommCare process reboot (see uninstall_reboot_warning
+# above) - give it room to settle back to the App Manager / setup screen.
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/install_app_button"
+    timeout: 30000
+- tapOn:
+    id: "org.commcare.dalvik:id/install_app_button"
+- tapOn:
+    id: "org.commcare.dalvik:id/enter_app_location"
+# UPDATE, confirmed live (run 31276111657 follow-up + round-5/6 re-runs):
+# see offline_09_uninstall_reinstall_test_two.yaml's own UPDATE comments
+# for the full root-cause writeup - this used to type a never-defined env
+# var, then a bare/re-declared reference to the real one, neither of which
+# actually resolved (a flow's own top-level env: frontmatter doesn't
+# interpolate ${...} against the outer session scope). Routed through an
+# inline runFlow instead - the same env: mapping mechanism already proven
+# to work for install_app_by_code.yaml's own APP_CODE. Uses the pinned Test
+# Two code, matching this row's own "reset WITH TEST TWO" name.
+- runFlow:
+    env:
+      RECOVERY_MEASURES_CODE: ${APP_CODE_RU_TEST_TWO}
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/edit_profile_location"
+      - inputText: "${RECOVERY_MEASURES_CODE}"
+- hideKeyboard
+- tapOn:
+    id: "org.commcare.dalvik:id/start_install"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/btn_start_install"
+    timeout: 15000
+- tapOn:
+    id: "org.commcare.dalvik:id/btn_start_install"
+# UPDATE, confirmed live (LOCAL-VERIFY-round3): removed - see
+# offline_09_uninstall_reinstall_test_two.yaml's own UPDATE comment for the
+# full root-cause writeup (transient state, missed even with a 60s wait;
+# the next login.yaml call already waits for the real durable end state).
+# UPDATE (2nd correction), confirmed live (LOCAL-VERIFY-round4): still
+# failed - device was stuck back on App Manager's own app list, not a login
+# screen. Defensively handled the CommCare-version-mismatch dialog
+# ("I'LL UPDATE LATER") here too.
+# UPDATE (3rd correction), per direct user observation (2026-08-10): see
+# offline_09_uninstall_reinstall_test_two.yaml's own 3rd-correction UPDATE
+# comment - tapping the app's own name/link doesn't open it into a login
+# screen; pressing back does.
+- tapOn:
+    text: "I.LL UPDATE LATER"
+    optional: true
+- tapOn:
+    id: "org.commcare.dalvik:id/btn_start_install"
+    optional: true
+- back
+# "Reinstall and update 8" - log back in; the reinstall-needed chooser should
+# fire again now that the device is back on a stale build relative to HQ's
+# released Test Three (see CAVEAT above on whether that stale build is
+# really "Test Two").
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+# OPEN ISSUE (2026-08-25), confirmed live in CI (real failure hierarchy
+# dump): this assertion fails - the device shows a completely normal home
+# screen (Start, Log out of CommCare, Logged In: test1, synced fine), not
+# the reinstall-chooser, even though Test Two was JUST reinstalled via App
+# Manager above with Test Three released. This is the SAME "genuine
+# unexplained anomaly" already documented for offline_09_uninstall_
+# reinstall_test_two.yaml (reinstalling via App Manager doesn't trigger
+# staleness detection the way a fresh install_app_by_code.yaml install
+# does, even under an apparently-identical release-state setup) - now
+# confirmed a SECOND time, in a different flow, against a different app
+# (RU_TEST_TWO/THREE here vs OFFLINE_TEST_TWO/THREE there), suggesting a
+# real, systemic difference in how CommCare's staleness check treats an
+# App-Manager-driven uninstall+reinstall versus a fresh code-based install,
+# not a one-off flake. Left as a hard assertion (not made optional) since
+# silently tolerating this would mean the row verifies nothing - if this is
+# a genuine product behavior difference, that's itself the real finding
+# this row should surface, not paper over.
+#
+# UPDATE (2026-08-26): the "genuine unexplained anomaly" theory above is
+# superseded - offline_09_uninstall_reinstall_test_two.yaml's own
+# 3rd-correction UPDATE (confirmed live a SECOND time via CI run
+# 32974908020, on retry_recovery_02_network_toggle_retry.yaml hitting this
+# identical plain-home-screen symptom) traced the real mechanism to a
+# concurrent, unrelated BrowserStack build's own HQ setup/teardown
+# transiently un-releasing the build this app needs "released" to look
+# stale, purely by timing coincidence - not a systemic App-Manager-reinstall
+# staleness gap. Since that race is transient (the other build's own
+# setup/teardown completes and re-releases normally), retry logout+login up
+# to 4 times to give the window time to pass before falling back to the
+# still-hard assertion below, mirroring ../common/login.yaml's own
+# established bounded-retry convention. logout.yaml's "run from the home
+# screen" precondition holds here because this loop's while-condition only
+# lets the body run when we're NOT on the chooser dialog, i.e. we're on the
+# plain home screen this symptom describes.
+- repeat:
+    times: 4
+    while:
+      notVisible:
+        text: "Choose Reinstall Method"
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - runFlow: ../common/logout.yaml
+      # UPDATE (2026-08-26), confirmed live via a real failure screenshot (CI
+      # run 32982037505, session 16a27e19...1dcba237): the retry loop's own
+      # detection worked exactly as intended - "Choose Reinstall Method" WAS
+      # genuinely on-screen at the moment of failure - but the shared
+      # ../common/login.yaml call used for the retry's re-login hard-failed
+      # first, because it unconditionally taps edit_username and waits up to
+      # ~17s for it. For an app with a pending recovery measure, logging back
+      # out and back in can land DIRECTLY on the forced screen (skipping the
+      # login form) rather than always showing it first - a real, evidenced
+      # race between login.yaml's tap and the app's own async redirect to the
+      # measure screen. login.yaml itself must stay strict for every OTHER
+      # caller (its retry-on-server-error hardening depends on reliably
+      # reaching the post-login screen), so this loop uses its own tolerant,
+      # LOCAL re-login sequence instead of the shared one - every tap
+      # optional, so landing on the forced screen mid-attempt is treated as
+      # fine (the outer while-condition will simply see it on the next
+      # check) rather than a hard failure. Same fix as offline_09_uninstall_
+      # reinstall_test_two.yaml's own 5th-correction UPDATE.
+      - tapOn:
+          id: "org.commcare.dalvik:id/edit_username"
+          optional: true
+      - tapOn:
+          text: "Skip"
+          optional: true
+      - tapOn:
+          id: "org.commcare.dalvik:id/edit_username"
+          optional: true
+      - eraseText
+      - inputText: "${CC_TEST_USERNAME}"
+      - tapOn:
+          id: "org.commcare.dalvik:id/edit_password"
+          optional: true
+      - tapOn:
+          text: "Skip"
+          optional: true
+      - tapOn:
+          id: "org.commcare.dalvik:id/edit_password"
+          optional: true
+      - eraseText
+      - inputText: "${CC_TEST_PASSWORD}"
+      - hideKeyboard
+      - tapOn:
+          id: "org.commcare.dalvik:id/login_button"
+          optional: true
+      - extendedWaitUntil:
+          notVisible:
+            id: "org.commcare.dalvik:id/dialog_cancel_button"
+          timeout: 30000
+          optional: true
+- assertVisible: "Choose Reinstall Method"
+- assertVisible:
+    text: "(?i).*Online Reinstall.*"
+- assertVisible:
+    text: "(?i).*Reinstall Using CCZ.*"
+# "Reinstall and update 9" - this time pick the ONLINE install branch
+# (doOnlineAppInstall() -> reinstallApp(getProfileReference())), not the CCZ
+# branch already exercised by reinstall_update_app_flow.yaml's step 6.
+- tapOn:
+    text: "(?i).*Online Reinstall.*"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/edit_username"
+    timeout: 60000
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+# "Reinstall and update 9" (cont.) - verify version is now Test Three.
+# UPDATE (2026-08-19), per direct user instruction: dropped EXPECTED_VERSION
+# - see check_app_version_via_about.yaml's own UPDATE comment for the full
+# citation (HQ build version drift, not a real regression signal).
+- runFlow: ../common/check_app_version_via_about.yaml
+- runFlow: ../common/submit_only_form.yaml
+- assertVisible:
+    text: "(?i).*form.*success.*completed.*"
+# UPDATE (2026-08-25), confirmed live elsewhere this session (auto_cc_
+# update_03/geoservices_02's own identical fix): Maestro's textRegex
+# requires a FULL match, not substring - the real device text is "Sync
+# Successful! Your information is up to date.", longer than the bare
+# "Sync Successful" this used to check. Wildcarded.
+- tapOn: "Sync with Server"
+- extendedWaitUntil:
+    visible:
+      text: "(?i).*Sync Successful.*"
+    timeout: 30000
+# "Reinstall and update 10" - negative check: already on latest (Test
+# Three), no further forced reinstall/update prompt.
+- assertNotVisible: "Choose Reinstall Method"
+- assertNotVisible:
+    text: "(?i).*reinstall.*required.*"
+- assertNotVisible:
+    text: "(?i).*update.*required.*"

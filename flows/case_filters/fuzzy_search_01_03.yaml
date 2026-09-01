@@ -1,0 +1,149 @@
+appId: org.commcare.dalvik
+tags:
+  - case_filters
+  - partial
+---
+# Master Mobile Plan (2026) > Case Filters > "Fuzzy Search 1" (enable Fuzzy
+# Search Matches in Settings), "2" (locate exact match by typing letters
+# incrementally, highlighted green), "3" (locate a fuzzy/misspelled match).
+#
+# PARTIAL: the sheet's own prerequisite note says "in order to complete this
+# test you will have to have one case with the associated name 'Christy'" -
+# this used to be treated as an undischarged test-data dependency (no case
+# named "Christy" actually exists in this app's live data - confirmed live
+# via a real BrowserStack failure: searching "Krist" surfaced an unrelated
+# "Case List Test" case, not "Christy"). Now self-contained: this flow
+# registers its own "Christy" case first via Case Tests -> Create a Case
+# (same registration pattern as flows/form_submissions/case_name_size_01_02_
+# length_warning_and_not_saved.yaml), matching this repo's "every flow
+# runnable in isolation" convention. Still PARTIAL for a separate reason:
+# also needs HQ web-user install (install_app_as_web_user.yaml).
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: ".*Basic Tests$") - a fresh
+# BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
+# null.
+#
+# Verified against commcare-android source (read-only reference, not modified):
+#   The CCZ's own en/app_strings.txt (extracted read-only from resources/
+#     qateam - [Master] Basic Tests - v1141.ccz, never committed/modified):
+#     modules.m3="Case Tests", forms.m3f1="Update a Case" - matches this
+#     tab's own "Case Tests -> Update a Case" navigation exactly.
+#   CaseListSearchTest.kt (a DIFFERENT dedicated search-test app, "Test:
+#     List Searching", not this tab's "Basic Test" app - but the search
+#     WIDGET mechanics it exercises are core CommCare chrome, not app-
+#     specific content, same reasoning as this repo's Support Menus flows):
+#     R.id.search_action_bar (opens the search box), the SearchAutoComplete
+#     view class for typed input, "$matched of $totalSize results for your
+#     search: \"$searchText\"" as the live-count text pattern (used below
+#     as a substring match since the exact counts depend on this app's real
+#     case data, not the 4-case fixture CaseListSearchTest.kt controls).
+#   The sheet's own "Settings -> Fuzzy Search Matches -> Enabled" step: the
+#     settings-menu labels ("Settings", "Auto Update Frequency" etc.) are
+#     confirmed via MenuTests.kt's homeMenuItems/checkStringExists (a
+#     different dedicated app, but again core CommCare Settings-screen
+#     chrome) - "Fuzzy Search Matches" itself is this flow's own best-effort
+#     tap-by-text, not independently source-confirmed.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_BASIC_TESTS}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+
+# --- Setup: register the "Christy" case this flow's own search steps
+# depend on (see PARTIAL note above for why this is here now). ---
+- tapOn: "Start"
+- tapOn: "Case Tests"
+- tapOn: "Create a Case"
+# UPDATE, confirmed live (2026-08-18, real Android 16 failure): the
+# hideKeyboard that used to sit here fell back to a real back-press once
+# the keyboard had already auto-dismissed (device/OS-dependent timing -
+# never triggered on the Android 10 device this flow was originally
+# tuned against), opening an unwanted "Exit Form?" dialog. nav_btn_next
+# lives in the top toolbar (screen_form_entry.xml), above the question
+# content, so an open keyboard covering the bottom never blocks it -
+# same reasoning already proven live in
+# flows/externalapp_tests/external_app_02_start_commcare_submit_form.yaml's
+# own fix for this identical bug. Dropped hideKeyboard entirely instead
+# of trying to guess a safer place to call it.
+- inputText: "Christy"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+# UPDATE, confirmed live 2026-08-12: hardened against the same
+# already-advanced-past-Finish race fixed elsewhere in this repo today -
+# tap is now optional, with a fallback wait on the real end state.
+- tapOn: "Confirm - Please create this case."
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"
+    optional: true
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 15000
+
+# --- Fuzzy Search 1: enable Fuzzy Search Matches in Settings. ---
+# UPDATE, found via a real BrowserStack failure: this used to `back` twice.
+# "Fuzzy Search Matches" is a ListPreference-style row - tapping "Enabled"
+# selects the value and auto-dismisses its own dialog (same mechanic as
+# DeveloperPreferences' ListPreference rows, e.g. cc-offer-pin-for-login -
+# see flows/common/enable_pin_login_option.yaml), so only ONE screen (the
+# Settings activity itself) is actually open by this point. The failing
+# run's hierarchyRoot dump showed the SAMSUNG HOME LAUNCHER on screen right
+# after this block - the second `back` had nothing left to close inside the
+# app and fell through to real OS back-navigation, exiting CommCare
+# entirely (same class of bug as install_app_as_web_user.yaml's earlier
+# hideKeyboard-repeat caveat).
+- tapOn: "More options"
+- tapOn: "Settings"
+- assertVisible: "CommCare > Settings"
+- tapOn: "Fuzzy Search Matches"
+- tapOn: "Enabled"
+- back
+
+# --- Fuzzy Search 2: incremental exact-match search, highlighted. ---
+- tapOn: "Start"
+- tapOn: "Case Tests"
+- tapOn: "Update a Case"
+- tapOn:
+    id: "org.commcare.dalvik:id/search_action_bar"
+- inputText: "c"
+# UPDATE, found via a real BrowserStack failure: confirmed live the actual
+# rendered text is "N of M results for your derp: \"c\"" - a genuine (if
+# oddly-worded) app string, not "search". Matching on "results for your"
+# alone rather than hardcoding that specific placeholder word, in case it's
+# inconsistent across CCZ versions.
+- assertVisible:
+    text: "(?i).*results for your.*"
+- inputText: "h"
+- assertVisible: "Christy"
+
+# --- Fuzzy Search 3: fuzzy/misspelled match. ---
+- tapOn:
+    id: "org.commcare.dalvik:id/search_action_bar"
+    optional: true
+- eraseText
+- inputText: "rist"
+# UPDATE (3rd correction, 2026-08-17): confirmed live - "rist" is an exact
+# substring of "Christy" (Ch-RIST-y), not just a loose fuzzy near-miss like
+# "Krist" was. The earlier two corrections below fought an ever-growing,
+# loosely-matched result set (70+ hits, "Christy" buried far down) that a
+# genuinely fuzzy misspelling like "Krist" produces against this shared,
+# never-pruned domain - switching to a real substring narrows the match
+# dramatically, avoiding that whole class of problem rather than working
+# around it with bigger scrolls/timeouts. Kept the hideKeyboard +
+# scrollUntilVisible safety net below regardless, since this domain's
+# result count only grows over time and a plain assertVisible alone
+# already proved unreliable once (see the two corrections' own history).
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      text: "Christy"
+    direction: DOWN
+    timeout: 30000
+- assertVisible: "Christy"

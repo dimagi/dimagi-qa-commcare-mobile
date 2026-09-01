@@ -1,0 +1,85 @@
+appId: org.commcare.dalvik
+tags:
+  - recovery_measures
+  - recovery_phase1
+  - automatable
+---
+# PHASE 1 (2026-08-10): must run with Test Three un-released (see
+# hq_setup/recovery_measures/phase1_unrelease_test_three.json) - confirmed
+# live that CommCareHQ's normal update-check offers the HIGHEST-version
+# released build, so with Three also released this step's own update-check
+# would jump straight to Three instead of Two, failing the
+# EXPECTED_VERSION="2" check below. See
+# update_app_01_normal_update_to_two.yaml's header for the full writeup.
+# Master Mobile Plan (2026) > Recovery Measures > Recovery: Reinstall and
+# Update App > "Reinstall and update 3" - "Return to mobile, update CommCare
+# to Test Two". Written as its own standalone flow file rather than an
+# extension of reinstall_update_app_flow.yaml (that file already covers
+# Reinstall/Update 1, 5, 6 and is described as an existing template - keeping
+# it untouched avoids colliding with anything already built around it) - this
+# flow is the natural bridge step between it and
+# hq_setup/recovery_measures/reinstall_update_2_mark_test_two.json /
+# reinstall_update_4_mark_test_three.json.
+#
+# UPDATE (2026-08-10): the ORDER OF OPERATIONS below described a 5-step,
+# multi-Maestro-run choreography assuming separate HQ mark-released actions
+# had to be staged BETWEEN each on-device step. That's no longer needed -
+# Test One/Two/Three are all released together, upfront, by run_suite.py's
+# normal pre-run code-resolution pass (see scripts/app_registry.py's
+# RU_TEST_ONE/TWO/THREE entries) - the recovery-measure/
+# update triggers are gated on the CURRENTLY-INSTALLED build's own version
+# against an already-configured min/max window, not on when some OTHER
+# build was released, so there's no ordering dependency between "which
+# build is released" and "which on-device flow runs" left to preserve.
+# This flow remains a separate file (rather than folded into
+# reinstall_update_app_flow.yaml) simply because the sheet itself splits
+# "Reinstall and update 3" out as its own row with its own narrative.
+#
+# Reuses flows/common/update_app_via_menu.yaml verbatim (same subflow
+# reinstall_update_app_flow.yaml itself uses to move Test One -> Test Two) -
+# see that file's header for its own selector/string citations
+# (home.menu.update = "Update App", ccz.update.available.title, etc., all
+# from android_translatable_strings.txt). Since AppUtils.notOnLatestAppVersion()
+# is what a normal CCZ-update banner reacts to (MEASURE_TYPE_APP_UPDATE's own
+# code path, distinct from the reinstall chooser) and Test Two was just
+# marked released in the HQ pre-step above, "Update App" from the overflow
+# menu is expected to offer the CCZ update to Test Two here in the ordinary
+# (non-recovery-measure) way.
+# UPDATE (2026-08-10): "Test One"/"Test Two"/"Test Three" are three
+# SPECIFIC, already-cut builds (confirmed live via a user-supplied
+# recording + this app's own Releases page) - see
+# scripts/app_registry.py's RU_TEST_ONE/TWO/THREE entries for
+# the real saved_app_ids and the full citation. Test Two/Three are released
+# upfront alongside Test One by run_suite.py's normal pre-run
+# code-resolution pass, so update_app_via_menu.yaml below has a real
+# release to offer without a separate HQ action staged mid-flow.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_RU_TEST_ONE}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+# "Reinstall and update 3" - update CommCare app to Test Two via the normal
+# "Update App" menu path (not the recovery-measures forced flow). Its own
+# final tap ("Update to version X & log out") already logs out.
+- runFlow: ../common/update_app_via_menu.yaml
+# Confirm the update actually landed.
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+# UPDATE (2026-08-19), per direct user instruction: dropped the hardcoded
+# EXPECTED_VERSION="160" assertion below. It was already a workaround for
+# HQ's real build version drifting out from under the sheet's own "Version
+# 1/2/3" narrative numbers (see the superseded comment this replaced) - a
+# real CI run showed "App v163" here again (Test Three's version, per that
+# same comment), meaning the number drifts on its own independent of this
+# flow's own correctness. check_app_version_via_about.yaml itself now
+# drops this same assertion for every caller (see its own UPDATE comment),
+# so this can go back to using the shared subflow directly.
+- runFlow: ../common/check_app_version_via_about.yaml
+- runFlow: ../common/logout.yaml

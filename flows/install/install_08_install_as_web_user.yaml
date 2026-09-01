@@ -1,0 +1,229 @@
+appId: org.commcare.dalvik
+tags:
+  - install
+  - partial
+---
+# Master Mobile Plan (2026) > Install > "Install 8" - Install app as a web user.
+# PARTIAL: needs a valid HQ web-user email/password.
+- launchApp:
+    clearState: true
+# Waits for "More options" rather than tapping it blindly: live BrowserStack
+# evidence showed this exact tap (the very first interaction after a cold
+# app launch) failing with "Element not found" - most likely
+# CommCareSetupActivity/its toolbar hasn't finished rendering yet
+# immediately after launchApp.
+- extendedWaitUntil:
+    visible: "More options"
+    timeout: 20000
+- tapOn: "More options"
+- tapOn: "See Apps for My User"
+# Waits for switch_button rather than tapping it blindly, same reasoning as
+# the "More options" wait above: "See Apps for My User" navigates into a
+# new activity (InstallFromListActivity), and a real BrowserStack failure
+# (on flows/common/install_app_as_web_user.yaml, which shares this exact
+# sequence) showed "Element not found: Id matching regex:
+# .../switch_button" here - most likely that activity hadn't finished
+# rendering yet immediately after the navigating tap.
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/switch_button"
+    timeout: 15000
+- tapOn:
+    id: "org.commcare.dalvik:id/switch_button"
+# Confirmed against real BrowserStack runs: tapping into EITHER of this
+# screen's 2 fields for the first time can trigger Gboard's one-time "Get
+# Smart content directly in the keyboard" system consent dialog - a
+# full-screen OS-level overlay unrelated to this app. It's NOT reliably
+# tied to just the very FIRST tap of the whole session - confirmed live
+# (2026-08-08, frame-by-frame video review of install_07's identical
+# pattern) it can appear only once a LATER field gets focus.
+#
+# UPDATE, UPDATE (2nd correction), and UPDATE (3rd correction) - three
+# progressively more careful timing-based fixes (re-tap the field after
+# dismissing "Skip"; then also waitForAnimationToEnd before the re-tap)
+# were each confirmed live (on install_07's identical pattern, builds
+# fb330cc0e184ee53e4ad5351b6f1f846cf986b38 and
+# 1c31858ff60d3f854effd23ffdfbea9527184bf9) to reduce but NOT eliminate the
+# bug - dismissing Gboard's popup can reassign Android focus back to a
+# PREVIOUSLY-active field asynchronously regardless of how many
+# waits/re-taps are inserted. Rather than keep guessing at timing, each
+# field below now SELF-VERIFIES: a bounded repeat-while loop keyed on the
+# combined id+text selector (Maestro ANDs multiple properties on one
+# selector object - both must match the SAME element), which only exits
+# once that specific field visibly holds exactly the intended value,
+# retrying (re-tap, dismiss Skip if present, retype) up to 3 times if not.
+#
+# UPDATE (4th correction), confirmed live (2026-08-08, real BrowserStack
+# failure + user-provided screen recording): this file's own
+# HQ_WEB_USER_EMAIL ("kbordoloi+maestro@dimagi.com") contains "+" and "." -
+# both regex metacharacters - and the self-verify condition below fed the
+# value straight into a regex with NO escaping, so it could never actually
+# match itself. The loop therefore ran unconditionally on every attempt,
+# and the resulting EXTRA tap/erase/type cycles gave the real Gboard focus
+# race more chances to fire mid-loop - confirmed live: the email field
+# ended up genuinely doubled ("...@dimagi.com@dim..."). Fixed by wrapping
+# the interpolated value in Java regex's \Q...\E literal-quote syntax (see
+# flows/common/login.yaml's own header for the fuller writeup - this is the
+# file where the bug was actually caught).
+- repeat:
+    times: 3
+    while:
+      notVisible:
+        id: "org.commcare.dalvik:id/edit_email"
+        text: "^\\Q${HQ_WEB_USER_EMAIL}\\E$"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/edit_email"
+      - tapOn:
+          text: "Skip"
+          optional: true
+      - tapOn:
+          id: "org.commcare.dalvik:id/edit_email"
+      - eraseText
+      - inputText: "${HQ_WEB_USER_EMAIL}"
+# UPDATE (2nd correction) - a single hideKeyboard call, exactly where it was
+# originally, IS correct here and was never the actual problem: on Android
+# a back-press's FIRST effect, when an IME is genuinely showing, is to
+# dismiss ONLY the keyboard, not navigate the activity back - that only
+# happens on a SECOND back-press once no keyboard remains. The real bug
+# (see the UPDATE comment below) was calling hideKeyboard MULTIPLE times in
+# a row after the keyboard was already gone, each one then falling through
+# to a real back-navigation. A previous edit here overcorrected by removing
+# hideKeyboard entirely and tapping id/feature_prompt instead - confirmed
+# via a real BrowserStack screenshot (from install_app_as_web_user.yaml,
+# which shares this exact sequence) that this does NOT dismiss the keyboard
+# at all (tapping a plain, non-focusable TextView doesn't reliably steal
+# focus away from an EditText on Android), leaving the keyboard covering
+# get_apps_button. Restored the single hideKeyboard calls, kept the repeat
+# block removed.
+- hideKeyboard
+- repeat:
+    times: 3
+    while:
+      notVisible:
+        id: "org.commcare.dalvik:id/edit_password"
+        text: "^\\Q${HQ_WEB_USER_PASSWORD}\\E$"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/edit_password"
+      - tapOn:
+          text: "Skip"
+          optional: true
+      - tapOn:
+          id: "org.commcare.dalvik:id/edit_password"
+      - eraseText
+      - inputText: "${HQ_WEB_USER_PASSWORD}"
+- hideKeyboard
+- tapOn:
+    text: "Skip"
+    optional: true
+# UPDATE - do NOT retry hideKeyboard here (a previous version of this file
+# did, following install_07's example): confirmed against Maestro's own
+# docs, on Android hideKeyboard ALWAYS sends a back-button press regardless
+# of whether a keyboard is showing - calling it AGAIN once the single call
+# above has already dismissed the keyboard just navigates the activity back,
+# and enough repeats exit the app entirely. Confirmed via a real BrowserStack
+# failure (on install_app_as_web_user.yaml, which shares this exact
+# sequence) whose commandlogs hierarchy dump showed the SAMSUNG HOME
+# LAUNCHER on screen at this exact point. A single wait for get_apps_button
+# is enough now that the one hideKeyboard call above has dismissed the
+# keyboard.
+#
+# UPDATE (2nd correction), confirmed live (2026-08-08, install_07's
+# identical pattern, self-verify build
+# 3df3f4916d9308f1ca4e575975f869f206b3839d): per-field self-verify loops
+# alone weren't sufficient - a LATER field's popup handling can corrupt an
+# EARLIER field that already verified correct (a cross-field async event,
+# not a same-field timing issue). Fix: one final all-fields correction pass
+# here, at the very end of this screen's interaction, re-verifying and
+# re-fixing each field immediately before moving on. Each loop ends with
+# its OWN hideKeyboard (not a trailing standalone one) since hideKeyboard
+# with no keyboard actually showing falls through to a real back-press - a
+# correction loop that ran zero iterations (the common case) must not
+# re-hide an already-hidden keyboard.
+- repeat:
+    times: 2
+    while:
+      notVisible:
+        id: "org.commcare.dalvik:id/edit_email"
+        text: "^\\Q${HQ_WEB_USER_EMAIL}\\E$"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/edit_email"
+      - eraseText
+      - inputText: "${HQ_WEB_USER_EMAIL}"
+      - hideKeyboard
+- repeat:
+    times: 2
+    while:
+      notVisible:
+        id: "org.commcare.dalvik:id/edit_password"
+        text: "^\\Q${HQ_WEB_USER_PASSWORD}\\E$"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/edit_password"
+      - eraseText
+      - inputText: "${HQ_WEB_USER_PASSWORD}"
+      - hideKeyboard
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/get_apps_button"
+    timeout: 10000
+- tapOn:
+    id: "org.commcare.dalvik:id/get_apps_button"
+# UPDATE, confirmed live (2026-08-08, real BrowserStack failure on build
+# fc5f54da23d29b9a16e139a2413b0496a0798e12 - same wait, same exact 30.0s
+# gap between RUNNING and FAILED, on install_07's identical apps_list_view
+# wait across 3 separate builds): 30s isn't consistently enough for HQ to
+# return the app list - a genuine slow server response, not a wrong
+# selector. Raised to 60s, matching this flow's own "Setting Up App" wait
+# one step below.
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/apps_list_view"
+    timeout: 60000
+- tapOn:
+    id: "org.commcare.dalvik:id/apps_list_view"
+# Confirmed against a real BrowserStack run: this tap actually DOES trigger a
+# real install (a follow-up screenshot showed "Setting Up App, Step 67 of
+# 90" actively progressing) even when Maestro reports the tap itself as
+# FAILED - it can't reconcile its hierarchy-change check with the heavy
+# native "Setting Up App" dialog taking over the screen. optional:true stops
+# that self-reported failure from aborting the flow; the extendedWaitUntil
+# below is the real success gate.
+- tapOn:
+    id: "org.commcare.dalvik:id/install_app_button"
+    retryTapIfNoChange: false
+    optional: true
+# UPDATE, confirmed live (2026-08-08, full-suite run 31256655977): this used
+# to be a hard (non-optional) assertion and failed even though the install
+# genuinely succeeded - the failure screenshot showed the app already
+# sitting on the login screen ("Welcome back! Please log in."). Same root
+# cause flows/common/install_app_as_web_user.yaml's own FIFTH CAVEAT
+# already documents and fixed there: "Setting Up App" is only a
+# transitional loading screen that doesn't reliably render long enough (or
+# at all) to be caught by a poll-based wait - this standalone file's copy
+# of the sequence never got that same fix. Made optional, with the actual
+# login screen (this flow's real success criterion) asserted afterward.
+- extendedWaitUntil:
+    visible: "Setting Up App"
+    timeout: 60000
+    optional: true
+# UPDATE (2026-08-13): confirmed live via a user-supplied screen recording
+# (frame-by-frame review, not reproduced on a physical device) - right as
+# "Setting Up App" finishes and the login screen (edit_username) should
+# render.
+#
+# UPDATE (2nd correction, 2026-08-13): the launchApp-based "force a
+# repaint" fix tried here was ITSELF causing real, confirmed damage - see
+# flows/common/install_app_by_code.yaml's own 2nd-correction UPDATE
+# comment for the full writeup (CI run 31691239630 showed ~15+ unrelated
+# flows across every module failing at this exact wait, matching a
+# user-supplied recording of the install stalling and reverting to the
+# pre-install screen - launchApp backgrounding the app mid-install can
+# interrupt CommCare's own background install task). Removed the
+# relaunch; just a longer plain wait instead.
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/edit_username"
+    timeout: 120000

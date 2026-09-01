@@ -4,17 +4,63 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Run only flows carrying this tag (e.g. mobile_pins). Leave blank to run everything."
+        description: "Run only flows carrying this tag. Pick All to run everything (splits across 2 parallel jobs)."
         required: false
-        default: ""
+        type: choice
+        default: "All"
+        options:
+          - "All"
+          - case_filters
+          - conditional_enum_in_case_list
+          - date_widgets
+          - externalapp_tests
+          - form_submissions
+          - install
+          - login
+          - menu_badges
+          - mobile_pins
+          - multimedia
+          - other_error_tests
+          - prompted_updates
+          - recovery_measures
+          - right_to_left_text
+          - session_expiration
+          - support_menus
+          - trigger_device_logs
+          - update
+          - updates_2_49
+          - updates_partial_failed
       release_tag:
-        description: "commcare-android GitHub release tag to test (e.g. commcare_2.63.4). Leave blank for latest."
+        description: "commcare-android GitHub release tag to test (e.g. commcare_2.63.4). Leave blank for latest. Ignored unless apk_source below is left as 'GitHub Releases'."
         required: false
         default: ""
-      devices:
-        description: "Comma-separated BrowserStack device names."
+      apk_source:
+        description: "APK to test. 'GitHub Releases' uses release_tag above (or latest if blank) - the normal path. Any other option tests that committed resources/*.apk file directly instead (e.g. a build not yet published as a release). NOTE: this list is a static snapshot - a newly-added resources/*.apk needs a matching option added here by hand, workflow_dispatch choices can't be generated from the repo at trigger time."
         required: false
-        default: "Samsung Galaxy S20-10.0"
+        type: choice
+        default: "GitHub Releases"
+        options:
+          - "GitHub Releases"
+          - "resources/app-commcare-release-Android16.apk"
+          - "resources/commcare_2.45_release.apk"
+          - "resources/Mobile API Testing App-release.apk"
+      android_version:
+        description: "Android version to test on (maps to a Samsung Galaxy flagship BrowserStack has real devices for at that version). Ignored if 'devices' below is also set."
+        required: false
+        type: choice
+        default: "16.0"
+        options:
+          - "16.0"
+          - "15.0"
+          - "14.0"
+          - "13.0"
+          - "12.0"
+          - "11.0"
+          - "10.0"
+      devices:
+        description: "Comma-separated BrowserStack device names - overrides android_version above when set (e.g. to pick a specific non-Samsung device)."
+        required: false
+        default: ""
       hq_setup:
         description: "Path to an hq_setup/*.json pre-step file to run first (optional)."
         required: false
@@ -24,8 +70,72 @@ on:
     - cron: "0 3 * * *"
 
 jobs:
-  maestro-tests:
+  # Computes the matrix maestro-tests fans out over. A specific --tag pick
+  # (or nothing typed in, which never happens via the dropdown but covers any
+  # future non-choice trigger) runs as a single matrix entry - no parallelism
+  # needed for one tag. "All" (the dropdown's default, and what the nightly
+  # schedule trigger implies since it has no inputs at all) splits into 2
+  # roughly-balanced groups so the full suite doesn't have to run serially -
+  # see the tag lists below for why they're split this way.
+  prepare:
     runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      start_epoch: ${{ steps.set-matrix.outputs.start_epoch }}
+    steps:
+      - id: set-matrix
+        run: |
+          echo "start_epoch=$(date +%s)" >> "$GITHUB_OUTPUT"
+          TAG="${{ github.event.inputs.tag }}"
+          if [ -z "$TAG" ] || [ "$TAG" = "All" ]; then
+            # 3-way split (was 2) to further cut per-runner wall-clock time.
+            # UPDATE, confirmed live (2026-08-08): the original split above
+            # grouped tags by rough conceptual similarity, not actual flow
+            # FILE COUNT per tag - it ended up wildly unbalanced (group-a
+            # alone carried multimedia(27) + mobile_pins(17) + install(5) +
+            # login(3) + date_widgets(3) + case_filters(1) +
+            # conditional_enum_in_case_list(1) = 57 files vs group-c's 17),
+            # which is exactly why group-a was still running 2+ hours after
+            # group-b had already finished in a real run. Rebalanced here by
+            # greedily bin-packing each tag's actual file count (computed via
+            # `doc.get("tags")` the same way scripts/run_suite.py's own
+            # select_flow_files() resolves them - every flow file carries
+            # exactly one of these 20 module tags, no overlaps) into 3 groups
+            # of the most equal total size possible: 41/41/40 flow files
+            # (not counting flows/common/*.yaml's 19 files, which
+            # select_flow_files() always adds to every group's run
+            # regardless of tags).
+            MATRIX='{"include":[
+              {"name":"group-a","tags":"multimedia install updates_2_49 other_error_tests support_menus trigger_device_logs"},
+              {"name":"group-b","tags":"mobile_pins prompted_updates externalapp_tests updates_partial_failed login case_filters conditional_enum_in_case_list update"},
+              {"name":"group-c","tags":"form_submissions recovery_measures right_to_left_text date_widgets session_expiration menu_badges"}
+            ]}'
+          else
+            MATRIX="{\"include\":[{\"name\":\"single\",\"tags\":\"$TAG\"}]}"
+          fi
+          echo "matrix=$(echo "$MATRIX" | tr -d '\n')" >> "$GITHUB_OUTPUT"
+
+  maestro-tests:
+    needs: prepare
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.prepare.outputs.matrix) }}
+    # UPDATE (2026-08-28), confirmed live (CI run 33178278102, group-a):
+    # scripts/download_apk.py's own GitHub API calls (resolving/downloading
+    # the CommCare release APK, called by every run_suite.py/run_appium_*.py
+    # invocation below) were UNAUTHENTICATED - it already supports adding a
+    # GITHUB_TOKEN Authorization header if the env var is set (raises
+    # GitHub's API rate limit from 60/hour to 5000/hour), but this workflow
+    # never actually set it, so every job here shared the same 60/hour
+    # unauthenticated ceiling. A real "HTTP Error 403: rate limit exceeded"
+    # crashed this exact job (traced directly to download_apk.py's
+    # get_release_by_tag call) under today's unusually heavy CI dispatch
+    # volume. Set at the job level (not per-step) so every step in this job
+    # that might call download_apk.py is covered - GITHUB_TOKEN is provided
+    # free by GitHub Actions for every job, no extra secret needed.
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -35,19 +145,6 @@ jobs:
 
       - name: Install dependencies
         run: pip install -r requirements.txt
-
-      # reports/history.json is what the report's trend chart is drawn from -
-      # each run is a fresh checkout, so without this it'd always show a
-      # single point. Restore keyed on run_id first (never matches) so it
-      # falls through to the newest "report-history-" cache via restore-keys,
-      # then save under this run's own id - a fixed save key would collide
-      # with the previous run's immutable cache entry.
-      - name: Restore report history
-        uses: actions/cache/restore@v4
-        with:
-          path: reports/history.json
-          key: report-history-${{ github.run_id }}
-          restore-keys: report-history-
 
       - name: Run Maestro suite on BrowserStack
         env:
@@ -66,11 +163,466 @@ jobs:
           HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
           HQ_WEB_USER_PASSWORD: ${{ secrets.HQ_WEB_USER_PASSWORD }}
         run: |
-          ARGS=(--devices "${{ github.event.inputs.devices || 'Samsung Galaxy S20-10.0' }}")
-          if [ -n "${{ github.event.inputs.tag }}" ]; then ARGS+=(--tag "${{ github.event.inputs.tag }}"); fi
-          if [ -n "${{ github.event.inputs.release_tag }}" ]; then ARGS+=(--release-tag "${{ github.event.inputs.release_tag }}"); fi
+          # BrowserStack ties each Android version to specific real devices
+          # (not a version you can pick independently of hardware) - this
+          # maps android_version to the Samsung Galaxy flagship BrowserStack
+          # actually has at that version (confirmed against
+          # api-cloud.browserstack.com/app-automate/devices.json), same
+          # device family/tier convention as the S20/Android 10 default this
+          # replaces. Only used when `devices` is left blank - set `devices`
+          # directly to override with a specific/non-Samsung device.
+          declare -A ANDROID_DEVICE_MAP=(
+            ["16.0"]="Samsung Galaxy S26"
+            ["15.0"]="Samsung Galaxy S25"
+            ["14.0"]="Samsung Galaxy S24"
+            ["13.0"]="Samsung Galaxy S23"
+            ["12.0"]="Samsung Galaxy S22"
+            ["11.0"]="Samsung Galaxy S21"
+            ["10.0"]="Samsung Galaxy S20"
+          )
+          ANDROID_VERSION="${{ github.event.inputs.android_version || '16.0' }}"
+          DEVICES="${{ github.event.inputs.devices }}"
+          if [ -z "$DEVICES" ]; then
+            DEVICES="${ANDROID_DEVICE_MAP[$ANDROID_VERSION]}-$ANDROID_VERSION"
+          fi
+          # --retry-failed: re-triggers a second build with just the flows
+          # that failed a real assertion, and reports a pass-on-retry as
+          # "rerun" (flaky) instead of "failed" - previously only used in
+          # ad-hoc local dispatches, never wired into CI itself, so a
+          # genuinely flaky test had no chance to recheck here before today.
+          ARGS=(--devices "$DEVICES" --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}" --retry-failed)
+          for T in ${{ matrix.tags }}; do ARGS+=(--tag "$T"); done
+          # apk_source picks between the normal GitHub-release path and a
+          # committed resources/*.apk (e.g. a build not yet published as a
+          # release) - matches scripts/run_suite.py's own --apk-over-
+          # --release-tag precedence.
+          APK_SOURCE="${{ github.event.inputs.apk_source || 'GitHub Releases' }}"
+          if [ "$APK_SOURCE" != "GitHub Releases" ]; then
+            ARGS+=(--apk "$APK_SOURCE")
+          elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
+            ARGS+=(--release-tag "${{ github.event.inputs.release_tag }}")
+          fi
           if [ -n "${{ github.event.inputs.hq_setup }}" ]; then ARGS+=(--hq-setup "${{ github.event.inputs.hq_setup }}"); fi
+          # externalapp_tests needs its companion app pre-installed alongside the main app -
+          # see flows/externalapp_tests/README.md. Only pass it for jobs actually running that
+          # tag, so the other matrix groups don't pay for an upload they don't need.
+          if [[ " ${{ matrix.tags }} " == *" externalapp_tests "* ]]; then
+            ARGS+=(--other-app "resources/Mobile API Testing App-release.apk")
+          fi
           python scripts/run_suite.py "${ARGS[@]}"
+
+      # Runs the 3 updates_partial_failed scenarios that genuinely need a
+      # mid-session CommCare binary swap (Maestro can't do this at all - see
+      # scripts/run_appium_suite.py's own module docstring for the full
+      # citation) via real Appium sessions against BrowserStack instead of
+      # Maestro. Additive to run_suite.py's own (less complete, but still
+      # real) coverage of these same 3 flows above - not a replacement.
+      # UPDATE (2026-08-19), per direct user question: this used to be its
+      # own separate "appium-tests" job/artifact - folded into whichever
+      # matrix job's tags already include updates_partial_failed instead,
+      # same gating pattern as externalapp_tests' companion-app upload just
+      # above, since a whole extra job wasn't actually needed. Runs AFTER
+      # run_suite.py in this same job so run_appium_suite.py's own
+      # results-merge logic (see its own module docstring) has something to
+      # merge into rather than overwrite.
+      - name: Run Appium suite on BrowserStack (updates_partial_failed mid-session updates)
+        # always() - confirmed live 2026-08-21: this step's own `if:` was
+        # implicitly ANDed with success() on the prior "Run Maestro suite"
+        # step (GitHub Actions' default when no status-check function is
+        # given), so whenever that Maestro step failed for ANY reason - even
+        # a totally unrelated flow elsewhere in the same tag list - this
+        # step (and the prompted_updates one below) got silently skipped
+        # instead of running. Confirmed via this exact CI run's job steps
+        # showing both Appium steps as "skipped" after the Maestro step
+        # failed. This coverage is additive/independent (a separate
+        # BrowserStack session via a different script), so it should run
+        # regardless of the Maestro step's outcome.
+        if: always() && contains(matrix.tags, 'updates_partial_failed')
+        env:
+          BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
+          BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
+          HQ_DOMAIN: qateam
+          CC_TEST_USERNAME: ${{ secrets.CC_TEST_USERNAME }}
+          CC_TEST_PASSWORD: ${{ secrets.CC_TEST_PASSWORD }}
+          HQ_MOBILE_WORKER_USERNAME: ${{ secrets.HQ_MOBILE_WORKER_USERNAME }}
+          HQ_MOBILE_WORKER_PASSWORD: ${{ secrets.HQ_MOBILE_WORKER_PASSWORD }}
+          HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
+          HQ_WEB_USER_PASSWORD: ${{ secrets.HQ_WEB_USER_PASSWORD }}
+        run: |
+          # Same android_version-to-device mapping as run_suite.py's own
+          # step above - kept as a separate copy rather than a shared step/
+          # composite action since it's 7 lines.
+          declare -A ANDROID_DEVICE_MAP=(
+            ["16.0"]="Samsung Galaxy S26"
+            ["15.0"]="Samsung Galaxy S25"
+            ["14.0"]="Samsung Galaxy S24"
+            ["13.0"]="Samsung Galaxy S23"
+            ["12.0"]="Samsung Galaxy S22"
+            ["11.0"]="Samsung Galaxy S21"
+            ["10.0"]="Samsung Galaxy S20"
+          )
+          ANDROID_VERSION="${{ github.event.inputs.android_version || '16.0' }}"
+          DEVICES="${{ github.event.inputs.devices }}"
+          if [ -z "$DEVICES" ]; then
+            DEVICES="${ANDROID_DEVICE_MAP[$ANDROID_VERSION]}-$ANDROID_VERSION"
+          fi
+          ARGS=(--devices "$DEVICES" --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-appium")
+          # Same apk_source precedence as the Maestro step above - the "new"
+          # binary in the mid-session update swap.
+          APK_SOURCE="${{ github.event.inputs.apk_source || 'GitHub Releases' }}"
+          if [ "$APK_SOURCE" != "GitHub Releases" ]; then
+            ARGS+=(--apk "$APK_SOURCE")
+          elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
+            ARGS+=(--release-tag "${{ github.event.inputs.release_tag }}")
+          fi
+          python scripts/run_appium_suite.py "${ARGS[@]}"
+
+      # Runs prompted_updates' scenario_01_optional_ccz_update and
+      # scenario_02_forced_ccz_update - the 2 scenarios whose HQ pre-step
+      # (mark_build_status) must fire BETWEEN an on-device logout and the
+      # next login, which a Maestro build has no way to do mid-execution -
+      # see scripts/run_appium_prompted_updates_suite.py's own module
+      # docstring for the full citation. Same fold-into-the-matrix-job
+      # pattern as the updates_partial_failed Appium step above (per the
+      # same direct user question that led to that one).
+      #
+      # UPDATE (2026-08-22), per direct user instruction: split into TWO
+      # separate steps/builds (was one step running both scenarios via the
+      # script's own "no --scenario given = run all" default) - confirmed
+      # live that running scenario_02 right after scenario_01 in the SAME
+      # invocation left scenario_02's own "mark latest build Released"
+      # mid-flow action as a no-op (scenario_01 already released it as its
+      # end-state), so scenario_02 could never detect a real transition no
+      # matter how long it waited. appium_scenarios.py's own functions now
+      # each re-assert "latest is In Test" as their first action (a real
+      # code fix, not just a workaround), but running them as fully
+      # separate BrowserStack sessions here too is a cheap extra layer of
+      # isolation against this same class of shared-state bug recurring.
+      # UPDATE (2nd correction): per direct user instruction, placed in
+      # DIFFERENT matrix groups (scenario_01 -> group-b, scenario_02 ->
+      # group-c) rather than two steps in the same job - group-c has no
+      # 'prompted_updates' Maestro tag today, so this is gated on
+      # matrix.name directly for a full "All" dispatch (group-a/b/c),
+      # falling back to the tags check for a scoped single-tag dispatch
+      # (matrix.name is "single" there, matching neither group-b nor
+      # group-c) so `--tag prompted_updates` ad-hoc runs still cover both
+      # in that one job, same as before.
+      - name: Run Appium suite on BrowserStack (prompted_updates scenario_01_optional_ccz_update)
+        if: always() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'prompted_updates')))
+        env:
+          BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
+          BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
+          CC_TEST_USERNAME: ${{ secrets.CC_TEST_USERNAME }}
+          CC_TEST_PASSWORD: ${{ secrets.CC_TEST_PASSWORD }}
+          HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
+          HQ_WEB_USER_PASSWORD: ${{ secrets.HQ_WEB_USER_PASSWORD }}
+        run: |
+          # Same android_version-to-device mapping and apk_source
+          # precedence as the two Appium steps above.
+          declare -A ANDROID_DEVICE_MAP=(
+            ["16.0"]="Samsung Galaxy S26"
+            ["15.0"]="Samsung Galaxy S25"
+            ["14.0"]="Samsung Galaxy S24"
+            ["13.0"]="Samsung Galaxy S23"
+            ["12.0"]="Samsung Galaxy S22"
+            ["11.0"]="Samsung Galaxy S21"
+            ["10.0"]="Samsung Galaxy S20"
+          )
+          ANDROID_VERSION="${{ github.event.inputs.android_version || '16.0' }}"
+          DEVICES="${{ github.event.inputs.devices }}"
+          if [ -z "$DEVICES" ]; then
+            DEVICES="${ANDROID_DEVICE_MAP[$ANDROID_VERSION]}-$ANDROID_VERSION"
+          fi
+          ARGS=(--devices "$DEVICES" --scenario scenario_01_optional_ccz_update --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-prompted-updates-scenario-01")
+          APK_SOURCE="${{ github.event.inputs.apk_source || 'GitHub Releases' }}"
+          if [ "$APK_SOURCE" != "GitHub Releases" ]; then
+            ARGS+=(--apk "$APK_SOURCE")
+          elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
+            ARGS+=(--release-tag "${{ github.event.inputs.release_tag }}")
+          fi
+          python scripts/run_appium_prompted_updates_suite.py "${ARGS[@]}"
+
+      - name: Run Appium suite on BrowserStack (prompted_updates scenario_02_forced_ccz_update)
+        if: always() && (matrix.name == 'group-c' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'prompted_updates')))
+        env:
+          BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
+          BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
+          CC_TEST_USERNAME: ${{ secrets.CC_TEST_USERNAME }}
+          CC_TEST_PASSWORD: ${{ secrets.CC_TEST_PASSWORD }}
+          HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
+          HQ_WEB_USER_PASSWORD: ${{ secrets.HQ_WEB_USER_PASSWORD }}
+        run: |
+          declare -A ANDROID_DEVICE_MAP=(
+            ["16.0"]="Samsung Galaxy S26"
+            ["15.0"]="Samsung Galaxy S25"
+            ["14.0"]="Samsung Galaxy S24"
+            ["13.0"]="Samsung Galaxy S23"
+            ["12.0"]="Samsung Galaxy S22"
+            ["11.0"]="Samsung Galaxy S21"
+            ["10.0"]="Samsung Galaxy S20"
+          )
+          ANDROID_VERSION="${{ github.event.inputs.android_version || '16.0' }}"
+          DEVICES="${{ github.event.inputs.devices }}"
+          if [ -z "$DEVICES" ]; then
+            DEVICES="${ANDROID_DEVICE_MAP[$ANDROID_VERSION]}-$ANDROID_VERSION"
+          fi
+          ARGS=(--devices "$DEVICES" --scenario scenario_02_forced_ccz_update --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-prompted-updates-scenario-02")
+          APK_SOURCE="${{ github.event.inputs.apk_source || 'GitHub Releases' }}"
+          if [ "$APK_SOURCE" != "GitHub Releases" ]; then
+            ARGS+=(--apk "$APK_SOURCE")
+          elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
+            ARGS+=(--release-tag "${{ github.event.inputs.release_tag }}")
+          fi
+          python scripts/run_appium_prompted_updates_suite.py "${ARGS[@]}"
+
+      # Runs the Updates(2.49)-tab's OWN "Prompted Update Scenario 1/2" (the
+      # CommCare-BINARY/APK forced-vs-optional update prompt - distinct from
+      # the CCZ/app-content prompted_updates scenarios above) as two plain
+      # Maestro dispatches, each with its own --hq-setup, matching the
+      # mutually-exclusive apk_prompt=on-then-forced HQ states these two
+      # flows exercise (a single Maestro build only applies one --hq-setup
+      # before the whole build starts - there's no mid-build hook to flip
+      # HQ state, unlike run_appium_prompted_updates_suite.py's Appium
+      # sessions above, which is why this can't just be folded into the
+      # scenario_01/02 Appium steps or the main tag-based dispatch instead).
+      #
+      # UPDATE (2026-08-24), per direct user instruction: scheduled to run
+      # LAST in group-a's job (after the main Maestro dispatch and both
+      # Appium steps above) rather than interleaved by tag - confirmed live
+      # this app_id's Manage Update Settings are a genuinely global,
+      # per-app_id HQ setting, so any OTHER flow sharing this app_id
+      # (auto_cc_update_03_relogin_sync_latest_version.yaml,
+      # capture_01_gather_signature.yaml, capture_02_signature_reset.yaml -
+      # all tagged updates_2_49/multimedia, both in group-a) running
+      # concurrently with a mutated apk_prompt=on/forced window is a real
+      # hazard, not theoretical. Running these two last, within the same
+      # job, after everything else that shares the app has already finished,
+      # eliminates the overlap entirely without needing precise
+      # interleaving - confirmed via a real local dispatch that running
+      # auto_cc_update_03 back-to-back with this app's mutated window did
+      # NOT actually break it, but "last, in the same job" removes the
+      # question altogether rather than relying on that being reliably true
+      # under CI's own (possibly different) timing.
+      #
+      # Gated the same way as the two Appium steps above: matrix.name ==
+      # 'group-a' for the normal All/nightly dispatch, or (for a scoped
+      # single-tag ad-hoc dispatch) matrix.tags containing the flows' own
+      # updates_2_49_apk_prompt tag.
+      - name: Run Maestro suite (Updates tab - CommCare APK update prompt, 1/2 optional)
+        if: always() && (matrix.name == 'group-a' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'updates_2_49')))
+        env:
+          BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
+          BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
+          HQ_API_USERNAME: ${{ secrets.HQ_API_USERNAME }}
+          HQ_API_PASSWORD: ${{ secrets.HQ_API_PASSWORD }}
+          HQ_SESSION_COOKIE: ${{ secrets.HQ_SESSION_COOKIE }}
+          HQ_DOMAIN: qateam
+          CC_TEST_USERNAME: ${{ secrets.CC_TEST_USERNAME }}
+          CC_TEST_PASSWORD: ${{ secrets.CC_TEST_PASSWORD }}
+          HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
+          HQ_WEB_USER_PASSWORD: ${{ secrets.HQ_WEB_USER_PASSWORD }}
+        run: |
+          declare -A ANDROID_DEVICE_MAP=(
+            ["16.0"]="Samsung Galaxy S26"
+            ["15.0"]="Samsung Galaxy S25"
+            ["14.0"]="Samsung Galaxy S24"
+            ["13.0"]="Samsung Galaxy S23"
+            ["12.0"]="Samsung Galaxy S22"
+            ["11.0"]="Samsung Galaxy S21"
+            ["10.0"]="Samsung Galaxy S20"
+          )
+          ANDROID_VERSION="${{ github.event.inputs.android_version || '16.0' }}"
+          DEVICES="${{ github.event.inputs.devices }}"
+          if [ -z "$DEVICES" ]; then
+            DEVICES="${ANDROID_DEVICE_MAP[$ANDROID_VERSION]}-$ANDROID_VERSION"
+          fi
+          ARGS=(--devices "$DEVICES" --flow flows/updates_2_49/prompted_update_scenario_01_ill_update_later.yaml --hq-setup hq_setup/updates_2_49/setup_02_commcare_version_plus_one.json --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-apk-update-prompt-1-optional")
+          APK_SOURCE="${{ github.event.inputs.apk_source || 'GitHub Releases' }}"
+          if [ "$APK_SOURCE" != "GitHub Releases" ]; then
+            ARGS+=(--apk "$APK_SOURCE")
+          elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
+            ARGS+=(--release-tag "${{ github.event.inputs.release_tag }}")
+          fi
+          python scripts/run_suite.py "${ARGS[@]}"
+
+      - name: Run Maestro suite (Updates tab - CommCare APK update prompt, 2/2 forced)
+        if: always() && (matrix.name == 'group-a' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'updates_2_49')))
+        env:
+          BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
+          BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
+          HQ_API_USERNAME: ${{ secrets.HQ_API_USERNAME }}
+          HQ_API_PASSWORD: ${{ secrets.HQ_API_PASSWORD }}
+          HQ_SESSION_COOKIE: ${{ secrets.HQ_SESSION_COOKIE }}
+          HQ_DOMAIN: qateam
+          CC_TEST_USERNAME: ${{ secrets.CC_TEST_USERNAME }}
+          CC_TEST_PASSWORD: ${{ secrets.CC_TEST_PASSWORD }}
+          HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
+          HQ_WEB_USER_PASSWORD: ${{ secrets.HQ_WEB_USER_PASSWORD }}
+        run: |
+          declare -A ANDROID_DEVICE_MAP=(
+            ["16.0"]="Samsung Galaxy S26"
+            ["15.0"]="Samsung Galaxy S25"
+            ["14.0"]="Samsung Galaxy S24"
+            ["13.0"]="Samsung Galaxy S23"
+            ["12.0"]="Samsung Galaxy S22"
+            ["11.0"]="Samsung Galaxy S21"
+            ["10.0"]="Samsung Galaxy S20"
+          )
+          ANDROID_VERSION="${{ github.event.inputs.android_version || '16.0' }}"
+          DEVICES="${{ github.event.inputs.devices }}"
+          if [ -z "$DEVICES" ]; then
+            DEVICES="${ANDROID_DEVICE_MAP[$ANDROID_VERSION]}-$ANDROID_VERSION"
+          fi
+          ARGS=(--devices "$DEVICES" --flow flows/updates_2_49/prompted_update_scenario_02_forced_commcare_update.yaml --hq-setup hq_setup/updates_2_49/prompted_update_scenario_02_forced.json --hq-teardown hq_setup/updates_2_49/prompted_update_scenario_teardown.json --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-apk-update-prompt-2-forced")
+          APK_SOURCE="${{ github.event.inputs.apk_source || 'GitHub Releases' }}"
+          if [ "$APK_SOURCE" != "GitHub Releases" ]; then
+            ARGS+=(--apk "$APK_SOURCE")
+          elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
+            ARGS+=(--release-tag "${{ github.event.inputs.release_tag }}")
+          fi
+          python scripts/run_suite.py "${ARGS[@]}"
+
+      # Runs cc_reinstall_needed_01/cc_update_needed_01_trigger_on_old_client.yaml
+      # (tagged requires_old_client_apk, excluded from the main tag-based
+      # dispatch above - see run_suite.py's select_flow_files own citation)
+      # as their own dedicated build against the OLD CommCare binary
+      # (resources/commcare_2.45_release.apk) their forced-prompt precondition
+      # genuinely needs - unlike every other recovery_measures flow, which
+      # runs against the normal current-release build via apk_source/
+      # release_tag. Always resources/commcare_2.45_release.apk specifically
+      # (not the workflow's own apk_source dropdown) since this needs an OLD
+      # binary regardless of which current release the rest of the suite is
+      # testing. Gated the same way as the updates_2_49 apk-prompt steps
+      # above: matrix.name == 'group-c' for the normal All/nightly dispatch,
+      # or (for a scoped single-tag ad-hoc dispatch) matrix.tags containing
+      # requires_old_client_apk directly.
+      - name: Run Maestro suite (CC Reinstall/Update Needed - old CommCare client)
+        if: always() && (matrix.name == 'group-c' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'requires_old_client_apk')))
+        env:
+          BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
+          BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
+          HQ_API_USERNAME: ${{ secrets.HQ_API_USERNAME }}
+          HQ_API_PASSWORD: ${{ secrets.HQ_API_PASSWORD }}
+          HQ_SESSION_COOKIE: ${{ secrets.HQ_SESSION_COOKIE }}
+          HQ_DOMAIN: qateam
+          CC_TEST_USERNAME: ${{ secrets.CC_TEST_USERNAME }}
+          CC_TEST_PASSWORD: ${{ secrets.CC_TEST_PASSWORD }}
+          HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
+          HQ_WEB_USER_PASSWORD: ${{ secrets.HQ_WEB_USER_PASSWORD }}
+        run: |
+          declare -A ANDROID_DEVICE_MAP=(
+            ["16.0"]="Samsung Galaxy S26"
+            ["15.0"]="Samsung Galaxy S25"
+            ["14.0"]="Samsung Galaxy S24"
+            ["13.0"]="Samsung Galaxy S23"
+            ["12.0"]="Samsung Galaxy S22"
+            ["11.0"]="Samsung Galaxy S21"
+            ["10.0"]="Samsung Galaxy S20"
+          )
+          ANDROID_VERSION="${{ github.event.inputs.android_version || '16.0' }}"
+          DEVICES="${{ github.event.inputs.devices }}"
+          if [ -z "$DEVICES" ]; then
+            DEVICES="${ANDROID_DEVICE_MAP[$ANDROID_VERSION]}-$ANDROID_VERSION"
+          fi
+          python scripts/run_suite.py --devices "$DEVICES" --tag requires_old_client_apk \
+            --apk resources/commcare_2.45_release.apk \
+            --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-old-client-recovery-measures"
+
+      # Runs the 4 Recovery Measures scenarios that genuinely need a real
+      # .ccz file pushed onto the device's filesystem before the "Select
+      # CCZ" system file picker (Storage Access Framework) can find one -
+      # Maestro has no file-push mechanism at all (see each of these flows'
+      # own "REQUIRED MANUAL/CI PRE-STEP (not run by Maestro)" header:
+      # offline_06_select_ccz_via_picker.yaml, offline_08_move_ccz_to_
+      # downloads.yaml, offline_reinstall_update_app_flow.yaml,
+      # reinstall_update_05_06_chooser_and_ccz.yaml's own "Reinstall Using
+      # CCZ" branch). scripts/appium_browserstack_client.py's push_file
+      # (confirmed live 2026-08-25) does this via a real Appium session -
+      # see scripts/run_appium_offline_ccz_suite.py's own module docstring
+      # for the full citation. Additive to the plain Maestro flows above
+      # (which still cover everything except this one file-picker step) -
+      # same fold-into-the-matrix-job pattern as every other Appium step in
+      # this job, gated on group-c (recovery_measures' own group) or a
+      # scoped recovery_measures tag dispatch.
+      - name: Run Appium suite on BrowserStack (Recovery Measures - CCZ file picker)
+        if: always() && (matrix.name == 'group-c' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'recovery_measures')))
+        env:
+          BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
+          BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
+          HQ_DOMAIN: qateam
+          CC_TEST_USERNAME: ${{ secrets.CC_TEST_USERNAME }}
+          CC_TEST_PASSWORD: ${{ secrets.CC_TEST_PASSWORD }}
+          HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
+          HQ_WEB_USER_PASSWORD: ${{ secrets.HQ_WEB_USER_PASSWORD }}
+        run: |
+          declare -A ANDROID_DEVICE_MAP=(
+            ["16.0"]="Samsung Galaxy S26"
+            ["15.0"]="Samsung Galaxy S25"
+            ["14.0"]="Samsung Galaxy S24"
+            ["13.0"]="Samsung Galaxy S23"
+            ["12.0"]="Samsung Galaxy S22"
+            ["11.0"]="Samsung Galaxy S21"
+            ["10.0"]="Samsung Galaxy S20"
+          )
+          ANDROID_VERSION="${{ github.event.inputs.android_version || '16.0' }}"
+          DEVICES="${{ github.event.inputs.devices }}"
+          if [ -z "$DEVICES" ]; then
+            DEVICES="${ANDROID_DEVICE_MAP[$ANDROID_VERSION]}-$ANDROID_VERSION"
+          fi
+          ARGS=(--devices "$DEVICES" --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-appium-offline-ccz")
+          APK_SOURCE="${{ github.event.inputs.apk_source || 'GitHub Releases' }}"
+          if [ "$APK_SOURCE" != "GitHub Releases" ]; then
+            ARGS+=(--apk "$APK_SOURCE")
+          elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
+            ARGS+=(--release-tag "${{ github.event.inputs.release_tag }}")
+          fi
+          python scripts/run_appium_offline_ccz_suite.py "${ARGS[@]}"
+
+      # No report-history cache restore/save here on purpose: each matrix
+      # job's own reports/history.json only reflects ITS slice of tags, not
+      # the full logical run, so it isn't meaningful on its own - the
+      # merge-reports job below is the only place the real persistent trend
+      # history gets read or written, from the properly COMBINED results.
+      - name: Upload HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maestro-report-${{ matrix.name }}
+          path: reports/
+          retention-days: 30
+
+  merge-reports:
+    needs: [prepare, maestro-tests]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # Same restore/save pattern as before, just moved here - this is now
+      # the only job that reads or writes the real trend history, from the
+      # single combined result set every matrix job's artifact feeds into.
+      - name: Restore report history
+        uses: actions/cache/restore@v4
+        with:
+          path: reports/history.json
+          key: report-history-${{ github.run_id }}
+          restore-keys: report-history-
+
+      - name: Download all matrix job artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: maestro-report-*
+          path: artifacts/
+
+      - name: Merge matrix job reports
+        run: python scripts/merge_reports.py artifacts/*/
 
       - name: Save report history
         if: always()
@@ -79,17 +631,43 @@ jobs:
           path: reports/history.json
           key: report-history-${{ github.run_id }}
 
-      - name: Upload HTML report
+      - name: Upload merged HTML report
         if: always()
+        id: upload_report
         uses: actions/upload-artifact@v4
         with:
           name: maestro-report
           path: reports/
           retention-days: 30
 
+      # Formats needs.prepare.outputs.start_epoch (captured at the very
+      # start of the prepare job, before matrix fan-out) against "now" into
+      # "1h 23m" / "45m" - this job runs last, so its own start time is a
+      # reasonable proxy for "when the whole run finished".
+      - name: Compute run duration
+        id: duration
+        if: always()
+        run: |
+          elapsed=$(( $(date +%s) - ${{ needs.prepare.outputs.start_epoch }} ))
+          hours=$(( elapsed / 3600 ))
+          minutes=$(( (elapsed % 3600) / 60 ))
+          if [ "$hours" -gt 0 ]; then
+            echo "text=${hours}h ${minutes}m" >> "$GITHUB_OUTPUT"
+          else
+            echo "text=${minutes}m" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Post Slack notification
         if: always()
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
           SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
+          REPORT_ARTIFACT_URL: ${{ steps.upload_report.outputs.artifact-url }}
+          RUN_TAG: ${{ github.event.inputs.tag }}
+          RUN_DURATION: ${{ steps.duration.outputs.text }}
+          # Reflects the android_version dropdown, not whatever the
+          # maestro-tests job's own `devices` override might have used -
+          # matches every other RUN_*/env var here in reading the raw
+          # workflow input directly rather than a resolved value.
+          ANDROID_VERSION: ${{ github.event.inputs.android_version || '16.0' }}
         run: python scripts/slack_notify.py

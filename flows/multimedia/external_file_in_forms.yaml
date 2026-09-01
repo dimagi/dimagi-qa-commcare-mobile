@@ -1,0 +1,84 @@
+appId: org.commcare.dalvik
+tags:
+  - multimedia
+  - partial
+---
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_MULTIMEDIA}
+# Master Mobile Plan (2026) > Multimedia > "External File in Forms" -
+# Linking to External Files: open menu "External File in Forms" > form
+# "Access File", click the in-form hyperlink "This link", verify the video
+# plays.
+#
+# ****************************************************************************
+# ** UNMET PREREQUISITE - THIS FLOW CANNOT RUN AS-IS, flagged Partial for   **
+# ** exactly this reason (not just the usual QA-app-navigation uncertainty) **
+# ****************************************************************************
+# The sheet requires a video file to exist at the EXACT device filesystem
+# path /storage/emulated/0/Android/data/org.commcare.dalvik/media/yourvideo.mp4
+# - i.e. a path INSIDE the app's own external-files directory, but NOT
+# inside CommCare's own media/MediaStore sandbox. Maestro's `addMedia`
+# command only pushes files into the device's shared MediaStore/gallery (see
+# ../common/pick_first_gallery_image.yaml's own citation of that same
+# behavior) - it has no way to place a file at an arbitrary filesystem path.
+# The only way to get a file onto that exact path is a real `adb push
+# <local file> /storage/emulated/0/Android/data/org.commcare.dalvik/media/yourvideo.mp4`
+# shell command run BEFORE this flow, which is not something
+# scripts/run_suite.py currently supports (grep for "adb" in scripts/ turns
+# up nothing - there is no adb-push pre-step hook in the orchestrator today).
+# **This is a real gap in scripts/run_suite.py, not something this flow can
+# work around on its own** - either extend run_suite.py with an
+# --adb-push-file pre-step (BrowserStack App Automate does expose an adb-like
+# file-push capability for its device sessions, per BrowserStack's own docs -
+# not independently re-confirmed here), or have whatever CI job invokes
+# run_suite.py push the file via BrowserStack's REST API / their Maestro
+# runner's device-setup hooks before triggering this build. Until one of
+# those exists, this flow will reliably fail at its very first assertion
+# below (the hyperlink either won't render as expected, or will show the
+# app's own "No activity found"/similar error instead of playing anything),
+# and this Test Case ID should stay classified as blocked, not passing.
+#
+# Mechanism verified against source (read-only reference, not modified):
+#   app/src/org/commcare/utils/MarkupUtil.java getLinkResolverPlugin()
+#     (line 189-220): CommCare renders question-text markdown via Markwon: a
+#     link literal starting with "file:///" is intercepted (NOT passed
+#     through to a normal browser/http handler) and instead turned into an
+#     Intent.ACTION_VIEW with the file's real Uri + detected mime type,
+#     started via startActivity() - i.e. the sheet's clickable "This link"
+#     text is a markdown-style hyperlink in the question label pointing at
+#     exactly this kind of file:/// path, and tapping it hands the file off
+#     to whatever app on the device claims that mime type (a video player,
+#     for an .mp4).
+#   If no matching app exists, it catches ActivityNotFoundException and
+#     Toasts R.string.activity_not_found = "No activity found to handle: %s"
+#     (app/res/values/strings.xml:155) - used below as a negative-result
+#     check.
+#   The exact "External File in Forms" menu name / "Access File" form name
+#   are taken verbatim from the task description - unverified against any
+#   source in this repo, since this is a QA-only app.
+#
+# "verify the video plays" is not directly assertable by Maestro (there's no
+# way to inspect whatever external video-player app takes over the screen,
+# and even if there were, playback-quality is the kind of human-judgment
+# call this repo's coverage_matrix.csv already excludes elsewhere, e.g.
+# "Video Types"/"Capture 5"). This only asserts that tapping the link did
+# NOT surface the app's own "no handler" error - i.e. some external
+# activity actually took over - which is the best on-device signal available
+# short of a screenshot-diff.
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: Multimedia) - a fresh
+# BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp == null.
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- tapOn: "Start"
+- tapOn: "External File in Forms"
+- tapOn: "Access File"
+- tapOn: "This link"
+- assertNotVisible:
+    text: "(?i)No activity found to handle"

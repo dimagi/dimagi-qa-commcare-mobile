@@ -1,0 +1,17 @@
+{
+  "_comment": "Master Mobile Plan (2026) > Mobile Pins > 'Mutiple App PIN' (sheet's own spelling, kept verbatim as the Test Case ID for CSV consistency) - 'Install app Basic Tests, install app Case Managements, follow Setup 4 to enable PIN for both apps.' This JSON covers only the HQ half: marking BOTH apps' latest builds Released so they can each be installed on the device (via Setup 4's barcode-claim step, run twice - once per app - which is Not automatable per coverage_matrix.csv and stays a manual step). Run via `python scripts/hq_client.py hq_setup/mobile_pins/mutiple_app_pin_install_apps.json` before flows/mobile_pins/multiple_app_pin_per_app_isolation.yaml. 'Basic Tests' app_id placeholder matches hq_setup/mobile_pins/setup_02_install_application.json's assumption. 'Case Management' app_id placeholder matches hq_setup/prompted_updates/varying_prompt_setup.json's comment (same app, qateam domain). Both are placeholders - confirm current before relying on this, app ids get recreated between QA cycles. NOTE: this is two CCZ app profiles installed side-by-side in the SAME CommCare APK (CommCare's own 'multiple apps' feature, see app/src/org/commcare/utils/MultipleAppsUtil.java on the read-only commcare-android reference) - not two separate APKs.",
+  "actions": [
+    {
+      "type": "mark_build_status",
+      "app_id": "REPLACE_WITH_BASIC_TESTS_APP_ID",
+      "saved_app_id": "REPLACE_WITH_BASIC_TESTS_BUILD_ID",
+      "is_released": true
+    },
+    {
+      "type": "mark_build_status",
+      "app_id": "REPLACE_WITH_CASE_MANAGEMENT_APP_ID",
+      "saved_app_id": "REPLACE_WITH_CASE_MANAGEMENT_BUILD_ID",
+      "is_released": true
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "_comment": "Master Mobile Plan (2026) > Recovery Measures > CC Update Needed > Test Case ID 'CC Reinstall Needed 2' AS LABELED UNDER THE 'CC Update Needed step' SUMMARY IN coverage_matrix.csv (maps to cc_update_needed_flow.yaml's precondition - a different section from cc_reinstall_needed_2_mark_released.json's identically-numbered row, see that file's header for why the filenames differ despite the shared literal ID text). Summary per task: 'mark released + increment recovery Max Version by 1' (via HQ).",
+  "IMPORTANT_CAVEAT": "Same underlying gap as cc_reinstall_needed_2_mark_released.json, PLUS an additional unmapped piece here: 'increment recovery Max Version by 1' has NO corresponding action in hq_client.py's dispatch table (mark_build_status / create_new_build / set_custom_properties / set_prompt_update_settings) at all. This is NOT the same field as set_prompt_update_settings's apk_version parameter - that parameter drives PromptUpdateSettingsForm's 'Manage Update Settings' tab (a forced-update-prompt setting, PromptApkUpdateActivity's own code path independent of recovery measures), whereas 'recovery Max Version' refers to the ccVersionMax field RecoveryMeasure.java/RecoveryMeasuresRequester.java read from the separate 'recovery_measures' HQ endpoint (see cc_reinstall_needed_2_mark_released.json's caveat for the citations). Since neither hq_client.py's cited provenance (corehq/apps/app_manager/views/releases.py + settings.py) nor the commcare-android read-only reference repo expose that endpoint's actual HQ view, NO action is included below for the 'increment recovery Max Version' half - fabricating an action type not implemented in hq_client.py's dispatch would raise 'Unknown HQ pre-step action type' at run time and is worse than leaving it undone. Only the 'mark released' half is represented, via the same best-effort mark_build_status mapping as the CC Reinstall Needed section's row 2.",
+  "actions": [
+    {
+      "type": "mark_build_status",
+      "app_id": "REPLACE_WITH_CC_UPDATE_APP_ID",
+      "saved_app_id": "REPLACE_WITH_TEST_BUILD_ID",
+      "is_released": true
+    }
+  ]
+}

@@ -1,0 +1,70 @@
+appId: org.commcare.dalvik
+tags:
+  - right_to_left_text
+  - automatable
+---
+# Master Mobile Plan (2026) > Right to Left Text > "Setup 3" - Return to the
+# home screen and launch CommCare; verify CommCare opens successfully; select
+# options within CommCare and change the app's language to Arabic.
+# This is the pure IN-APP language switch (distinct from "Setup 2"'s
+# device-level `adb`/system-locale change, which is Partial and out of scope
+# for this flow). This exact feature already has Espresso coverage in
+# LanguagesTest.kt (testLanguageChanges), whose menu path this flow mirrors:
+#   InstrumentationUtility.kt selectOptionItem(languageOptionItemMatcher) ->
+#   openOptionsMenu() + click matcher withText(R.string.change_language)
+# Menu item / dialog text verified against:
+#   app/src/org/commcare/activities/StandardHomeActivity.java
+#     (R.id.action_change_language -> Localization.get("home.menu.locale.change"))
+#   app/src/org/commcare/activities/HomeScreenBaseActivity.java
+#     showLocaleChangeMenu() (dialog title Localization.get("home.menu.locale.select"))
+#   app/assets/locales/android_translatable_strings.txt:
+#     home.menu.locale.change=Change Language
+#     home.menu.locale.select=Choose your Language
+# Prepends install_app_as_web_user.yaml (APP_NAME: ".*Right to Left Tests!") - a
+# fresh BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp == null.
+# UPDATE, confirmed live (run 31276111657): same redundant-clearState bug as
+# setup_02_change_device_language_to_arabic.yaml - see that file's header
+# for the full root-cause writeup. install_app_by_code.yaml (above) already
+# ends on the login screen; a second clearState here wiped that install and
+# threw the device back to the pre-install setup screen.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_RIGHT_TO_LEFT}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- assertVisible:
+    id: "org.commcare.dalvik:id/home_gridview_buttons"
+- tapOn: "More options"
+- tapOn: "Change Language"
+- assertVisible: "Choose your Language"
+- assertVisible:
+    id: "org.commcare.dalvik:id/choices_list_view"
+# CAVEAT: the list is populated from the currently-installed app's own locale
+# bundle (ChangeLocaleUtil.getLocaleNames() -> HomeScreenBaseActivity.java
+# showLocaleChangeMenu()/buildLocaleChoices()), not a fixed CommCare string -
+# each locale's display name is whatever that app's translation supplies for
+# its own locale code (e.g. "ar").
+# UPDATE, confirmed live (run 31276111657 follow-up): "Tap on 'Arabic'"
+# failed - the failure screenshot showed the real dialog lists each
+# language in its OWN native script, not translated into English: "ENGLISH"
+# and "العربية" (Arabic's own name for itself), not "Arabic".
+# UPDATE (2nd correction), confirmed live (LOCAL-VERIFY-round3): tapping the
+# literal Arabic string ALSO failed to match ("Element not found") even
+# though the exact same text is clearly rendered on screen - a byte-level
+# Unicode mismatch somewhere in this string's round-trip through the tool
+# chain is more likely than the text genuinely being absent twice in a row.
+# Sidestepped entirely with a coordinate tap instead of relying on matching
+# Arabic text at all - the dialog only ever has two fixed choices
+# (ENGLISH/Arabic), so the second choice's on-screen position is stable.
+# Measured off the real 1080x2400 screenshot (choice center ~540px/1080
+# horiz, ~1326px/2400 vert - just below the ENGLISH/divider row).
+- tapOn:
+    point: "50%, 55%"
+- assertNotVisible: "Choose your Language"
+- assertVisible:
+    id: "org.commcare.dalvik:id/home_gridview_buttons"

@@ -1,0 +1,77 @@
+appId: org.commcare.dalvik
+tags:
+  - date_widgets
+  - partial
+---
+# Master Mobile Plan (2026) > Date Widgets > "Date 4" (Standard 1 - see the
+# standard date/month/year widget, pick a date) and "Date 5" (Standard 2 -
+# the label shows the chosen date in three formats: long, short, and
+# unformatted).
+#
+# PARTIAL: needs HQ web-user install (install_app_as_web_user.yaml). The
+# exact rendered date text depends on today's live date, so this flow
+# asserts the three-format label is visible and non-empty rather than a
+# fixed string - matching this repo's convention of not hardcoding a moving
+# target.
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: ".*Date Widgets") - a fresh
+# BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
+# null.
+#
+# Verified against commcare-android source (read-only reference, not modified):
+#   The CCZ's own default/app_strings.txt + modules-0/forms-4.xml
+#     (extracted read-only from resources/qateam - Date Widgets - v40.ccz,
+#     never committed/modified): modules.m0="Date Widgets",
+#     forms.m0f4="Standard Widget test" (module index 4, matching
+#     DateWidgetsTests.kt's testStandardWidget() -> openModule(4)) - a
+#     single "Date" question (plain xsd:date widget, defaults to today, no
+#     interaction needed) followed by an output/label screen whose itext
+#     literally concatenates format-date() in three ways: "%a, %b %e, %Y"
+#     (long), "%e/%n/%y" (short), and the raw unformatted value.
+#   DateWidgetsTests.kt: login credentials "test1"/"123" (NOT the sheet's
+#     own "test1/1234"); "1 form sent to server!" toast confirms successful
+#     submission.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_DATE_WIDGETS}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: "test1"
+      PASSWORD: "123"
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+- tapOn: "Start"
+- tapOn: "Date Widgets"
+- tapOn: "Standard Widget test"
+# "Date" question - defaults to today, no interaction needed.
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+# UPDATE, found via a real BrowserStack failure: all three "Date chosen ..."
+# labels render as ONE combined multi-line TextView ("Date chosen long
+# form: ...\nDate chosen short form: ...\nDate chosen, unformatted: ..."),
+# confirmed live via the failing run's hierarchyRoot dump - Maestro's
+# assertVisible is a full match against the element's ENTIRE text (same
+# semantics as tapOn's own full-match discovery elsewhere in this repo), so
+# a bare substring never matched. (?s) (DOTALL) lets ".*" span the
+# newlines; each assertion below still targets the same one combined
+# element, which is fine - they're independent regex checks, not separate
+# widgets.
+# UPDATE, confirmed live 2026-08-12: hardened against the same
+# already-advanced-past-Finish race fixed elsewhere in this repo today
+# (flows/login/commcare_odk_01_login.yaml,
+# flows/other_error_tests/keyboard_navigation.yaml) - the tap is now
+# optional and the real end state (Start) is asserted with a generous
+# timeout, rather than requiring nav_btn_finish to still be on screen.
+- assertVisible: "(?s).*Date chosen long form:.*"
+- assertVisible: "(?s).*Date chosen short form:.*"
+- assertVisible: "(?s).*Date chosen, unformatted:.*"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"
+    optional: true
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 15000

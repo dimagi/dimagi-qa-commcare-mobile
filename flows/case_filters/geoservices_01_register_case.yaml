@@ -1,0 +1,157 @@
+appId: org.commcare.dalvik
+tags:
+  - case_filters
+  - partial
+---
+# Master Mobile Plan (2026) > Case Filters > "Case Lists 3" (Register
+# Geoservices case) + "End Form 1" (verify returned to the form list).
+#
+# Ground truth extracted from resources/qateam - [Master] Basic Tests -
+# v1141.ccz (a real zip, unzipped read-only to inspect suite.xml +
+# en/app_strings.txt + modules-8/forms-0.xml) - no instrumentation test
+# covers this module, so this is entirely CCZ-derived, not guessed:
+#   en/app_strings.txt: modules.m8="Geoservices", forms.m8f0="Register Case"
+#     (the sheet's own "Register a Case" paraphrase doesn't match the real
+#     button text - "Register Case" is used here instead).
+#   modules-8/forms-0.xml: exactly 2 questions - site_name (xsd:string,
+#     label "Enter a name for this case:") and site_location (geopoint,
+#     label "Capture the case location.", required="true()"). The case's
+#     own case_name is calculate-bound directly to site_name
+#     (<bind nodeset="/data/case/create/case_name" calculate="/data/
+#     details/site_name"/>), so whatever text is typed here becomes this
+#     case's display name everywhere else (case lists, etc.).
+#   suite.xml: entry m8-f0 has <stack><create><command value="'m8'"/>
+#     </create></stack> - explicitly returns to the "Geoservices" menu
+#     after saving, matching "End Form 1"'s own claim ("you're returned to
+#     the form list").
+#
+# PARTIAL, genuinely best-effort (not a research gap - a real device/
+# environment dependency): site_location has no `appearance="maps"`
+# attribute, so GeoPointWidget launches the DEFAULT GeoPointActivity (not
+# GeoPointMapActivity) - verified in commcare-android source
+# (views/widgets/GeoPointWidget.java, activities/GeoPointActivity.java).
+# That activity requires an actual GPS/network-fusion location fix
+# (CommCareLocationController, up to a 60s timeout,
+# HiddenPreferences.getGpsWidgetTimeoutInMilliseconds()) with NO manual
+# lat/long entry fallback - unlike the "maps" appearance variant, which
+# lets you tap a point on a map without any real fix. Since site_location
+# is required="true()", the form cannot be saved at all if no fix is ever
+# obtained - this is the single reason this row (and any flow that depends
+# on a case this form creates) stays Partial rather than Automatable.
+#
+# UPDATE, confirmed live 2026-08-11 (build a7d63d06a30c199b2e8c6c6e4e76c121d28f7e8d):
+# the location fix DID succeed on a real BrowserStack device (network-based
+# fix, ~11m accuracy) - the best-effort GPS concern above is real but not
+# fatal in practice. Two wrong assumptions this fixed:
+#   1. The <group appearance="field-list"> wrapping both questions
+#      (confirmed in modules-8/forms-0.xml) puts BOTH site_name and
+#      site_location on ONE page with a top action bar (X to cancel,
+#      "FINISH" to submit) - same alternate display style already flagged
+#      elsewhere in this repo (e.g. right_to_left_text/question_types_02's
+#      header) - NOT the per-question nav_btn_next/nav_btn_finish model.
+#      There is no "next" step between the two questions.
+#   2. The button stays labelled "RECORD LOCATION" even after a fix is
+#      captured in this build (the failure screenshot showed real lat/long/
+#      altitude/accuracy text WITH the button still reading "RECORD
+#      LOCATION", not "REPLACE LOCATION"). Asserting the coordinate text
+#      itself ("Latitude:") is what actually confirms success, not any
+#      button-label change.
+#
+# UPDATE (2nd correction), confirmed live 2026-08-11 (build
+# 994eb26eb5523b31492fa14c244c5140ccbef9fb): removing the second tap
+# entirely (per the UPDATE above) was an over-correction - GeoPointActivity
+# shows an intermediate "Location Found! Location accuracy: X m." dialog
+# with its OWN "RECORD LOCATION" confirm button (real string,
+# accept_location in app/res/values/strings.xml) that must be tapped before
+# control returns to the field-list page - the failure screenshot showed
+# the app stuck on exactly this dialog, obscuring the "Latitude:" text
+# behind it. The first attempt's original two-tap sequence was actually
+# closer to right; only its trailing assertion ("Replace Location") was
+# wrong. Waits for the unique "Location Found!" string specifically (not a
+# repeat of "Record Location", which is also the PAGE's own pre-existing
+# button label and would match immediately, before the dialog even opens).
+#
+# UPDATE (3rd correction), confirmed live 2026-08-11 (build
+# 40e5fc75b9c46763a852d67c3d84dae7fc412c87): "Assert that 'Latitude:' is
+# visible" failed, but the failure screenshot showed the coordinate text
+# fully rendered on screen ("Latitude: N 50°5'50""...) - the same
+# too-fast-for-a-bare-assertVisible race documented elsewhere in this repo
+# today. Wrapped in extendedWaitUntil.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_BASIC_TESTS}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+
+# UPDATE (2026-08-19), per direct user instruction: give this run's site a
+# dynamic, unique name instead of the same literal "Geoservices Automation
+# Site" every run - a shared, never-pruned domain accumulating identically
+# named cases run after run is confusing to eyeball in the case list. Same
+# run-suffix mechanism already established in
+# flows/conditional_enum_in_case_list/conditional_id_mapping_01_06_full_scenario.yaml
+# (a real Date.now() value generated on the test-runner side, not
+# device-derived) - see that flow's own UPDATE comment for the full
+# citation.
+- runScript:
+    file: assets/generate_run_suffix.js
+
+# === Case Lists 3: Register Geoservices case ===
+- tapOn: "Start"
+- tapOn: "Geoservices"
+- tapOn: "Register Case"
+# UPDATE, confirmed live (2026-08-18, real Android 16 failure): dropped
+# hideKeyboard - the failure hierarchy dump showed an unwanted "Exit
+# Form?" dialog (hideKeyboard falls back to a real back-press once the
+# keyboard's already auto-dismissed, device/OS-dependent timing). Maestro
+# taps via the accessibility tree, not pixel coordinates, so an open IME
+# overlay doesn't block finding/tapping "Record Location" underneath it -
+# same reasoning already validated for nav_btn_next/nav_btn_finish
+# elsewhere in this repo. A user-supplied recording of normal (non-
+# automated) usage confirms the app itself works fine either way.
+- inputText: "Geoservices Automation Site ${output.runSuffix}"
+- tapOn: "Record Location"
+- extendedWaitUntil:
+    visible: "Location Found!"
+    timeout: 65000
+# UPDATE, confirmed live (2026-08-18, Android 16): failed at exactly the
+# 10s timeout, but the failure hierarchy dump (captured moments later)
+# showed "Latitude: ..." already fully rendered - a marginal miss, not a
+# structural bug (the exact "diagnostic dump lags slightly behind the
+# real failure moment" pattern already seen elsewhere in this repo).
+# Raised the timeout for real headroom instead of guessing at a smaller
+# bump.
+# UPDATE (2nd correction, 2026-08-18): recurred at 20s too, same marginal
+# miss. Cross-checked the locator against the raw hierarchy dump's own
+# byte codes first (ruled out an encoding issue - the colon is a plain
+# ASCII 0x3a, the only non-ASCII character is the degree symbol later in
+# the string, unrelated to this match) before raising the timeout again -
+# WRONGLY diagnosed as a timing variance.
+# UPDATE (3rd correction, 2026-08-18), per direct user guidance: recurred
+# again even at 40s - if it were genuinely a marginal timing miss, some
+# of these increasingly generous timeouts should eventually have
+# succeeded. The real cause: the real node text is a multi-line string
+# ("Latitude: N ...\nLongitude: ...\nAltitude: ...\nAccuracy: ..."), and
+# Maestro's textRegex requires a FULL match, not a substring/contains
+# match - a bare "Latitude:" with no wildcards can never match that
+# longer string regardless of wait time. Same class of fix already used
+# in flows/common/check_app_version_via_about.yaml's own
+# "(?s).*App v...*" pattern - (?s) lets "." span newlines, and the
+# leading/trailing ".*" let the target appear anywhere within the full
+# multi-line text.
+- tapOn: "Record Location"
+- extendedWaitUntil:
+    visible: "(?s).*Latitude.*"
+    timeout: 15000
+- tapOn: "FINISH"
+
+# === End Form 1: verify returned to the "Geoservices" form list ===
+- assertVisible: "Geoservices"
+- assertVisible: "Register Case"
+- assertVisible: "Rate Case"

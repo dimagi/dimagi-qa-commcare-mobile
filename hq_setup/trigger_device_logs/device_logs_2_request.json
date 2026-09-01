@@ -1,0 +1,10 @@
+{
+  "_comment": "Master Mobile Plan (2026) > Trigger device logs > 'Device Logs 2' - 'Device Log info'. Steps (hidden behind a HYPERLINK formula in the cell, confirmed by reading the raw formula rather than the rendered text): follow https://www.commcarehq.org/admin/ota/devicelogrequest/add/, fill Domain=qateam/Username=test1, Save. This is a plain django.contrib.admin 'add' form - hq_client.py's create_device_log_request(domain, username) does exactly this (GET the add page for its csrfmiddlewaretoken, POST domain+username+_save, confirm the 302-to-changelist success response). Verified live 2026-08-27: created a real DeviceLogRequest row, confirmed present on the changelist afterward (domain=qateam, username=test1, timestamped the same run).\n\nRun via `python scripts/hq_client.py hq_setup/trigger_device_logs/device_logs_2_request.json` before Device Logs 3 ('Trigger') - that row logs back into the app and syncs, which is what causes the device to actually respond to this pending request.",
+  "actions": [
+    {
+      "type": "create_device_log_request",
+      "domain": "qateam",
+      "username": "test1"
+    }
+  ]
+}

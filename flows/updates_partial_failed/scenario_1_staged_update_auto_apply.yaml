@@ -1,0 +1,113 @@
+appId: org.commcare.dalvik
+tags:
+  - updates_partial_failed
+  - automatable
+---
+# Master Mobile Plan (2026) > Updates (partial and failed) > Test Case ID: 1.
+# App under test: "Mobile Updates - Test 1_2" (per the tab's own "Apps" note).
+#
+# The preceding Setup row is deliberately OUT of scope (Not automatable, per
+# coverage_matrix.csv): "Stage CCZ update, interrupt with CommCare update
+# mid-stream" requires precisely-timed interleaving of a real binary update
+# mid-download - that must be arranged by hand/harness before this flow runs,
+# ending with the device logged out and the CCZ update staged-but-unapplied.
+#
+# REMAINING GAP (genuinely not automatable in this framework, investigated
+# 2026-08-18 - confirmed, not just assumed): explored whether the Setup step
+# above could be automated by installing an older APK (resources/
+# commcare_2.45_release.apk), staging a CCZ update on it, then installing a
+# newer APK (commcare_2.64.0) mid-flow to interrupt it - the exact scenario
+# this row's own precondition describes. Same class of gap already
+# independently documented in
+# flows/recovery_measures/cc_reinstall_needed_flow.yaml and
+# cc_update_needed_flow.yaml's own "REMAINING GAP" notes (switching the
+# CommCare CLIENT binary version mid-test), confirmed again here against
+# both Maestro's and BrowserStack's own docs:
+#   - Maestro has no installApp (or any) command to install an app package
+#     during a running flow - only launchApp, which requires the app already
+#     installed (https://docs.maestro.dev/api-reference/commands, confirmed
+#     via the full command reference, not just the tapOn/launchApp pages).
+#   - BrowserStack App Automate's trigger_build "otherApps" field (see
+#     scripts/browserstack_client.py's own citation) pre-installs companion
+#     APKs alongside `app` at SESSION START only, before the Maestro flow's
+#     first command ever runs - there is no API to install a second/updated
+#     APK partway through an already-running session.
+#   - BrowserStack App Live's own docs describe installing an app as the
+#     initial session setup (from direct upload/Play Store/etc.), not a
+#     mid-session sideload via API either.
+# Bottom line: even with both APK files available locally, there is no
+# platform hook (Maestro or BrowserStack) to install a new APK AFTER a
+# session/flow has already started - only a fundamentally different,
+# ADB-capable device-farm infrastructure (outside BrowserStack App
+# Automate) could interleave the two installs with real timing control,
+# which is a genuine infrastructure change, not a flow-level fix.
+#
+# UPDATE (2026-08-19): that "fundamentally different infrastructure" now
+# exists in this repo - BrowserStack App Automate's APPIUM sessions (not
+# Maestro) support a genuine mid-session app upgrade via the
+# midSessionInstallApps capability + `mobile: installApp`, confirmed both
+# via BrowserStack's own docs and directly against this app's two real APKs
+# (resources/commcare_2.45_release.apk and the current release both share
+# an identical signing-certificate SHA-256 fingerprint, the requirement for
+# BrowserStack to treat it as an upgrade). scripts/run_appium_suite.py +
+# scripts/appium_scenarios.py's run_scenario_1() now exercises the REAL
+# Setup precondition end-to-end (stage the CCZ update, interrupt with a
+# binary swap mid-stream, land logged out) as CI's "group-d" job, in
+# addition to (not instead of) this Maestro flow's own verification-only
+# coverage below.
+# This flow covers the three "Automatable" verification steps that follow:
+#   - Update 1: log in and confirm the staged update auto-applied (app
+#     version should now read "Version 2").
+#   - Update 2: Form 1 opens/navigates without error (should reflect
+#     Version 2's content).
+#   - Update 3: Form 2 (unchanged) opens/navigates without error.
+#
+# GENERIC/BEST-EFFORT: "Mobile Updates - Test 1_2" is a pre-provisioned QA
+# app whose exact menu/form structure isn't available in this repo or
+# commcare-android - "Form 1" and "Form 2" below are tapped by the literal
+# names the sheet itself uses, which is assumed (not verified) to match the
+# on-screen labels.
+#
+# Selector citations live in the reused subflows - see
+# flows/common/login.yaml, flows/common/check_app_version_via_about.yaml and
+# flows/common/navigate_form_no_errors.yaml.
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: ".*Mobile Updates - Test
+# 1_2") - a fresh BrowserStack session has no app installed until this
+# runs; see DispatchActivity.java's CommCareSetupActivity routing when
+# currentApp == null. NOTE: this by itself does NOT establish the "staged
+# CCZ update, interrupted mid-stream" precondition the header above already
+# flags as out-of-scope/Setup - it only gets the device to a plain fresh
+# install of this app, which is a prerequisite for that out-of-scope setup
+# to even begin.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_MOBILE_UPDATES_1_2}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+
+# --- Update 1: staged update auto-applied on login -> now on Version 2. ---
+# UPDATE (2026-08-19), per direct user instruction: dropped the
+# EXPECTED_VERSION param - see check_app_version_via_about.yaml's own
+# UPDATE comment for the full citation (HQ build version drift, not a
+# real regression signal).
+- runFlow: ../common/check_app_version_via_about.yaml
+
+# --- Update 2: updated Form 1 verification. ---
+- runFlow:
+    file: ../common/navigate_form_no_errors.yaml
+    env:
+      FORM_NAME: "Form 1"
+
+# --- Update 3: unchanged Form 2 verification. ---
+- runFlow:
+    file: ../common/navigate_form_no_errors.yaml
+    env:
+      FORM_NAME: "Form 2"

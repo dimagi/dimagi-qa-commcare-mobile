@@ -1,0 +1,55 @@
+appId: org.commcare.dalvik
+tags:
+  - prompted_updates
+  - partial
+---
+# Master Mobile Plan (2026) > Prompted Updates > "Prompted Update Scenario 3" -
+# No prompt for an un-starred (created but never Released) build.
+#
+# PARTIAL: requires an HQ pre-step (create a new build, but do NOT release
+# it) between this flow's logout and relogin - see
+# hq_setup/prompted_updates/scenario_03_unreleased_build.json. ASSUMES
+# Setup 2/3 have already run (latest build In Test + prior build Released,
+# Prompt Updates to CommCare/App = On), so the device is currently on the
+# prior released version with no prompt pending.
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: ".*Basic Tests$") -
+# a fresh BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
+# null. Only needed once, before the first login below - the later
+# re-logins in this same flow reuse the app that's still installed.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_BASIC_TESTS}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+# Logout keeping the current (prior released) version installed - no update
+# is taken here.
+- runFlow: ../common/logout.yaml
+
+# === HQ pre-step runs here in a real execution: create a new build, leave it un-released ===
+# (hq_setup/prompted_updates/scenario_03_unreleased_build.json)
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- assertNotVisible: "New version of the application is available"
+- assertNotVisible: "New version of the application is required"
+
+# Tap into the app and back out - confirm the un-starred build still doesn't
+# surface a prompt after further on-device navigation.
+- tapOn: "Start"
+- pressKey: Back
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+- assertNotVisible: "New version of the application is available"
+- assertNotVisible: "New version of the application is required"

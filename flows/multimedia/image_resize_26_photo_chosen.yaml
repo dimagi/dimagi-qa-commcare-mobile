@@ -1,0 +1,89 @@
+appId: org.commcare.dalvik
+tags:
+  - multimedia
+  - automatable
+---
+# Master Mobile Plan (2026) > Multimedia > "Image Resize 26" - Photo chosen
+# (from gallery) per question + submit.
+#
+# REWRITTEN 2026-08-12 from a real on-device recording the user captured.
+# Every previous version of this file assumed the target was the separate
+# top-level "Image Resize" MODULE (Large/Small/Wide/Tall/Smart, each its
+# own multi-question form) - that assumption was wrong. The real target,
+# confirmed live, is a much simpler SINGLE FORM: "Multimedia" (module) >
+# "Image Resize" (form, the 2nd item in that module's own form list, name-
+# colliding with the unrelated sibling module of the same name). Ground-
+# truthed against the real CCZ (resources/qateam - Multimedia - v381.ccz,
+# modules-0/forms-1.xml): an intro trigger, then four image/* upload
+# questions in a fixed sequence - Original_Size, Small, Medium, Large -
+# each its own screen (no group wrapping), none required.
+#
+# addMedia pushes a small local placeholder PNG (assets/sample_image.png)
+# into the device's gallery so "Choose Image" - a real Android photo-picker
+# intent, see views/widgets/ImageWidget.java's mChooseButton ->
+# WidgetUtils.createPickMediaIntent(getContext(), "image/*") /
+# FormEntryConstants.IMAGE_CHOOSER - has something to select. "Choose
+# Image" button text verified against res/values/strings.xml:223
+# (choose_image = "Choose Image"). Picking the pushed image out of
+# whichever picker UI the OS shows is delegated to
+# ../common/pick_first_gallery_image.yaml; reusing the exact same picked
+# image for all four questions satisfies the sheet's "select the same
+# image for all four questions". nav_btn_next/nav_btn_finish ids verified
+# against res/layout/screen_form_entry.xml.
+- addMedia:
+    - "./assets/sample_image.png"
+# Prepends install_app_as_web_user.yaml (APP_NAME: Multimedia) - a fresh
+# BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
+# null.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_MULTIMEDIA}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- tapOn: "Start"
+# UPDATE, confirmed live 2026-08-12: a plain `tapOn: "Multimedia"` here
+# landed on the WRONG "Image Resize" afterward - the separate, unrelated
+# top-level MODULE (Large/Small/Wide/Tall/Smart Image forms), not the form
+# inside the "Multimedia" module this flow actually targets. Root cause:
+# "Multimedia" is ALSO this app's own toolbar title, and matches ambiguously.
+# Scoped to the row_txt id, the same fix already proven live in
+# flows/multimedia/photo_01_can_remove_taken_photo.yaml and
+# photo_02_can_remove_chosen_photo.yaml for this exact ambiguity.
+- tapOn:
+    id: "org.commcare.dalvik:id/row_txt"
+    text: "Multimedia"
+- tapOn: "Image Resize"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_next"
+    timeout: 10000
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+
+# Original_Size / Small / Medium / Large - choose an image, then advance.
+# UPDATE, confirmed live 2026-08-12: a fixed "3 next-taps, then assume the
+# 4th is last" count is fragile - if the real question count/order ever
+# differs from this assumption, the flow ends up waiting on nav_btn_finish
+# on a screen that still shows nav_btn_next instead, and fails outright.
+# Replaced with a loop that checks which button is actually present after
+# each choice (Finish means done; Next means keep going) rather than
+# assuming a fixed number of questions up front - same fix applied to
+# flows/multimedia/image_resize_25_photo_taken.yaml.
+- repeat:
+    times: 6
+    while:
+      notVisible:
+        id: "org.commcare.dalvik:id/nav_btn_finish"
+    commands:
+      - tapOn: "Choose Image"
+      - runFlow: ../common/pick_first_gallery_image.yaml
+      - tapOn:
+          id: "org.commcare.dalvik:id/nav_btn_next"
+          optional: true
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"

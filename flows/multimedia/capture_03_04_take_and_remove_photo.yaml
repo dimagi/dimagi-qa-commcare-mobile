@@ -1,0 +1,90 @@
+appId: org.commcare.dalvik
+tags:
+  - multimedia
+  - partial
+---
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_BASIC_TESTS}
+# Prepends install_app_as_web_user.yaml (APP_NAME: Basic Tests) - a fresh
+# BrowserStack session has no app installed until this runs; see DispatchActivity.java's
+# CommCareSetupActivity routing when currentApp == null.
+#
+# Master Mobile Plan (2026) > Multimedia > "Capture 3" (Take picture for
+# image question) + "Capture 4" (Remove + retake image), combined since
+# Capture 4 is a direct continuation of Capture 3 on the same question.
+#
+# **CAMERA-CAPTURE FLAKINESS CAVEAT (same as
+# photo_01_can_remove_taken_photo.yaml / coverage_matrix.csv's "Image Resize
+# 25" row)**: real camera capture is flaky/unsupported on most cloud
+# emulators/BrowserStack device images - there is no Maestro-native way to
+# inject a photo into the OS camera app's capture flow. The shutter/confirm
+# selectors below are the SAME unverified guesses used in
+# photo_01_can_remove_taken_photo.yaml - see that flow's header comment for
+# the full caveat. Only feasible if the BrowserStack device supports an
+# injected camera image.
+#
+# NAVIGATION CORRECTED (previously wrong, now source-verified): extracted
+# basic_tests.ccz (commcare-android/app/instrumentation-tests/resources - not
+# committed here) shows the app's module list is "Basic Form Tests"
+# (en/app_strings.txt: modules.m0), NOT "Basic Tests" - that's only the app's
+# display name, not a menu item, so the original `tapOn: "Basic Tests"` below
+# would never have matched anything. The "Multimedia Only" form (forms.m0f10)
+# lives directly under that module; its Image question (q_image_acquire,
+# modules-0/forms-10.xml) is reachable with no Next taps since every question
+# in this form renders on one screen (Question List style) - confirmed by the
+# same source, not just assumed. Path: Start > Basic Form Tests > Multimedia Only.
+#
+# Button text (capture_image="Take Picture", discard_image="Remove Image")
+# verified against the same res/values/strings.xml citations as
+# photo_02_can_remove_chosen_photo.yaml / photo_01_can_remove_taken_photo.yaml.
+#
+# "verify image visible" IS NOT asserted by a direct id selector: unlike the
+# discard_image button, ImageWidget.java's own attached-image preview
+# (mImageView, line 68/192) is created purely in code with only a setTag(),
+# no fixed Android resource id (app/src/org/commcare/views/widgets/
+# ImageWidget.java) - the same "no fixed resource id" caveat already
+# documented in flows/common/verify_form_b_photo_question.yaml for this
+# widget's buttons. The best available proxy signal is discard_image
+# ("Remove Image") itself becoming VISIBLE, since ImageWidget only flips it
+# to VISIBLE once a binary attachment is actually registered (same
+# mDiscardButton citation as photo_02) - i.e. if "Remove Image" is showing,
+# an image was successfully attached and is presumably being previewed.
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- tapOn: "Start"
+- tapOn: "Basic Form Tests"
+# UPDATE, confirmed live (run 31276111657): "Multimedia Only" is below the
+# fold in this module's form list - see capture_01_gather_signature.yaml's
+# own UPDATE comment for the full citation/root-cause writeup.
+- scrollUntilVisible:
+    element:
+      text: "Multimedia Only"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Multimedia Only"
+# One tap past this form's own intro screen before "Take Picture" is
+# reachable - see capture_01_gather_signature.yaml's own UPDATE comment for
+# the full root-cause writeup.
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+# UPDATE, confirmed live 2026-08-12: this used to hand-roll its own
+# shutter/confirm taps (twice) instead of calling
+# ../common/capture_camera_photo.yaml - missing that shared subflow's own
+# fix for the camera app's first-run "Turn on Location tags?" dialog,
+# which can block the shutter button entirely. Switched both capture
+# points to the shared subflow rather than re-duplicating its fixes here.
+# --- Capture 3: take a picture, verify it attached ---
+- tapOn: "Take Picture"
+- runFlow: ../common/capture_camera_photo.yaml
+- assertVisible: "Remove Image"
+# --- Capture 4: remove it, then retake ---
+- tapOn: "Remove Image"
+- assertNotVisible: "Remove Image"
+- tapOn: "Take Picture"
+- runFlow: ../common/capture_camera_photo.yaml
+- assertVisible: "Remove Image"

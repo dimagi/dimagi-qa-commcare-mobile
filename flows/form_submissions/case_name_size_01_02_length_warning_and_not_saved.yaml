@@ -1,0 +1,176 @@
+appId: org.commcare.dalvik
+tags:
+  - form_submissions
+  - automatable
+---
+# Master Mobile Plan (2026) > Form Submissions > "Case Name Size 1" (Basic
+# Tests app -> Case Tests -> register a case with a name over 255
+# characters, attempt to submit, confirm the app shows a length-warning
+# error) and "Case Name Size 2" (the oversized submission must NOT appear
+# under Saved Forms afterward). One sequential flow, same convention as
+# flows/conditional_enum_in_case_list/conditional_id_mapping_01_06_full_scenario.yaml
+# (a single narrative split across sheet rows).
+#
+# Verified against commcare-android source (read-only reference, not modified):
+#   The CCZ's own en/app_strings.txt + modules-3/forms-0.xml (extracted
+#     read-only from resources/qateam - [Master] Basic Tests - v1141.ccz,
+#     never committed/modified): modules.m3="Case Tests",
+#     forms.m3f0="Create a Case" (this app's "register a case" form,
+#     matching flows/case_filters/fuzzy_search_01_03.yaml's own citation of
+#     this same module). Body: a single required `casename` text question
+#     ("What is the case name? You should not be allowed to proceed if the
+#     question is empty."), then a required select1 `confirm` question with
+#     two choices whose itext is literally "Confirm - Please create this
+#     case." / "Cancel - Please do not create this case." - no client-side
+#     max-length constraint is defined in the form itself (confirmed by
+#     grepping the form's <bind> elements - only required="true()", no
+#     length constraint), so the 255-char check below happens at
+#     submit-time, not as an inline form-validation error.
+#   FormRecord.java updateAndProcessRecord(): FormRecordProcessor.process()
+#     of a completed form throws InvalidCasePropertyLengthException when a
+#     case property's value is too long, which is wrapped as an
+#     IllegalStateException using exactly R.string.invalid_case_property_length
+#     = "Invalid %1s, value must be 255 characters or less"
+#     (app/res/values/strings.xml line 334) - asserted below via a regex on
+#     the confirmed literal tail of this template ("value must be 255
+#     characters or less"), not the %1s-substituted property name (its
+#     exact substituted value - the raw case-transaction property name vs.
+#     a display label - is not confirmed by any source in this repo).
+#   SaveToDiskTask.java doTaskBackground(): catches the resulting
+#     FormInstanceTransactionException and returns SAVE_UNRECOVERABLE_ERROR
+#     with that same message text.
+#   FormEntryActivity.java savingComplete(): on SAVE_UNRECOVERABLE_ERROR,
+#     shows the message via UserfacingErrorHandling.createErrorDialog()
+#     titled Localization.get("notification.formentry.save_error.title") =
+#     "Error Saving your Form" (android_translatable_strings.txt line 697),
+#     with an "OK" button (R.string.ok), then calls
+#     quarantineRecordOnError() - which sets the form record's status to
+#     QUARANTINED, not COMPLETE. This is exactly why "Case Name Size 2"
+#     expects the record to be ABSENT from Saved Forms afterward: Saved
+#     Forms lists FormRecordFilter.Saved-matching (completed, non-
+#     quarantined) records, and a quarantined record doesn't match that
+#     filter.
+#   android_translatable_strings.txt: home.forms.saved="Saved" (home card
+#     label); app.workflow.saved.heading="Saved Forms" (list screen title).
+#   Credentials: test1/123 (InstrumentationUtility.kt's login() default,
+#     preferred over the sheet's own prose which elsewhere says "1234").
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: ".*Basic Tests$") - a
+# fresh BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
+# null.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_BASIC_TESTS}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: "test1"
+      PASSWORD: "123"
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+
+# --- Case Name Size 1: register a case with a > 255 char name, attempt
+# submit, confirm the length-warning error. ---
+- tapOn: "Start"
+- tapOn: "Case Tests"
+- tapOn: "Create a Case"
+# UPDATE, confirmed live (2026-08-18, Android 16): dropped hideKeyboard -
+# nav_btn_next lives in the top toolbar, never covered by an open
+# keyboard, and this exact hideKeyboard-falls-back-to-a-real-back-press
+# bug (see flows/case_filters/fuzzy_search_01_03.yaml's own UPDATE for
+# the full citation) can pop an unwanted "Exit Form?" dialog here instead.
+- inputText: "CaseNameTooLongCaseNameTooLongCaseNameTooLongCaseNameTooLongCaseNameTooLongCaseNameTooLongCaseNameTooLongCaseNameTooLongCaseNameTooLongCaseNameTooLongCaseNameTooLongCaseNameTooLongCaseNameTooLongCaseNameTooLongCaseNameTooLongCaseNameTooLongCaseNameTooLongCaseNameTooLong"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+# UPDATE, confirmed live 2026-08-12: added an explicit wait for
+# nav_btn_finish before tapping it (was previously a bare tap with no
+# wait at all) - this tap is NOT made optional like the success-path
+# hardening elsewhere in this repo, since it's what actually triggers the
+# save attempt this test's error-path assertion depends on.
+- tapOn: "Confirm - Please create this case."
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_finish"
+    timeout: 10000
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"
+- assertVisible: "Error Saving your Form"
+- assertVisible:
+    text: "(?i).*value must be 255 characters or less.*"
+- tapOn: "OK"
+# UPDATE, confirmed live (2026-08-08, real BrowserStack failure on BOTH the
+# main attempt and its --retry-failed re-run, build
+# af73a71fe00d14a20fc6d59a0b3a2da22c1211a0, session
+# .../e4c3ec923b0ad37805250109aede2c9d8c68886060c11c60): the plain
+# `assertVisible: "Start"` right after tapping "OK" failed - the downloaded
+# maestroScreenshot for that exact failure shows the device sitting on the
+# "Case Tests" module list (title bar reads "Case Tests" with a back arrow),
+# NOT the home/"Start" screen. This matches FormEntryActivity.java's real
+# dismissal behavior: savingComplete()'s SAVE_UNRECOVERABLE_ERROR branch
+# (already cited above) calls quarantineRecordOnError() and then finishes
+# the form-entry Activity, which returns control to whichever Activity
+# launched it - here, the "Case Tests" module list (EntitySelectActivity),
+# one level below the home screen - not directly to Start. A single
+# `assertVisible: "Start"` therefore raced a screen that still needed one
+# more back-press. Fixed the same way as the identical "variable submenu
+# depth" problem in flows/multimedia/image_resize_01_04_default_setting.yaml
+# (see that file's own header): a bounded repeat-while loop that presses
+# back until "Start" is actually visible, rather than assuming a fixed
+# number of screens (or none) separate the post-dialog state from home.
+- repeat:
+    times: 5
+    while:
+      notVisible:
+        text: "Start"
+    commands:
+      - back
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+
+# --- Case Name Size 2: the oversized-name submission must NOT show up
+# under Saved Forms (it was quarantined, not completed). ---
+# UPDATE, confirmed live (2026-08-08, real BrowserStack failure, build
+# fc7ff420bd1deb299f7f8a391f2287999c1cf0bd): "Assert that 'Saved Forms' is
+# visible" failed - the failing screenshot showed the toolbar title is
+# actually this app's own name (e.g. "[Master] Ba...", truncated), not the
+# literal "Saved Forms" string this header's own citation assumed
+# (app.workflow.saved.heading) - that string may be the Activity's
+# setTitle() value rather than something rendered as visible toolbar text
+# in this CCZ/APK combination, or may simply differ from the citation.
+# "Filter By: All Completed Forms" IS visible on the real screen (a filter
+# chip, not the toolbar title) - matching on that instead confirms we
+# genuinely reached the right screen. The list itself was empty in the
+# failing screenshot too, which is the REAL pass condition this test cares
+# about (the quarantined form correctly absent) - kept as its own
+# assertNotVisible check below, unchanged.
+# UPDATE, confirmed live (run 31276111657): `assertVisible: "Filter By:"`
+# failed outright even though the failure screenshot shows "Filter By: All
+# Completed Forms" clearly rendered. Bumping to extendedWaitUntil with a
+# 10s timeout (2nd correction) STILL failed identically in a follow-up
+# local verification run, ruling out a plain timing race. Root cause,
+# confirmed in source: FormRecordListActivity.java line 163 - this text is
+# the SELECTED item of a real android.widget.Spinner
+# (id/entity_select_filter_dropdown, ArrayAdapter<String> over
+# R.layout.form_filter_display) - Spinners are a known category of Android
+# widget where the visually-rendered child TextView isn't always exposed as
+# its own leaf node in the accessibility tree Maestro reads (the Spinner
+# can consume/collapse it), so a text-based match can keep missing
+# something that's genuinely on screen. Fixed by matching the Spinner's own
+# confirmed resource id instead of its rendered text - id-based visibility
+# doesn't depend on how the child TextView happens to surface in the
+# accessibility dump.
+- tapOn: "Saved"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/entity_select_filter_dropdown"
+    timeout: 10000
+- assertNotVisible:
+    text: "(?i).*CaseNameTooLong.*"
+- back
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000

@@ -1,0 +1,66 @@
+appId: org.commcare.dalvik
+tags:
+  - support_menus
+  - partial
+---
+# Master Mobile Plan (2026) > Support Menus > "Menu 2" - Force Log
+# Submission: tap Advanced > Force Log Submission, verify the "Device Logs
+# Pending" notification does NOT appear.
+#
+# PARTIAL: the sheet's own pre-requisite ("verify the app does NOT have the
+# custom property logenabled=on_demand") is an HQ app-builder settings check
+# on the currently-published build - this flow does not verify that setting
+# itself (no on-device way to introspect it), it only assumes whichever
+# build is under test already satisfies it and checks the on-device
+# consequence.
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: ".*Basic Tests$") - a fresh
+# BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
+# null. Same "Basic Test" app as menu_01_report_problem.yaml - see that
+# file's header for why the Advanced menu itself is app-agnostic.
+#
+# Verified against commcare-android source (read-only reference, not modified):
+#   android_translatable_strings.txt: force.log.submit="Force Log
+#     Submission" (line 911), notification.logger.serialized.title="Device
+#     Logs Pending" (line 684) - the notification this flow asserts absent.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_BASIC_TESTS}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+- tapOn: "More options"
+- tapOn: "Advanced"
+- assertVisible: "CommCare > Advanced"
+# UPDATE, confirmed live (2026-08-08, real CI failure, run 31259796789):
+# this whole flow (and every OTHER flow bundled in the same zip) failed
+# with BROWSERSTACK_TESTSUITE_PARSE_ERROR - `openNotifications` is not a
+# real Maestro command (confirmed via `maestro check-syntax`: "Invalid
+# Command: openNotifications", and via maestro-orchestra-models.jar's own
+# class listing, which has no notification-related command at all).
+# Maestro has no dedicated "open notification shade" action; the
+# documented workaround is a coordinate swipe from the very top edge of
+# the screen downward - the same real-device gesture a user would perform.
+- tapOn: "Force Log Submission"
+- swipe:
+    start: "50%, 1%"
+    end: "50%, 60%"
+# UPDATE (2026-08-19), same defensive Android 16 onboarding-overlay
+# dismiss as flows/session_expiration/setup_02_restore_user_session_expires.yaml
+# and flows/login/commcare_odk_02_check_session.yaml (see either file's own
+# UPDATE comment for the full citation) - a first-time-swipe system
+# coachmark can cover the shade after this exact gesture, and left
+# undismissed it can linger into whatever runs after this flow in the same
+# device session, not just affect this assertion.
+- tapOn:
+    text: "OK"
+    optional: true
+- assertNotVisible: "Device Logs Pending"
+- back

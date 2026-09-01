@@ -1,0 +1,41 @@
+{
+  "_comment": "Run this BEFORE any 'phase 1' recovery_measures flow (the ones exercising the NORMAL, non-forced Test One -> Test Two update via the home screen's Update App menu: update_app_01_normal_update_to_two.yaml, reinstall_update_03_update_to_test_two.yaml). Confirmed live (2026-08-10, run 5a4ec96afbc87c985933d00b4c7d649f32af7c4f) that CommCareHQ allows MULTIPLE builds to be 'Released' simultaneously, and the app's own update-check always offers the HIGHEST-version released build - so with Test Three left released from an earlier QA cycle/run, a normal update check from Test One jumps straight to Test Three, skipping Test Two entirely (screenshot showed 'Update to version 163 & log out' when the flow expected version 160/Test Two). scripts/hq_client.py's resolve_app_codes() only ever RELEASES builds it's asked to resolve - it has no un-release capability - so Test Three's stale 'Released' state from a prior run has to be explicitly cleared here, via scripts/run_suite.py's --hq-setup flag, before phase-1 flows run. Run phase2_ensure test-three is released (or just let resolve_app_codes do it automatically, since phase-2 flow files reference ${APP_CODE_RU_TEST_THREE}/${APP_CODE_OFFLINE_TEST_THREE}) before running phase-2 flows. See scripts/app_registry.py's RU_TEST_THREE/OFFLINE_TEST_THREE entries for these app_id/saved_app_id values. UPDATE (2026-08-27): the last 4 actions below do the same for 'Recovery: Update App' (9d63118c3eda4e56bebfb52762804d53, see app_registry.py's UPDATE_APP_ONE/TWO/THREE entries) - this app had v96/v99/v102/v105 ALL simultaneously released (everything above Test Two/v93), so a normal update-check from Test One (v84) needs all four un-released, not just one, to land exactly on Test Two.",
+  "actions": [
+    {
+      "type": "mark_build_status",
+      "app_id": "c49c34a1d74297ecb6ecef7a7c5d3f88",
+      "saved_app_id": "c0c55463a7fa43f7a6409c54849159a6",
+      "is_released": false
+    },
+    {
+      "type": "mark_build_status",
+      "app_id": "8009e8a2814a465b818d56284011b1e9",
+      "saved_app_id": "e2e7a3dcbaf94035b2ce8dbd5f1dd3b3",
+      "is_released": false
+    },
+    {
+      "type": "mark_build_status",
+      "app_id": "9d63118c3eda4e56bebfb52762804d53",
+      "saved_app_id": "1e752bb102844c7f912f9bba220c6b67",
+      "is_released": false
+    },
+    {
+      "type": "mark_build_status",
+      "app_id": "9d63118c3eda4e56bebfb52762804d53",
+      "saved_app_id": "3bbb4bfcc50f4a61ad66fad3526a2575",
+      "is_released": false
+    },
+    {
+      "type": "mark_build_status",
+      "app_id": "9d63118c3eda4e56bebfb52762804d53",
+      "saved_app_id": "32de0bb536c2467fb7b593caee4695ce",
+      "is_released": false
+    },
+    {
+      "type": "mark_build_status",
+      "app_id": "9d63118c3eda4e56bebfb52762804d53",
+      "saved_app_id": "ab2fc77a762643cab4025c9607e66040",
+      "is_released": false
+    }
+  ]
+}

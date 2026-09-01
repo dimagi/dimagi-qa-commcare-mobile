@@ -1,0 +1,262 @@
+appId: org.commcare.dalvik
+tags:
+  - case_filters
+  - partial
+---
+# Master Mobile Plan (2026) > Case Filters > "Case Lists 4" (Update
+# Geoservices case / Rate Case) + the automatable portion of "Case Lists 5"
+# (Test case details for geoservices) - steps 1-3 only (star rating in the
+# case list, case detail values). Case Lists 5's own steps 4-5 ("Select
+# 'Show Address'" -> external maps app pin verification) are Not
+# automatable - see this tab's Notes column for that row - and are
+# deliberately not attempted here.
+#
+# Self-contained per this repo's "each flow runnable in isolation"
+# convention: registers its own geo_case first (same steps as
+# geoservices_01_register_case.yaml - see that file's header for the full
+# Register Case citation) rather than assuming "Case Lists 3" ran first in
+# the same session. Inherits the SAME geopoint/GPS-fix caveat that file
+# documents - genuinely best-effort, not guaranteed, since site_location is
+# required="true()" with no manual-entry fallback.
+#
+# UPDATE, confirmed live 2026-08-11 (same build/evidence as
+# geoservices_01_register_case.yaml's own UPDATE note): Register Case is a
+# single field-list page (top "FINISH" bar, no nav_btn_next between
+# questions, button stays "RECORD LOCATION" even after a fix is captured) -
+# the registration steps below were corrected to match. Rate Case's own
+# modules-8/forms-1.xml ALSO uses <group appearance="field-list"> - same
+# single-page/top-"FINISH"-bar model, not the nav_btn_next/nav_btn_finish
+# sequence originally assumed below for the rating+comment page either.
+#
+# Ground truth for Rate Case (m8-f1), extracted the same way from
+# resources/qateam - [Master] Basic Tests - v1141.ccz:
+#   en/app_strings.txt: forms.m8f1="Rate Case".
+#   suite.xml: m8-f1's own <session><datum id="case_id" nodeset=
+#     "instance('casedb')/casedb/case[@case_type='geo_case'][@status=
+#     'open']" detail-select="m8_case_short" detail-confirm="m8_case_long"/>
+#     </session> - tapping "Rate Case" shows a case list (m8_case_short),
+#     tapping a case name shows a confirm/detail screen (m8_case_long), then
+#     the module-wide default/app_strings.txt m8_select_text="Continue"
+#     button (same "tap case name, tap Continue" pattern already used by
+#     flows/form_submissions/save_to_case_01_03_register_update_case_list.yaml's
+#     m1-f1 entry) proceeds into the form.
+#   modules-8/forms-1.xml: 2 questions - rate_site (select1, label "Choose a
+#     rating:", 5 items literally labelled "1 - Poor"/"2 - Needs
+#     Improvement"/"3 - Average"/"4 - Good"/"5 - Exceptional") and comment
+#     (xsd:string, label "Enter some text:"). No <stack> override on this
+#     entry (unlike m8-f0's explicit return-to-m8), so after saving it falls
+#     through further up the navigation stack than the Geoservices menu -
+#     confirmed live-equivalent by the sheet's own "Case Lists 4" claim
+#     ("returned to the home screen"), asserted below as "Start" visible.
+# UPDATE (3rd correction), confirmed live 2026-08-11: same
+# too-fast-for-a-bare-assertVisible race documented in
+# geoservices_01_register_case.yaml's own 3rd correction - wrapped the
+# "Latitude:" check in extendedWaitUntil.
+#
+#   BOTH m8_case_short's and m8_case_long's own case_rate_site_2 field
+#     render the rating as LITERAL star characters via en/app_strings.txt's
+#     m8.case_short/case_long.case_rate_site_2.enum.k{one..five} values
+#     ("★", "★★", "★★★", "★★★★", "★★★★★") - not a description, an exact,
+#     source-verified string this flow can assertVisible on directly,
+#     confirming the sheet's own "if you rated a 3, 3 stars will display"
+#     claim precisely.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_BASIC_TESTS}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+
+# UPDATE (2026-08-19), per direct user instruction: give this run's site a
+# dynamic, unique name instead of the same literal "Geoservices Rate
+# Automation Site" every run - a shared, never-pruned domain accumulating
+# identically named cases run after run is confusing to eyeball in the
+# case list. Same run-suffix mechanism already established in
+# flows/conditional_enum_in_case_list/conditional_id_mapping_01_06_full_scenario.yaml
+# (a real Date.now() value generated on the test-runner side, not
+# device-derived) - see that flow's own UPDATE comment for the full
+# citation. One runScript call here covers both this file's own
+# registration step below and the Rate Case searches further down, since
+# (per the header) this whole file is self-contained/run in isolation.
+- runScript:
+    file: assets/generate_run_suffix.js
+
+# === Setup: register a geo_case to rate (see header - same steps as
+# geoservices_01_register_case.yaml's own "Case Lists 3"). ===
+- tapOn: "Start"
+- tapOn: "Geoservices"
+- tapOn: "Register Case"
+# UPDATE, confirmed live (2026-08-18, real Android 16 failure): dropped
+# hideKeyboard - the failure hierarchy dump showed an unwanted "Exit
+# Form?" dialog (hideKeyboard falls back to a real back-press once the
+# keyboard's already auto-dismissed, device/OS-dependent timing). Maestro
+# taps via the accessibility tree, not pixel coordinates, so an open IME
+# overlay doesn't block finding/tapping "Record Location" underneath it -
+# same fix as this file's own sibling geoservices_01_register_case.yaml.
+- inputText: "Geoservices Rate Automation Site ${output.runSuffix}"
+- tapOn: "Record Location"
+- extendedWaitUntil:
+    visible: "Location Found!"
+    timeout: 65000
+# UPDATE, confirmed live (2026-08-18, Android 16): failed at exactly the
+# 10s timeout, but the failure hierarchy dump (captured moments later)
+# and a user-supplied screenshot both showed "Latitude: ..." already
+# fully rendered with FINISH reachable - a marginal miss, not a
+# structural bug, same as this file's own sibling
+# geoservices_01_register_case.yaml. Raised the timeout for real headroom
+# instead of guessing at a smaller bump.
+# UPDATE (2nd correction, 2026-08-18): recurred at 20s too, same marginal
+# miss - see geoservices_01_register_case.yaml's own 2nd correction for
+# the locator cross-check that ruled out a text-matching problem (the
+# colon is plain ASCII; this is genuine timing variance, not a selector
+# bug). Raised again. WRONGLY diagnosed as a timing variance.
+# UPDATE (3rd correction, 2026-08-18), per direct user guidance: recurred
+# again even at 40s, ruling out timing - see
+# geoservices_01_register_case.yaml's own 3rd correction for the full
+# citation: the real node text is a multi-line string and Maestro's
+# textRegex requires a FULL match, not substring/contains, so a bare
+# "Latitude:" with no wildcards could never match regardless of wait
+# time. Fixed with the same (?s)-wildcarded pattern.
+- tapOn: "Record Location"
+- extendedWaitUntil:
+    visible: "(?s).*Latitude.*"
+    timeout: 15000
+- tapOn: "FINISH"
+- assertVisible: "Geoservices"
+
+# === Case Lists 4: Rate the case just created. ===
+- tapOn: "Rate Case"
+- assertVisible:
+    id: "org.commcare.dalvik:id/screen_entity_select_list"
+# UPDATE (2026-08-17): confirmed live via a user-supplied recording - this
+# domain's geo_case list accumulates cases across every past automation
+# run (no cleanup between runs), already a dozen+ entries deep. A bare
+# tapOn only searches the current viewport, and even a generous
+# scrollUntilVisible timeout only pushes the problem down the road - as
+# this list keeps growing across every future run, any fixed timeout
+# eventually stops being enough (the exact failure mode already documented
+# and fixed the same way in flows/conditional_enum_in_case_list/
+# conditional_id_mapping_01_06_full_scenario.yaml's own header). Using the
+# case list's own search box instead - org.commcare.dalvik:id/
+# search_action_bar is core CommCare chrome on entity-select list screens
+# (confirmed present here too, same screen_entity_select_list id asserted
+# above), so typing the name filters the list live regardless of how large
+# the backing list has grown. Anchored with ^...$ so the tap can't match
+# the search-results banner's own "results for your search: ..." text,
+# which also contains this case name as a substring - same fix as
+# conditional_id_mapping's own UPDATE comment.
+- tapOn:
+    id: "org.commcare.dalvik:id/search_action_bar"
+- inputText: "Geoservices Rate Automation Site ${output.runSuffix}"
+- hideKeyboard
+- tapOn:
+    text: "^Geoservices Rate Automation Site ${output.runSuffix}$"
+- tapOn: "Continue"
+- tapOn: "3 - Average"
+- tapOn:
+    text: "Enter some text:"
+    optional: true
+# UPDATE, confirmed live (2026-08-18, Android 16): dropped hideKeyboard -
+# "FINISH" lives in the top toolbar, never covered by an open keyboard,
+# and this exact hideKeyboard-falls-back-to-a-real-back-press bug (see
+# flows/case_filters/fuzzy_search_01_03.yaml's own UPDATE for the full
+# citation) can pop an unwanted "Exit Form?" dialog here instead.
+- inputText: "Automation rating comment"
+- tapOn: "FINISH"
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+
+# === Case Lists 5 (steps 1-3 only - the automatable portion): re-open Rate
+# Case and confirm the star rating shows correctly, both in the case list
+# and on the case's own detail/confirm screen. Steps 4-5 (Show Address ->
+# external maps app) are deliberately not attempted - see header. ===
+- tapOn: "Start"
+- tapOn: "Geoservices"
+- tapOn: "Rate Case"
+# Same accumulating-list risk and search-box fix as the earlier Rate Case
+# section above - see that UPDATE comment for the full writeup.
+- tapOn:
+    id: "org.commcare.dalvik:id/search_action_bar"
+- inputText: "Geoservices Rate Automation Site ${output.runSuffix}"
+- hideKeyboard
+# UPDATE, confirmed live (2026-08-18, Android 16): failed - the failure
+# hierarchy dump showed the real rendered text is " ★★★ " with
+# surrounding padding spaces, not the bare "★★★" this asserted (same
+# full-match requirement already fixed for this file's own Latitude
+# check above - Maestro's textRegex needs a full match, and a bare
+# "★★★" can never match a padded " ★★★ "). Wildcarded to tolerate the
+# padding. CONFIRMED PASSING live (2026-08-18, build v6).
+- assertVisible: "(?s).*★★★.*"
+- tapOn:
+    text: "^Geoservices Rate Automation Site ${output.runSuffix}$"
+# Same padded-text fix as the search-results check just above.
+- assertVisible: "(?s).*★★★.*"
+# UPDATE (2026-08-19), per direct user instruction: also verify "SHOW
+# ADDRESS" actually opens Maps with the captured coordinates - previously
+# deliberately skipped (see header's Case Lists 5 steps 4-5 note), but the
+# user asked for this exact check to be added. A user-supplied recording
+# of this exact confirm/detail screen showed tapping it can surface a
+# single-resolver "Open with Maps" chooser (Just once/Always) before Maps
+# actually opens - optional here since that chooser only shows up if Maps
+# isn't already the device's default handler. The real, non-optional
+# confirmation is Maps' own visible "Search here" search-bar placeholder,
+# confirmed in that same recording. Backs out of Maps afterward, landing
+# back on this same confirm screen (a foreign-app back-press returns to
+# the previous app's existing activity, not a new CommCare screen), before
+# the existing back-to-Start sequence below.
+- tapOn: "SHOW ADDRESS"
+- tapOn:
+    text: "(?i)just once"
+    optional: true
+# UPDATE (2026-08-19), confirmed live (full CI run 32178919171): the
+# "Search here" wait below failed - the failure hierarchy dump showed
+# Maps' own first-launch sign-in onboarding screen instead ("Make it your
+# map", "Sign in for quick access to your favorite places and get better
+# recommendations", "Sign in"/"Skip" buttons) - a fresh BrowserStack
+# device has never opened Maps before, so this one-time screen appears
+# ahead of the actual map/search bar. Dismiss it via "Skip" before waiting
+# for the real map UI.
+- tapOn:
+    text: "Skip"
+    optional: true
+# UPDATE (2nd correction, 2026-08-22), confirmed live via two real CI
+# failure screenshots (both showing the map, the dropped pin, and a fully
+# rendered place card - "Delsoft Corporation" with Directions/Call/Save
+# buttons - open correctly): "Search here" is only ONE of several rotating
+# placeholder strings Maps' search bar shows ("Try gas station...", "Try
+# restaurants...", etc., presumably server-side/A-B-tested), not a fixed
+# string - so this wait was really a coin-flip on which placeholder Maps
+# happened to rotate to that run, not a real signal of whether Maps opened
+# successfully. "Directions" is part of the place card itself, present in
+# both real evidence screenshots regardless of the search bar's rotating
+# text - waits on that instead as the actually-stable confirmation that
+# SHOW ADDRESS genuinely opened Maps on the right place.
+- extendedWaitUntil:
+    visible: "Directions"
+    timeout: 15000
+# UPDATE (2026-08-19, 2nd correction), confirmed live (build
+# batch2-regressions-fix-v1): a fixed "1 back to exit Maps + 4 backs to
+# Start" sequence still landed one short, on the "[Master] Basic Tests"
+# module list again - exiting a foreign app's own back-stack isn't a
+# reliably fixed number of presses (same non-determinism already
+# documented for minimize_duplicate_create_subcase_update_case.yaml's own
+# back-to-Start attempts). Replaced the fixed count with a bounded
+# repeat that presses back only until "Start" genuinely becomes visible,
+# generous enough to absorb Maps' own variable exit depth on top of
+# CommCare's own screen stack.
+- repeat:
+    times: 8
+    while:
+      notVisible: "Start"
+    commands:
+      - back
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000

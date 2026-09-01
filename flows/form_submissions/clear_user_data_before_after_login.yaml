@@ -1,0 +1,128 @@
+appId: org.commcare.dalvik
+tags:
+  - form_submissions
+  - automatable
+---
+# Master Mobile Plan (2026) > Form Submissions > "Clear user Data - session not
+# logged in" and "Clear user Data - session logged in", run as ONE continuous
+# flow since the sheet's own step lists are a continuous before/after
+# narrative on the same screen ("...5. Now log into to mobile app with a
+# user. 6. Get back to the Advanced tab and it works now."), same "single
+# flow covers both before/after rows" convention as
+# flows/form_submissions/save_to_case_01_03_register_update_case_list.yaml.
+#
+# GROUND TRUTH (read-only commcare-android checkout, never modified):
+#   app/src/org/commcare/preferences/AppManagerAdvancedPreferences.java
+#     line 56-59: the "clear-user-data" Preference's visibility is set via
+#     `clearUserDataButton.setVisible(!"".equals(
+#     CommCareApplication.instance().getCurrentUserId()))` - i.e. this is a
+#     genuine, on-device, login-state-driven visibility toggle (hidden when
+#     no user is logged in, visible once one is) - exactly what this row
+#     tests, not a cosmetic/timing thing.
+#   app/res/xml/app_manager_preferences.xml: `<Preference
+#     android:key="clear-user-data"/>` - confirms the key exists in the
+#     screen's own preference XML (AppManagerAdvancedPreferences.java's
+#     click-listener setup has NO null-check on this findPreference(), unlike
+#     its visibility check above, which only makes sense if the key is
+#     always present in the XML).
+#   app/res/values/strings.xml line 136: `app_manager_advanced_settings_title`
+#     = "App Manager &gt; Advanced Settings" (i.e. literal "App Manager >
+#     Advanced Settings") - this IS the "App Manager > Advanced" screen the
+#     sheet's steps refer to.
+#   app/assets/locales/android_translatable_strings.txt line 907:
+#     `clear.user.data=Clear User Data` - the button's exact visible text.
+#   app/src/org/commcare/activities/AppManagerActivity.java line 43,66,83-87:
+#     the "Advanced" entry (R.string.app_manager_advanced_settings_option =
+#     "Advanced", app/res/values/strings.xml line 137) is a
+#     showAsAction-never options-menu item (i.e. under the toolbar's
+#     "More options" overflow, same affordance already used by
+#     flows/mobile_pins/setup_05_uninstall_app.yaml and
+#     flows/common/install_app_as_web_user.yaml for this exact icon) on
+#     AppManagerActivity itself - reached from the LOGIN screen's own
+#     "More options" > "Go To App Manager" (LoginActivity.java line 100,671,
+#     709; android_translatable_strings.txt line 345:
+#     `login.menu.app.manager=Go To App Manager`) - confirmed via
+#     flows/mobile_pins/setup_05_uninstall_app.yaml's own header, which
+#     documents this identical "More options" > "Go To App Manager" path.
+#
+# NAVIGATION GAP FOUND (documented here rather than silently worked around):
+# AppManagerActivity has NO on-screen entry point once a session is already
+# logged in - LoginActivity.finishWithSuccess() finishes itself on a
+# successful login (LoginActivity.java ~line 531-543), handing off to
+# DispatchActivity, which routes to StandardHomeActivity (or
+# RootMenuHomeActivity for Connect-enabled apps). Neither's own options
+# menu/nav-drawer (app/res/menu/menu_app_home.xml;
+# HomeNavDrawerController.java) contains an "App Manager" item, and
+# BaseDrawerActivity.kt's drawer-click dispatcher has no App-Manager case
+# either - the ONLY way back into AppManagerActivity from a logged-in state
+# is to log out first (which would undo the very login state this row is
+# trying to verify). The sheet's own step 6 ("Get back to the Advanced tab")
+# does not actually specify HOW, and no on-device path exists to literally
+# return to *AppManagerActivity's* "Advanced" screen post-login.
+#
+# RESOLUTION: this flow verifies the identical underlying action/preference
+# (same "clear-user-data" key, same "Clear User Data" display text, per
+# `clear.user.data` in both classes below) via the ONE screen that IS
+# reachable post-login: the home screen's OWN "More options" > "Advanced"
+# item (menu_app_home.xml line 24-28, id/action_advanced, title "Advanced" -
+# only reachable once logged in, since HomeScreenBaseActivity/StandardHome
+# activity itself doesn't exist pre-login), backed by
+# AdvancedActionsPreferences.java (a separate but functionally-equivalent
+# class, also keyed "clear-user-data"/"clear.user.data"). Unlike
+# AppManagerAdvancedPreferences (login-state-conditional visibility),
+# AdvancedActionsPreferences.updateConditionallyVisibleSpecificPrefs() (line
+# 107-125) never removes/hides CLEAR_USER_DATA - it is unconditionally
+# visible there, which is correct BY CONSTRUCTION since that whole screen is
+# only reachable when logged in. So: pre-login state is verified via the
+# literal "App Manager > Advanced Settings" screen (Clear User Data hidden,
+# since that's the only screen reachable before login where this toggle
+# lives), and post-login state is verified via the home screen's own
+# "Advanced" screen (Clear User Data visible) - the same button/preference,
+# reached via the only two screens that are each actually reachable in their
+# respective login state. This is judged Automatable, not Partial: both
+# on-device assertions are real and deterministic, the only deviation from
+# the sheet's literal wording is WHICH of the app's two (functionally
+# identical) "Advanced" screens is used for the post-login half, forced by a
+# real absence of any post-login route back to AppManagerActivity.
+#
+# Credentials: CC_TEST_USERNAME/CC_TEST_PASSWORD (test1/123 per
+# .env.example), same as every other flow in this repo.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_BASIC_TESTS}
+
+# === "Clear user Data - session not logged in": App Manager > Advanced,
+# before any login attempt (LoginActivity is still on the back stack - it
+# only finish()es on a SUCCESSFUL login, which hasn't happened yet). ===
+- tapOn: "More options"
+- tapOn: "Go To App Manager"
+- assertVisible:
+    id: "org.commcare.dalvik:id/apps_list_view"
+- tapOn: "More options"
+- tapOn: "Advanced"
+- assertVisible: "App Manager > Advanced Settings"
+- assertNotVisible: "Clear User Data"
+
+# Back out to AppManagerActivity, then back again to the still-unfinished
+# LoginActivity.
+- back
+- back
+- assertVisible:
+    id: "org.commcare.dalvik:id/edit_username"
+
+# === "Clear user Data - session logged in": log in, then verify the
+# equivalent "Clear User Data" toggle is now visible via the home screen's
+# own "Advanced" screen (see NAVIGATION GAP note above for why this screen,
+# not AppManagerActivity's, is used here). ===
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+- tapOn: "More options"
+- tapOn: "Advanced"
+- assertVisible: "Clear User Data"

@@ -1,0 +1,188 @@
+appId: org.commcare.dalvik
+tags:
+  - multimedia
+  - partial
+---
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_LAZY_VIDEOS}
+# Master Mobile Plan (2026) > Multimedia > "Lazy Video 3" - for each
+# question, click the download button, wait for "Download complete", verify
+# the download button becomes a play button, verify it plays, submit.
+#
+# UPDATE (2026-08-13): switched from APP_CODE_MULTIMEDIA to
+# APP_CODE_LAZY_VIDEOS - see lazy_video_02_file_missing_popup.yaml's own
+# UPDATE comment for the full root-cause writeup (app-identity mismatch,
+# not a Multimedia-app menu).
+#
+# PARTIAL DEPENDENCY (per coverage_matrix.csv: "Depends on a real background
+# download completing within the test's timeout") - **TIMING RISK, matching
+# the sheet's own note**: the extendedWaitUntil below for "Download
+# completed" uses a generous 60s timeout, but this is still a REAL network
+# download racing a fixed test timeout - on a slow/throttled BrowserStack
+# network profile it could still time out even though the download would
+# have eventually succeeded. Same HQ dependency as lazy_video_02/04/05
+# (Lazy Video 1's install-low-media-build-then-release-lazy-video-build HQ
+# step, see hq_setup/multimedia/lazy_video_release.json, must have already
+# run) and the same "Video Questions" > "Videos with valid references" form
+# assumption as lazy_video_02.yaml/lazy_video_04_relogin_videos_play.yaml
+# (see those flows' header comments for the shared navigation/string
+# citations - video_download_prompt, nav_btn_next/nav_btn_finish).
+#
+# Mechanism verified against source (read-only reference, not modified):
+#   app/src/org/commcare/views/media/MediaLayout.java setupInlineVideoView()
+#     + showMissingMediaView() (line 304-407): while the video file doesn't
+#     exist locally yet, a missing_media_view is shown with a download
+#     trigger. Tapping it calls MissingMediaDownloadHelper.
+#     requestMediaDownload(); on Success it Toasts R.string.
+#     media_download_completed = "Download completed" (strings.xml:327) and
+#     hides the missing-media view, followed by the completion callback,
+#     which re-invokes setupInlineVideoView() - THIS time the file exists,
+#     so instead of the missing-media view it shows the real inline
+#     VideoView (id/inline_video_view, media_layout.xml:63) with its own
+#     native MediaController transport controls (ctrl.show(), line 335).
+#
+# UPDATE (2026-08-13): confirmed live via BrowserStack's own commandlogs
+# hierarchy dump (build 5f45ccaab3feb04c74202455ca2ee4e5f432af2a) - this
+# flow's download trigger tap was silently WARNING (never actually finding
+# the element, since it's optional) because the real resource-id on this
+# CommCare version (2.63.5) is id/video_button (an ImageButton, confirmed
+# clickable=true in the hierarchy dump), NOT id/download_media_icon -
+# that id doesn't appear anywhere in the real hierarchy at all. Switched
+# every reference below. Kept optional/best-effort since it's still
+# unconfirmed whether video_button disappears the same way after a
+# successful download (no post-tap hierarchy dump available to verify) -
+# same "can't fully confirm the visual transition" caveat this file
+# already carried for the old id.
+#
+# UPDATE (2026-08-13), 2nd correction: confirmed live via BrowserStack's
+# own commandlogs hierarchy dump (build 9d0340131b9133cb0186828ff7c0c361b9a6cd48)
+# and a user-supplied screenshot - tapping video_button opens an actual
+# external "Video Player" app via intent, which pops a one-time OS runtime
+# permission dialog ("Allow Video Player to access photos, media, and
+# files on your device?", com.android.permissioncontroller), blocking
+# everything after it until dismissed. Added an optional "Allow" tap right
+# after each video_button tap, same dismissal pattern already used for the
+# camera app's "Turn on Location tags?" dialog in
+# flows/common/capture_camera_photo.yaml.
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: Multimedia) - a fresh
+# BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp == null.
+#   PARAPHRASE NOTE (same honesty convention as lazy_video_02.yaml's own
+#     "popup" vs. "inline status view" note): the sheet's "download button
+#     becomes a play button" doesn't literally happen for this inline-video
+#     mechanism - the download icon disappears entirely and is REPLACED by
+#     the real video view (which has its own native play/pause controls,
+#     satisfying the sheet's intent even if the literal button-swap wording
+#     doesn't match 1:1). This flow asserts that transition (download icon
+#     gone, inline video view visible) as the closest honest match.
+#
+# "verify it plays" - actual playback-quality is a human-judgment call this
+# repo already excludes elsewhere (Video Types/Capture 5) - not asserted
+# here beyond "the video view rendered and no crash surfaced" (same
+# no-crash convention as lazy_video_04_relogin_videos_play.yaml, citing
+# app.handled.error.title/crash.warning.header from that flow).
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- tapOn: "Start"
+- tapOn: "Video Questions"
+- tapOn: "Videos with valid references"
+- repeat:
+    times: 10
+    while:
+      visible:
+        id: "org.commcare.dalvik:id/nav_btn_next"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/video_button"
+          optional: true
+      - tapOn:
+          id: "com.android.permissioncontroller:id/permission_allow_button"
+          optional: true
+      - extendedWaitUntil:
+          visible:
+            text: "(?i)Download completed"
+          timeout: 60000
+          optional: true
+      # UPDATE (2026-08-19), confirmed live (Android 16/Samsung Galaxy S26,
+      # full CI run 32178919171): on this device, tapping video_button
+      # opens the video in Samsung's OWN full-screen video player app
+      # (com.samsung.android.video), not the inline VideoView the header
+      # documents for the device this flow was originally tuned against -
+      # confirmed via the failure hierarchy dump showing
+      # com.samsung.android.video:id/action_bar_root covering the entire
+      # [0,0][1080,2340] screen, with a first-launch "temporal zoom guide"
+      # tutorial overlay ("Touch and hold a video as it plays to see it in
+      # slow-mo.") blocking everything underneath, including
+      # nav_btn_next - explaining the FAILED "Tap on nav_btn_next" (it
+      # genuinely wasn't on screen at all, covered by a different app).
+      # Dismiss the tutorial's own close button if present, then back out
+      # of the external player - bounded and self-terminating (a no-op if
+      # the video ever does render inline on some other device/session).
+      - tapOn:
+          id: "com.samsung.android.video:id/temporal_zoom_guide_close_btn"
+          optional: true
+      - repeat:
+          times: 3
+          while:
+            visible:
+              id: "com.samsung.android.video:id/action_bar_root"
+          commands:
+            - back
+      - assertNotVisible:
+          id: "org.commcare.dalvik:id/video_button"
+          optional: true
+      - assertVisible:
+          id: "org.commcare.dalvik:id/inline_video_view"
+          optional: true
+      - assertNotVisible: "Unrecoverable Error"
+      - assertNotVisible: "CommCare crashed and needs to restart."
+      - tapOn:
+          id: "org.commcare.dalvik:id/nav_btn_next"
+# Final question (no nav_btn_next left) - same download/play checks, then finish.
+- tapOn:
+    id: "org.commcare.dalvik:id/video_button"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      text: "(?i)Download completed"
+    timeout: 60000
+    optional: true
+# Same Samsung-video-player dismissal as the UPDATE (2026-08-19) comment
+# in the repeat loop above - see that for the full citation.
+- tapOn:
+    id: "com.samsung.android.video:id/temporal_zoom_guide_close_btn"
+    optional: true
+- repeat:
+    times: 3
+    while:
+      visible:
+        id: "com.samsung.android.video:id/action_bar_root"
+    commands:
+      - back
+- assertNotVisible:
+    id: "org.commcare.dalvik:id/video_button"
+    optional: true
+- assertVisible:
+    id: "org.commcare.dalvik:id/inline_video_view"
+    optional: true
+- assertNotVisible: "Unrecoverable Error"
+- assertNotVisible: "CommCare crashed and needs to restart."
+# UPDATE (2026-08-13): confirmed live (same build as the video_button fix
+# above) - this hard wait+tap failed with the form already having
+# auto-advanced past Finish (the hierarchy dump at the failure showed
+# CommCare's own home screen, e.g. id/nsv_home_screen, already on
+# screen) - the same "already-advanced-past-Finish" race hardened
+# elsewhere in this repo. Made optional, with the real end-state asserted
+# afterward instead.
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"
+    optional: true
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 15000

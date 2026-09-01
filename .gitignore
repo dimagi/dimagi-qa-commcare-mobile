@@ -1,0 +1,62 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Local secrets
+.env
+
+# Downloaded APKs and zipped flow bundles
+apks/
+*.apk
+*.aab
+flows.zip
+
+# Exception: the ExternalApp Tests companion app - small (1.1MB), needed by
+# CI (--other-app), and there's no HQ-hosted equivalent to fetch on demand
+# the way resources/README.md's CCZs are - see flows/externalapp_tests/README.md.
+!resources/Mobile API Testing App-release.apk
+
+# Exception: a commcare-android build not yet published as a GitHub release
+# (~41MB, committed anyway per direct user decision) - lets
+# scripts/run_suite.py/run_appium_suite.py's --apk (and the CI workflow's
+# apk_path input) test it directly instead of the normal
+# latest-release/--release-tag download path.
+!resources/app-commcare-release-Android16.apk
+
+# Exception: the "old" CommCare build for scripts/run_appium_suite.py's
+# updates_partial_failed group-d mid-session-update tests (~22MB) -
+# midSessionInstallApps needs a real, older-signed-with-the-same-cert APK on
+# disk to install alongside the current release inside one Appium session;
+# there's no GitHub release/asset for this exact build to fetch on demand,
+# so it's committed directly, same reasoning as app-commcare-release-
+# Android16.apk above. Confirmed missing from git (never committed despite
+# existing locally) after a real CI failure on group-b:
+# FileNotFoundError on resources/commcare_2.45_release.apk.
+!resources/commcare_2.45_release.apk
+
+# BrowserStack / run artifacts
+artifacts/
+*.log
+
+# Generated HTML reports - regenerate any of these via scripts/report_generator.py.
+# history.json is the one exception: it's what the trend chart is drawn from,
+# so it's tracked (see the maestro-browserstack.yml cache step for how it
+# survives across CI runs too).
+reports/*
+!reports/history.json
+
+# QA app CCZs - every app this repo tests installs via a dynamic HQ app
+# code at run time (see resources/README.md), never a sideloaded local CCZ,
+# so none of these are ever committed - download on demand (e.g. via
+# scripts/fetch_large_ccz.py or HQClient.download_ccz) if you need one to
+# inspect while writing/fixing a flow's selectors.
+*.ccz
+
+# Exception (2026-08-25): these two ARE genuinely read at runtime, unlike
+# every other CCZ excluded above - scripts/run_appium_offline_ccz_suite.py
+# pushes their real bytes onto the test device's filesystem for the
+# Recovery Measures "Select CCZ" system file picker to find. See
+# resources/README.md's own 2026-08-25 update for the full citation.
+!resources/OFFLINE_TEST_ONE.ccz
+!resources/RU_TEST_TWO.ccz

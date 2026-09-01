@@ -1,0 +1,86 @@
+appId: org.commcare.dalvik
+tags:
+  - updates_2_49
+  - automatable
+---
+# Master Mobile Plan (2026) > Updates > "Auto CC Update 3" (2.49 grab-bag
+# section) - re-login with the same mobile worker, sync, confirm sync
+# succeeds, and check the CommCare (APK) version via "About CommCare".
+#
+# ASSUMES "Auto CC Update 1" (HQ Auto Updates = Daily, install of a lower
+# version) has already run against this device - that's a Partial
+# dependency out of scope here (see coverage_matrix.csv). This flow only
+# does the on-device re-login/sync/verify portion, which needs no further
+# HQ action itself.
+#
+# BEST-EFFORT per the task: we assert sync completes without error and open
+# "About CommCare" to surface the version text, but we do NOT assert a
+# specific version string, since the exact "latest version" number depends
+# on whatever build/APK was released at HQ-setup time for "Auto CC Update 1"
+# and isn't knowable from commcare-android source alone.
+#
+# Selectors/strings verified against commcare-android source (read-only
+# reference, not modified):
+#   app/assets/locales/android_translatable_strings.txt:
+#     home.sync = "Sync with Server" (line 64)
+#     sync.success.synced = "Sync Successful! Your information is up to
+#       date." (line 118) - set via
+#       SyncCapableCommCareActivity.updateUiAfterDataPullOrSend on DataPullTask
+#       success.
+#     home.menu.about = "About CommCare" (line 86)
+#   app/res/values/strings.xml: about_cc = "About CommCare" (dialog title)
+#   app/src/org/commcare/activities/StandardHomeActivity.java:
+#     R.id.action_about -> showAboutCommCareDialog() (HomeScreenBaseActivity)
+#   app/src/org/commcare/views/dialogs/DialogCreationHelpers.java:
+#     buildAboutCommCareDialog() renders AppUtils.getCurrentVersionString()
+#     inside the R.id.dialog_text TextView of the scrolling_info_dialog
+#     layout - this is where the on-device "latest version" text lives.
+#
+# A fresh BrowserStack session has no app installed until
+# install_app_by_code.yaml runs; see DispatchActivity.java's
+# CommCareSetupActivity routing when currentApp == null.
+#
+# UPDATE (2026-08-24), per direct user-supplied app link + screen
+# recording: moved from the shared APP_CODE_BASIC_TESTS to
+# APP_CODE_BASIC_TESTS_NS_COPY ("[Master] Basic Tests NS Copy", a
+# dedicated copy) - same app now used by every other flow on this tab (see
+# prompted_update_scenario_01_ill_update_later.yaml's own UPDATE citation
+# for the full reasoning), resolving the earlier "guess by proximity" flag
+# on this row - confirmed, not a guess.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_BASIC_TESTS_NS_COPY}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- tapOn: "Sync with Server"
+# UPDATE (2026-08-24), confirmed live: the real on-device string is "Sync
+# Successful! Your information is up to date." (sync.success.synced, per
+# this file's own header citation) - a real BrowserStack failure's own
+# embedded view hierarchy (not just a screenshot) showed sync had already
+# genuinely succeeded with exactly that text present, but the bare
+# "(?i)Sync Successful" regex still failed to match - Maestro's textRegex
+# requires a FULL match of the target string, not a substring (same class
+# of fix already applied elsewhere today, e.g. geoservices' "Latitude:"
+# check). Wildcarded to match the real, longer string.
+- extendedWaitUntil:
+    visible:
+      text: "(?i).*Sync Successful.*"
+    timeout: 30000
+- assertNotVisible:
+    text: "(?i)sync.*(fail|error|unavailable)"
+- tapOn: "More options"
+- tapOn: "About CommCare"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/dialog_text"
+    timeout: 10000
+# Best-effort version surfacing: TODO(verify) once the released build number
+# from the "Auto CC Update 1" HQ pre-step is known, tighten this to
+# assertVisible a regex for that specific version string.
+- assertVisible:
+    id: "org.commcare.dalvik:id/dialog_text"
+- tapOn: "OK"

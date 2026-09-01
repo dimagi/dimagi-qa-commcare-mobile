@@ -1,0 +1,251 @@
+appId: org.commcare.dalvik
+tags:
+  - recovery_measures
+  - automatable
+---
+# Master Mobile Plan (2026) > Recovery Measures > Recovery: Offline Reinstall
+# and Update App > "Recovery (offline) 9" - "Uninstall/reinstall Test Two".
+#
+# UPGRADED from `partial` to `automatable` (2026-08-10): the two things that
+# used to block this - a mid-flow HQ "mark Test Three released" step, and a
+# missing install-URL env var - are both resolved now (see the two UPDATE
+# notes below): the forced trigger fires unconditionally on login regardless
+# of release state, and reinstalling uses the pinned OFFLINE_TEST_TWO app
+# code rather than a raw install URL.
+#
+# Historical context for the reinstall step's original design concern
+# (reinstall_update_07_10_online_install_and_negative.yaml's "Reinstall and
+# update 7" uninstall/reinstall step needed a real profile/install URL into
+# SetupEnterURLFragment's edit_profile_location field, and this repo has no
+# existing env var for "the Recovery Measures offline app's install URL" -
+# see that file's header CAVEAT for the full explanation (same gap,
+# different app). RECOVERY_APP_INSTALL_URL below is reused from that file's
+# convention rather than inventing a second env var name; if your two
+# Recovery Measures HQ apps (plain reinstall-and-update vs. offline
+# reinstall-and-update) are different HQ apps with different install URLs,
+# use a distinct var name per app and update both files consistently.
+#
+# App Manager uninstall path verified against commcare-android source -
+# same citations as reinstall_update_07_10_online_install_and_negative.yaml's
+# header (LoginActivity's "Go To App Manager" menu item,
+# AppManagerActivity/SingleAppManagerActivity's uninstall_button ->
+# "Uninstalling your app" confirm dialog -> OK, CommCareSetupActivity's
+# enter_app_location -> edit_profile_location -> start_install ->
+# btn_start_install install-confirm chain) - not re-derived here, see that
+# file for the full citation list.
+# UPDATE (2026-08-10): this is the "Recovery: Offline Reinstall and Update
+# App" app (id 8009e8a2814a465b818d56284011b1e9) - see
+# scripts/app_registry.py's OFFLINE_TEST_ONE/TWO/THREE entries.
+# Test One is the STARTING baseline here; the later reinstall step below
+# switches to the pinned Test Two code specifically, matching this file's
+# own name/row title.
+# UPDATE (2nd correction, 2026-08-10): removed the login/logout dance that
+# used to precede "Go To App Manager" - confirmed live in isolation (run
+# 6151522a9e31384f43802347b2456fef83391a5b, offline_05's own failure) that
+# logging into THIS app on ANY of its pinned builds triggers the forced
+# "Select CCZ" recovery screen IMMEDIATELY, never reaching the home screen
+# (so `logout.yaml`'s "Log out of CommCare" tile is never reachable this
+# way - that's the actual root cause of this file's own prior CI failure,
+# not a flaky selector). install_app_by_code.yaml already ends on the LOGIN
+# screen without logging in, and "Go To App Manager" is only ever available
+# from that LOGIN screen's own overflow menu anyway (confirmed via source -
+# see reinstall_update_07_10_online_install_and_negative.yaml's header) - so
+# logging in at all before reaching App Manager was both unreachable AND
+# unnecessary.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_OFFLINE_TEST_ONE}
+- tapOn: "More options"
+- tapOn: "Go To App Manager"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/apps_list_view"
+    timeout: 15000
+- tapOn:
+    id: "org.commcare.dalvik:id/apps_list_view"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/uninstall_button"
+    timeout: 10000
+- tapOn:
+    id: "org.commcare.dalvik:id/uninstall_button"
+- assertVisible: "Uninstalling your app"
+- tapOn: "OK"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/install_app_button"
+    timeout: 30000
+- tapOn:
+    id: "org.commcare.dalvik:id/install_app_button"
+- tapOn:
+    id: "org.commcare.dalvik:id/enter_app_location"
+# UPDATE, confirmed live (run 31276111657 follow-up): this used to type
+# "${RECOVERY_APP_INSTALL_URL}" - an env var never defined anywhere in this
+# repo, so it typed that literal placeholder text and failed with "The app
+# code you have entered is incorrect." edit_profile_location is the exact
+# same "Enter Code" field install_app_by_code.yaml already types an app
+# code into.
+# UPDATE (2nd/3rd correction): a bare `${APP_CODE_RECOVERY_MEASURES}`
+# reference here, and later a re-declared local var of the same or a
+# different name via this file's own top-level env: frontmatter, BOTH
+# still typed a literal, unresolved placeholder (confirmed via the build's
+# command log both times) - a flow's own top-level env: frontmatter
+# apparently doesn't interpolate ${...} against the outer session scope the
+# way a runFlow's env: mapping does. Routed through an inline runFlow
+# instead - the exact same env: mapping mechanism that already resolves
+# correctly for install_app_by_code.yaml's own APP_CODE.
+# UPDATE (4th correction, 2026-08-10): this row's own title is
+# "Uninstall/reinstall TEST TWO" - reinstalling with the SAME Test One code
+# used for the initial install would never exercise anything new. Switched
+# to the pinned OFFLINE_TEST_TWO code specifically.
+- runFlow:
+    env:
+      RECOVERY_MEASURES_CODE: ${APP_CODE_OFFLINE_TEST_TWO}
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/edit_profile_location"
+      - inputText: "${RECOVERY_MEASURES_CODE}"
+- hideKeyboard
+- tapOn:
+    id: "org.commcare.dalvik:id/start_install"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/btn_start_install"
+    timeout: 15000
+- tapOn:
+    id: "org.commcare.dalvik:id/btn_start_install"
+# UPDATE, confirmed live (LOCAL-VERIFY-round3): this wait for "Setting Up
+# App" (a real string - strings.xml's updates_resources_initialization)
+# failed even with a 60s timeout - it's a transient resource-init state
+# that can flash and clear faster than a poll catches it, on a small test
+# app installing quickly (same class of "success happened too fast to
+# catch a mid-transition state" issue already hit elsewhere this session,
+# e.g. flows/externalapp_tests/external_app_02_start_commcare_submit_form.yaml).
+# Removed rather than lengthened further - the very next step
+# (../common/login.yaml) already waits for the durable end state
+# (edit_username) that only exists once install has genuinely finished, so
+# this intermediate check added risk without adding a real guarantee.
+# UPDATE (2nd correction), confirmed live (LOCAL-VERIFY-round4): even after
+# removing the transient-state wait, login.yaml still couldn't find
+# edit_username - the failure screenshot showed the device sitting back on
+# App Manager's own app list ("Select an app to view its management
+# options, or install a new app." with the app itself listed below as a
+# tappable link), not a login screen. Defensively handled the
+# CommCare-version-mismatch dialog ("I'LL UPDATE LATER") that
+# install_app_by_code.yaml also has to handle here.
+# UPDATE (3rd correction), per direct user observation (2026-08-10): tapping
+# the app's own name/link on this App Manager screen does NOT open/select
+# it into a login screen (confirmed by this still failing identically after
+# the previous fix) - the real way through is pressing back, which lands
+# directly on the login screen. Replaced the tap with back.
+- tapOn:
+    text: "I.LL UPDATE LATER"
+    optional: true
+- tapOn:
+    id: "org.commcare.dalvik:id/btn_start_install"
+    optional: true
+- back
+# UPDATE (3rd correction, 2026-08-10): the 2nd correction above was WRONG -
+# confirmed live (build bfe2577d46712d5ab77aa85bea739f57b6e6fac5) that
+# reinstalling as Test Two and logging back in does NOT trigger the forced
+# screen when Test Three happens to be un-released at that moment (a
+# CONCURRENT phase-1 BrowserStack build's own --hq-setup step had just
+# un-released it, purely by coincidence of timing). The offline app's
+# trigger is NOT unconditional - it uses the exact same mechanism as the
+# non-offline "Reinstall and Update App" family (device version < currently
+# RELEASED top version => stale => trigger). offline_05/06/08's own "fires
+# immediately on Test One" behavior holds simply because Test One is the
+# lowest of the three real builds, so it's virtually always stale under
+# normal test setup (something newer than it is normally released) - not
+# because release status is irrelevant. This row specifically needs Test
+# Three released to make the just-reinstalled Test Two look stale, so its
+# code is referenced here (in a comment, not a real install step) purely so
+# scripts/run_suite.py's needed_keys text-scan resolves+releases it
+# automatically before this Maestro session starts - same mechanism
+# update_app_02_forced_two_to_three.yaml's own trailing comment uses; see
+# that file's header for the full citation. ${APP_CODE_OFFLINE_TEST_THREE}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+# UPDATE (4th correction, 2026-08-26), confirmed live a SECOND time (CI run
+# 32974908020, real failure screenshot on a DIFFERENT flow -
+# retry_recovery_02_network_toggle_retry.yaml - hitting the identical
+# plain-home-screen-instead-of-forced-screen symptom): the 3rd-correction
+# UPDATE above already diagnosed the real mechanism correctly (a
+# concurrently-running, unrelated BrowserStack build's own HQ setup/teardown
+# can transiently un-release the build this flow needs "released" to look
+# stale, purely by timing coincidence) - it just didn't yet act on that
+# diagnosis. Since the race window is real but transient (the other build's
+# own setup/teardown completes and re-releases normally), a bounded
+# logout+re-login retry gives it time to pass rather than failing hard on
+# what's already a well-understood, non-architectural timing race. Mirrors
+# ../common/login.yaml's own established bounded-retry convention for other
+# confirmed-real, non-deterministic HQ-timing issues. logout.yaml's "run
+# from the home screen" precondition holds here because this loop's own
+# while-condition only lets the body run when we're NOT on the forced-CCZ
+# screen, i.e. we're on the plain home screen this symptom describes.
+- repeat:
+    times: 4
+    while:
+      notVisible:
+        text: "(?i).*select ccz.*"
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - runFlow: ../common/logout.yaml
+      # UPDATE (5th correction, 2026-08-26), confirmed live via a real failure
+      # screenshot (CI run 32982037505, session 16a27e19...72709666): the
+      # retry loop's own detection worked exactly as intended - the "Select
+      # CCZ" screen this loop is waiting for WAS genuinely on-screen at the
+      # moment of failure - but the shared ../common/login.yaml call used for
+      # the retry's re-login hard-failed first, because it unconditionally
+      # taps edit_username and waits up to ~17s for it. For an app with a
+      # pending recovery measure, logging back out and back in can land
+      # DIRECTLY on the forced screen (skipping the login form) rather than
+      # always showing it first - a real, evidenced race between login.yaml's
+      # tap and the app's own async redirect to the measure screen.
+      # login.yaml itself must stay strict for every OTHER caller (its
+      # retry-on-server-error hardening depends on reliably reaching the
+      # post-login screen), so this loop uses its own tolerant, LOCAL
+      # re-login sequence instead of the shared one - every tap optional, so
+      # landing on the forced screen mid-attempt is treated as fine (the
+      # outer while-condition will simply see it on the next check) rather
+      # than a hard failure.
+      - tapOn:
+          id: "org.commcare.dalvik:id/edit_username"
+          optional: true
+      - tapOn:
+          text: "Skip"
+          optional: true
+      - tapOn:
+          id: "org.commcare.dalvik:id/edit_username"
+          optional: true
+      - eraseText
+      - inputText: "${CC_TEST_USERNAME}"
+      - tapOn:
+          id: "org.commcare.dalvik:id/edit_password"
+          optional: true
+      - tapOn:
+          text: "Skip"
+          optional: true
+      - tapOn:
+          id: "org.commcare.dalvik:id/edit_password"
+          optional: true
+      - eraseText
+      - inputText: "${CC_TEST_PASSWORD}"
+      - hideKeyboard
+      - tapOn:
+          id: "org.commcare.dalvik:id/login_button"
+          optional: true
+      - extendedWaitUntil:
+          notVisible:
+            id: "org.commcare.dalvik:id/dialog_cancel_button"
+          timeout: 30000
+          optional: true
+- assertVisible:
+    text: "(?i).*recovery (procedures|measures).*initiated.*"
+- assertVisible:
+    text: "(?i).*select ccz.*"

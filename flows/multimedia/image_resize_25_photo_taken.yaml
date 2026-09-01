@@ -1,0 +1,91 @@
+appId: org.commcare.dalvik
+tags:
+  - multimedia
+  - partial
+---
+# Master Mobile Plan (2026) > Multimedia > "Image Resize 25" - Photo taken
+# (via device camera) per question + submit.
+#
+# BEST-EFFORT / GENUINELY FLAKY (flagging clearly up front, the same way
+# photo_02_can_remove_chosen_photo.yaml flags its own caveats):
+# coverage_matrix.csv's own Dependency/Reason for this exact row says
+# outright "Camera capture is flaky/unsupported on most cloud emulators;
+# feasible only if the BrowserStack device supports an injected camera
+# image." This flow is written on that same understanding and should be
+# treated as a best-effort attempt, not a reliable CI gate. The camera-side
+# interaction is delegated to ../common/capture_camera_photo.yaml (see
+# that file's header for the full best-effort/unverified caveat).
+#
+# REWRITTEN 2026-08-12 from a real on-device recording the user captured.
+# Every previous version of this file assumed the target was the separate
+# top-level "Image Resize" MODULE (Large/Small/Wide/Tall/Smart, each its
+# own multi-question form) - that assumption was wrong. The real target,
+# confirmed live, is a much simpler SINGLE FORM: "Multimedia" (module) >
+# "Image Resize" (form, the 2nd item in that module's own form list, name-
+# colliding with the unrelated sibling module of the same name). Ground-
+# truthed against the real CCZ (resources/qateam - Multimedia - v381.ccz,
+# modules-0/forms-1.xml): an intro trigger, then four image/* upload
+# questions in a fixed sequence - Original_Size, Small, Medium, Large -
+# each its own screen (no group wrapping), none required. "Take Picture"
+# button text verified against res/values/strings.xml:174
+# (capture_image = "Take Picture"). nav_btn_next/nav_btn_finish ids
+# verified against res/layout/screen_form_entry.xml.
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: Multimedia) - a fresh
+# BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
+# null.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_MULTIMEDIA}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- tapOn: "Start"
+# UPDATE, confirmed live 2026-08-12: a plain `tapOn: "Multimedia"` here
+# landed on the WRONG "Image Resize" afterward - the separate, unrelated
+# top-level MODULE (Large/Small/Wide/Tall/Smart Image forms), not the form
+# inside the "Multimedia" module this flow actually targets. Root cause:
+# "Multimedia" is ALSO this app's own toolbar title, and matches ambiguously.
+# Scoped to the row_txt id, the same fix already proven live in
+# flows/multimedia/photo_01_can_remove_taken_photo.yaml and
+# photo_02_can_remove_chosen_photo.yaml for this exact ambiguity.
+- tapOn:
+    id: "org.commcare.dalvik:id/row_txt"
+    text: "Multimedia"
+- tapOn: "Image Resize"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_next"
+    timeout: 10000
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+
+# Original_Size / Small / Medium / Large - take a photo, then advance.
+# None of these questions are required, so the capture is best-effort per
+# the header caveat - a non-matching camera UI degrades to a silent no-op
+# (see capture_camera_photo.yaml) and nav_btn_next still advances.
+#
+# UPDATE, confirmed live 2026-08-12: a fixed "3 next-taps, then assume the
+# 4th is last" count is fragile - if the real question count/order ever
+# differs from this assumption, the flow ends up waiting on nav_btn_finish
+# on a screen that still shows nav_btn_next instead, and fails outright.
+# Replaced with a loop that checks which button is actually present after
+# each capture (Finish means done; Next means keep going) rather than
+# assuming a fixed number of questions up front.
+- repeat:
+    times: 6
+    while:
+      notVisible:
+        id: "org.commcare.dalvik:id/nav_btn_finish"
+    commands:
+      - tapOn: "Take Picture"
+      - runFlow: ../common/capture_camera_photo.yaml
+      - tapOn:
+          id: "org.commcare.dalvik:id/nav_btn_next"
+          optional: true
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"

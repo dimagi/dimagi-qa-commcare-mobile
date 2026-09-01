@@ -1,0 +1,73 @@
+appId: org.commcare.dalvik
+---
+# Reusable: from the CommCare home screen, enter a test app's module/form and
+# submit it, for apps that have exactly one module and one form (e.g. the
+# "Rate Limiting" test app referenced by coverage_matrix.csv's "Rate limit 1"
+# row - PARTIAL because it needs to be pre-provisioned; this subflow only
+# does the on-device navigation, which is Automatable).
+#
+# Selectors verified against commcare-android source (read-only reference,
+# not modified) - app/instrumentation-tests/src/org/commcare/utils/
+# InstrumentationUtility.kt:
+#   openModule()/openForm() -> tapOn "Start", then click the sole row in the
+#     R.id.screen_suite_menu_list list (used for both the module list and,
+#     if the app has a separate form list under that module, the form list).
+#   nextPage()/submitForm() -> R.id.nav_btn_next / R.id.nav_btn_finish.
+#
+# CAVEAT: tapping the screen_suite_menu_list container's center (rather than
+# a specific row by label) only works because the target app is assumed to
+# have exactly ONE entry at each list level - this has not been verified
+# against the actual "Rate Limiting" app's real module/form labels, since
+# provisioning that app is out of this repo's scope. If that app shows more
+# than one row at any level, replace the relevant tapOn below with a
+# tapOn-by-text using the real label.
+- tapOn: "Start"
+# UPDATE (2nd correction), confirmed live (recovery_measures/heartbeat_01_setup_and_submit.yaml
+# + point_release_flow.yaml, both sharing this subflow): even a bounded
+# drill-down loop tapping the CONTAINER id never advanced past the module
+# list. Root cause: `screen_suite_menu_list` is the list's own container
+# view, not a row - tapOn taps the container's bounding-box CENTER, which
+# for a short list (one row at the top, lots of empty space below) can land
+# on blank space rather than the actual row. InstrumentationUtility.kt's
+# own openModule()/openForm() never taps the container either - they use
+# Espresso's clickListItem(R.id.screen_suite_menu_list, position), which
+# targets a specific adapter position's row, not the container's geometry.
+# Fixed by tapping the row's own title TextView (row_txt,
+# menu_list_item_modern.xml - MenuAdapter.java ~line 341) at index 0
+# instead - the same proven pattern already used successfully in
+# flows/right_to_left_text/question_types_02_open_first_form.yaml for
+# identical single-row module/form navigation.
+- repeat:
+    times: 4
+    while:
+      visible:
+        id: "org.commcare.dalvik:id/screen_suite_menu_list"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/row_txt"
+          index: 0
+# UPDATE, confirmed live (recovery_measures/heartbeat_01_setup_and_submit.yaml):
+# the row_txt fix above worked (device landed back on the HOME screen with
+# "1 form sent to server!" showing on the Sync tile - real proof the form
+# submitted), but "Assert nav_btn_finish visible" still failed. Same
+# auto-submit-bypass class of bug already root-caused and fixed repeatedly
+# elsewhere this session (see
+# flows/form_submissions/incomplete_forms_01_03_save_resume_submit.yaml's
+# header for the full nav_btn_next/nav_btn_finish source citation): the
+# form can complete and return home mid-loop without nav_btn_finish's
+# visibility ever being toggled, so hard-requiring it afterward races a
+# form that may have already finished. Fixed with the same proven pattern:
+# loop on nav_btn_finish's own appearance instead, trailing tap optional,
+# accept Start as the real success signal.
+- repeat:
+    times: 15
+    while:
+      notVisible:
+        id: "org.commcare.dalvik:id/nav_btn_finish"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/nav_btn_next"
+          optional: true
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"
+    optional: true

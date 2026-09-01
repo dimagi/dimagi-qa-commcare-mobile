@@ -1,0 +1,51 @@
+appId: org.commcare.dalvik
+tags:
+  - recovery_measures
+  - automatable
+  - requires_old_client_apk
+---
+# Master Mobile Plan (2026) > Recovery Measures > CC Reinstall Needed
+# (Test Case IDs "CC Reinstall Needed 3" and "4" - the forced-prompt half).
+#
+# File split 2026-08-21 (was cc_reinstall_needed_flow.yaml, steps 1-2): per
+# direct user instruction, the real precondition here is starting from an
+# OLD CommCare CLIENT binary, not an old app version - confirmed via
+# commcare-android source (RecoveryMeasure.MEASURE_TYPE_CC_REINSTALL /
+# PromptCCReinstallActivity, gated on cc_version_min/max, see the old file's
+# header for the full citation - still accurate, not re-derived here).
+# Previously marked as a "permanent automation ceiling" on the theory that
+# Maestro/BrowserStack can only upload ONE app binary per build, so a
+# mid-session CommCare-client swap is impossible - true, but irrelevant: the
+# fix isn't a mid-session swap, it's running this half as its OWN build
+# against the OLD client. scripts/run_suite.py's existing `--apk` flag
+# already uploads whatever binary you point it at as the build's CommCare
+# client - this file is meant to be dispatched with
+# `--apk resources/commcare_2.45_release.apk` specifically (the `tags` list
+# above includes `requires_old_client_apk` as a marker for whoever wires
+# this into CI - the workflow's own apk_source dropdown is currently a
+# single global choice for the whole dispatch, so this needs its own
+# dedicated CI job/matrix entry, not yet added).
+#
+# See cc_reinstall_needed_02_verify_on_new_client.yaml for the negative-check
+# half (same app, default/current client) and the CAVEAT about the Play
+# Store action button (step below) not being reliably driveable further.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_CC_REINSTALL_NEEDED}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+# CC Reinstall Needed 3 - the forced "CommCare needs reinstall" message.
+- assertVisible:
+    text: "(?i).*reinstall.*required.*"
+- assertVisible:
+    text: "(?i).*play store.*"
+# CC Reinstall Needed 4 - reinstall: tap the action button. This fires an
+# ACTION_VIEW intent at the Play Store, outside this app's Maestro session -
+# only asserting the tap navigates away from the blocking prompt, not
+# driving the Play Store UI itself (same CAVEAT as the pre-split file).
+- tapOn:
+    text: "(?i).*go to this app.*play store.*"

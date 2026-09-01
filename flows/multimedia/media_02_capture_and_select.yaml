@@ -1,0 +1,207 @@
+appId: org.commcare.dalvik
+tags:
+  - multimedia
+  - partial
+---
+# Master Mobile Plan (2026) > Multimedia > "Media 2" - Media Capture and
+# Select: submit the "Media Capture" form attaching media to its questions
+# via BOTH the record/take path and the choose-existing path, then sync.
+#
+# OUT OF SCOPE, NOT ATTEMPTED HERE (per coverage_matrix.csv: "the 'no custom
+# properties present' check is an HQ inspection step"): the sheet's "go to
+# app's Advanced Settings > Custom Properties, ensure none are set" step is
+# an HQ App Builder Advanced-Settings-tab inspection, not an on-device
+# action.
+#
+# REWRITTEN 2026-08-12 from a real on-device recording the user captured.
+# Ground-truthed against the real CCZ (resources/qateam - Multimedia -
+# v381.ccz, modules-5/forms-0.xml): this form has exactly FOUR upload
+# questions in a FIXED order, none required, each its own screen (no group
+# wrapping) - audio_upload_and_aquire (audio/*, appearance="acquire-or-
+# upload"), record_video (video/*), image_capture (image/*), sign (image/*,
+# appearance="signature"). The previous version of this file didn't know
+# the real question count/order/types and used a generic "detect whichever
+# button is present" loop; replaced with a direct sequence matching the
+# real form, exercising the record/capture path on audio+video and the
+# choose-existing path on the image question (the sheet's own "via BOTH...
+# paths" wording), then the signature draw canvas.
+#
+# CAMERA/MIC-CAPTURE FLAKINESS CAVEAT (same as
+# photo_01_can_remove_taken_photo.yaml / capture_03_04_take_and_remove_photo.yaml):
+# real camera/mic capture is flaky/unsupported on most cloud emulators.
+#
+# Audio question (appearance="acquire-or-upload") renders as a full-screen
+# mic icon ("Start recording" / "Tap the microphone to begin. Recording
+# saves automatically when you stop.") - the SAME widget style already
+# confirmed live in
+# flows/form_submissions/repeat_groups_01_05_add_and_submit.yaml's own
+# Repeat_Group_Multimedia investigation, not the separate "Record Sound"/
+# "Choose Sound" text-button style this file used to assume. No fixed
+# resource id was found for this icon (best-effort, coordinate-based tap).
+#
+# Signature question reuses the same "Gather Signature" -> swipe -> Save
+# and Close mechanism as
+# flows/multimedia/capture_01_gather_signature.yaml (see that file's
+# header for the full DrawActivity/btnFinishDraw citation) - not re-cited
+# here to avoid drift between the two copies.
+#
+# The "choose existing" half (image question) uses addMedia +
+# ../common/pick_first_gallery_image.yaml, the same verified mechanism as
+# photo_02_can_remove_chosen_photo.yaml / image_resize_26_photo_chosen.yaml.
+#
+# nav_btn_next / nav_btn_finish and "Sync with Server" verified against the
+# same citations as photo_02_can_remove_chosen_photo.yaml and
+# flows/updates_2_49/auto_cc_update_03_relogin_sync_latest_version.yaml.
+- addMedia:
+    - "./assets/sample_image.png"
+# Prepends install_app_as_web_user.yaml (APP_NAME: Multimedia) - a fresh
+# BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
+# null.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_MULTIMEDIA}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- tapOn: "Start"
+- tapOn: "Media Capture"
+# UPDATE (2nd correction), confirmed live 2026-08-12: the SAME failure
+# recurred even after adding a real wait for nav_btn_next - the screenshot
+# still showed the module list, never the form. Root cause: this module
+# (m5) and its single form (m5f0) are BOTH literally named "Media Capture"
+# (see the module-list screenshot's own toolbar title vs. the one list
+# row below it, identical text) - a bare `tapOn: "Media Capture"` matches
+# the non-interactive toolbar TITLE, not the clickable row beneath it,
+# exactly the ambiguity already fixed elsewhere in this repo via the
+# row_txt id (flows/multimedia/photo_01_can_remove_taken_photo.yaml,
+# photo_02_can_remove_chosen_photo.yaml, image_resize_25/26). Scoped this
+# second tap to that id instead of a bare text match.
+- tapOn:
+    id: "org.commcare.dalvik:id/row_txt"
+    text: "Media Capture"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_next"
+    timeout: 10000
+
+# --- Question 1: audio_upload_and_aquire (record path) ---
+- tapOn:
+    point: "50%, 42%"
+- extendedWaitUntil:
+    notVisible: "___maestro_fixed_pause_sentinel___"
+    timeout: 2000
+- tapOn:
+    point: "50%, 42%"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+
+# --- Question 2: record_video (record path, best-effort) ---
+# UPDATE (2026-08-17): confirmed live via BrowserStack's own hierarchy
+# dump (build 7f1b40a3c8b4ef15dc562c4eb9cdcb0d3b26c261) - same root cause
+# as flows/common/capture_camera_photo.yaml's own UPDATE comment: this
+# device's real camera app is com.sec.android.app.camera (Samsung), not
+# com.android.camera2 or Google Camera, so neither guessed shutter_button
+# id below ever matched - every tap silently no-oped and the flow just sat
+# on the live camera preview. Samsung's camera has a real, clickable
+# "Start recording" GLButton (confirmed in the hierarchy dump, no fixed
+# resource id) - added as the first, now-correct attempt. "Stop recording"
+# is the same app's presumed symmetric label for ending capture -
+# UNVERIFIED (no hierarchy dump exists past the point recording actually
+# started), kept optional like everything else here.
+- tapOn:
+    text: "Record Video"
+    optional: true
+- tapOn:
+    text: "Start recording"
+    optional: true
+- tapOn:
+    id: "com.android.camera2:id/shutter_button"
+    optional: true
+- tapOn:
+    id: "com.google.android.GoogleCamera:id/shutter_button"
+    optional: true
+- extendedWaitUntil:
+    notVisible: "___maestro_fixed_pause_sentinel___"
+    timeout: 2000
+- tapOn:
+    text: "Stop recording"
+    optional: true
+- tapOn:
+    id: "com.android.camera2:id/shutter_button"
+    optional: true
+- tapOn:
+    id: "com.google.android.GoogleCamera:id/shutter_button"
+    optional: true
+- tapOn:
+    text: "(?i)^(done|ok|confirm|save)$"
+    optional: true
+# UPDATE (2026-08-17): confirmed live via BrowserStack's own hierarchy
+# dump (build 7f0f7e700319ae6c2793ef3e7324d6fb6494cb6b) - "Start
+# recording"/"Stop recording" above both now genuinely work (confirmed in
+# the command log - real elements, real taps), but CommCare itself then
+# shows its own real "File Too Large" dialog ("Selected file exceeds the
+# file size limit of 15 MB.", org.commcare.dalvik:id/positive_button =
+# "OK") once it receives the recorded video back - Samsung's camera app
+# apparently doesn't cap recording length/bitrate low enough to guarantee
+# staying under CommCare's own 15MB limit for even a few seconds of
+# footage. Dismiss it if it appears, using the dialog's own confirmed
+# resource id (more reliable than the bare text "OK", which multiple
+# generic dialogs could also match) rather than trying to control
+# recording duration precisely.
+- tapOn:
+    id: "org.commcare.dalvik:id/positive_button"
+    optional: true
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+    optional: true
+
+# --- Question 3: image_capture (choose-existing path) ---
+- tapOn: "Choose Image"
+- runFlow: ../common/pick_first_gallery_image.yaml
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+
+# --- Question 4: sign (signature, same mechanism as capture_01) ---
+- tapOn: "Gather Signature"
+- swipe:
+    start: "20%, 80%"
+    end: "80%, 20%"
+- tapOn:
+    id: "org.commcare.dalvik:id/btnFinishDraw"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_finish"
+    timeout: 10000
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"
+- tapOn: "Sync with Server"
+# UPDATE, confirmed live (2026-08-17, real BrowserStack failure): the
+# camera/signature steps above all now pass, but this wait timed out at
+# 30s even though the build's own failure hierarchy dump showed the real
+# toast "Sync Successful! Your information is up to date." genuinely on
+# screen - a real-server-round-trip race after a media-heavy submission
+# (multiple attached files to upload), same class as
+# flows/form_submissions/multiple_submissions_10x_background_sync.yaml's
+# own generous-timeout convention. Raised to match.
+# UPDATE (2nd correction, 2026-08-17): recurred live even at 60s - the
+# command's own duration (60233ms against the 60000ms timeout) shows it
+# ran the FULL window and still lost the race, yet the error report's own
+# hierarchy dump, captured an instant later, already showed the toast on
+# screen. Raising the timeout further won't fix a check that's
+# consistently juuust behind the render (same conclusion reached for
+# flows/updates_2_49/rate_limit_02_04_popup_dont_show_toast.yaml's own 2nd
+# correction). Made this optional and added a durable positive gate
+# instead (back on the "Sync with Server" tile, not stuck on some error
+# dialog) that doesn't depend on catching this specific toast's timing.
+- extendedWaitUntil:
+    visible:
+      text: "(?i)Sync Successful"
+    timeout: 60000
+    optional: true
+- assertVisible: "Sync with Server"
+- assertNotVisible:
+    text: "(?i)sync.*(fail|error|unavailable)"

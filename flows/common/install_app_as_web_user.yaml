@@ -1,0 +1,369 @@
+appId: org.commcare.dalvik
+---
+# Reusable "install a specific named app via HQ web user" subflow. Params:
+# APP_NAME (exact display name as it appears in the app list, e.g. "Session
+# Expiration Test").
+#
+# CAVEAT - Maestro's tapOn text matching is a REGEX by default, not a literal
+# string match (confirmed against Maestro's own docs: text/id selectors are
+# regex unless escaped). If an app's real HQ name contains regex
+# metacharacters (e.g. "[Master] Basic Tests" - the brackets form a
+# character class), pass a bracket/metacharacter-free SUBSTRING instead
+# (e.g. "Basic Tests") rather than the full literal name - tapOn matches
+# anywhere in the row's visible text by default, so a plain substring still
+# selects the right row without the escaping risk. Learned the hard way:
+# every flow originally using the literal "[Master] Basic Tests" here had
+# to be corrected to "Basic Tests" for this exact reason.
+#
+# SECOND CAVEAT, learned from a real BrowserStack "Apps Available for
+# Install" screenshot: the qateam domain has SEVERAL apps whose name
+# contains "Basic Tests" as a substring ("[KD Copy Master] Basic Tests1",
+# "[Master] Basic Tests NS Copy!!", plus the real target "[Master] Basic
+# Tests") - a bare substring match is ambiguous between them.
+#
+# THIRD CAVEAT, learned from a real BrowserStack failure: Maestro's tapOn
+# text matching is a FULL match against the element's text, not a
+# "contains"/search match, despite the first caveat above's original
+# (incorrect) assumption. A bare end-anchored "Basic Tests$" genuinely
+# failed to match "[Master] Basic Tests" live ("Element not found: Text
+# matching regex: Basic Tests$") - the leading "[Master] " prefix meant the
+# regex never matched the WHOLE string. Fixed by prepending a wildcard
+# prefix: ".*Basic Tests$" fullmatches "[Master] Basic Tests" (".*" absorbs
+# the "[Master] " prefix, "Basic Tests" matches the literal remainder, "$"
+# anchors the end) while still correctly excluding "...Basic Tests1" and
+# "...Basic Tests NS Copy!!" (neither ends in exactly "Basic Tests"). This
+# ".*<substring>$" shape is now this subflow's standard APP_NAME pattern -
+# use it for any app name that isn't already known to be the row's ENTIRE
+# text.
+#
+# Same "See Apps for My User" -> web-user-mode -> Get Apps mechanism as
+# flows/install/install_08_install_as_web_user.yaml (verified against
+# InstallFromListTest.kt's testAppInstall_usingWebWorkerDetails), except
+# that flow blindly taps the whole apps_list_view container (fine when the
+# domain only surfaces one app to select); this one selects a SPECIFIC row
+# by its visible app-name text instead, so it can install any of the
+# qateam domain's several QA apps on demand.
+#
+# Verified against commcare-android source (read-only reference, not modified):
+#   InstallFromListActivity.java line 394-408: each row is inflated from
+#     R.layout.single_available_app_view with its app_name TextView set to
+#     app.getAppName() - i.e. the app's real display name is the row's own
+#     visible text, not a synthetic index - and the list is sorted
+#     alphabetically by that same name (line 419), so this doesn't depend on
+#     row order.
+#   InstallFromListActivity.java line 133-141 (setOnItemClickListener):
+#     tapping a row immediately finishes this activity with RESULT_OK,
+#     carrying the selected app's media profile ref back to the caller - no
+#     separate per-row confirm step, same as install_08's single blind tap.
+#
+# Waits for "More options" rather than tapping it blindly: live BrowserStack
+# evidence showed this exact tap (the very first interaction after a cold
+# app launch, in both this subflow and install_07/08) failing with "Element
+# not found" - most likely CommCareSetupActivity/its toolbar hasn't finished
+# rendering yet immediately after launchApp, though CommCareSetupActivity
+# extends BaseDrawerActivity (whose shouldShowDrawer() can be true depending
+# on device/login state), so a drawer/hamburger icon replacing the standard
+# overflow affordance on some devices is also a real possibility this wait
+# alone would NOT fix - flag for a screenshot/view-hierarchy check if this
+# still fails after the wait.
+#
+# UPDATE - root cause found via BrowserStack's own commandlogs API (fetched
+# the failing assertion's hierarchyRoot dump directly): the screen shown at
+# the timeout was the SAMSUNG HOME LAUNCHER (com.sec.android.app.launcher),
+# not CommCare at all - org.commcare.dalvik was never brought to the
+# foreground. This subflow is invoked via `runFlow` as another flow's very
+# FIRST step, and unlike install_07/install_08 (which both open with an
+# explicit `- launchApp`), this file had none - Maestro's implicit
+# launch-on-appId behavior evidently does not reliably fire in that
+# position. Added the explicit launchApp below to match install_07/08.
+#
+# UPDATE 2 - clearState: true added after a real failure whose embedded
+# view-hierarchy dump (not a screenshot - confirmed the screenshot API for
+# this build was returning a stale/unrelated image, see the still-open
+# caveat in docs/FRAMEWORK.md-equivalent commit history) showed the device
+# already sitting on "Apps Available for Install" at the very moment this
+# flow's FIRST switch_button wait timed out - i.e. the device had SOME
+# app's install-list screen still open from a prior attempt, not a blank
+# CommCareSetupActivity. `launchApp` with no clearState (Maestro's default)
+# only brings an app back to the foreground - it does NOT reset it to a
+# fresh install, so if anything (a Maestro-level retry of this same test,
+# or a previous flow in the same chunk/session) had left the app mid
+# install-list navigation, plain launchApp would resume exactly there,
+# breaking every step that assumes a blank CommCareSetupActivity start.
+# clearState guarantees the true fresh-install state this whole framework's
+# flows assume. NOTE: flows/mobile_pins/multiple_app_pin_per_app_isolation.yaml
+# calls this subflow TWICE (installing two apps side by side) - its second
+# call must NOT go through this file (clearState would wipe the first app),
+# so it inlines the post-launchApp steps directly instead - see that file's
+# own comment for why.
+# UPDATE, confirmed live (2026-08-18, real Android 16/Galaxy S26 failure) -
+# same OS-level onboarding overlay as install_app_by_code.yaml's own
+# UPDATE comment (full citation there): dismiss defensively before the
+# wait below, which would otherwise time out against real app content
+# sitting behind this overlay.
+- launchApp:
+    clearState: true
+- tapOn:
+    text: "OK"
+    optional: true
+- extendedWaitUntil:
+    visible: "More options"
+    timeout: 20000
+- tapOn: "More options"
+- tapOn: "See Apps for My User"
+# Waits for switch_button rather than tapping it blindly, same reasoning as
+# the "More options" wait above: "See Apps for My User" navigates into a
+# new activity (InstallFromListActivity), and a real BrowserStack failure
+# showed "Element not found: Id matching regex: .../switch_button" here -
+# most likely that activity hadn't finished rendering yet immediately after
+# the navigating tap.
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/switch_button"
+    timeout: 15000
+- tapOn:
+    id: "org.commcare.dalvik:id/switch_button"
+# ELEVENTH CAVEAT, confirmed live (2026-08-08, follow-up real-device
+# failure on install_07's identical pattern): dismissing the Gboard popup
+# with "Skip" does NOT reliably return focus to the field that was just
+# tapped - it can leave focus on whatever field was active BEFORE the
+# popup interrupted, corrupting whichever field types next.
+#
+# UPDATE (2nd correction) and UPDATE (3rd correction) - two progressively
+# more careful timing-based fixes (re-tap the field after dismissing
+# "Skip"; then also waitForAnimationToEnd before the re-tap) were each
+# confirmed live (on install_07's identical pattern, builds
+# fb330cc0e184ee53e4ad5351b6f1f846cf986b38 and
+# 1c31858ff60d3f854effd23ffdfbea9527184bf9) to reduce but NOT eliminate the
+# bug - dismissing Gboard's popup can reassign Android focus back to a
+# PREVIOUSLY-active field asynchronously regardless of how many
+# waits/re-taps are inserted. Rather than keep guessing at timing, each
+# field below now SELF-VERIFIES: a bounded repeat-while loop keyed on the
+# combined id+text selector (Maestro ANDs multiple properties on one
+# selector object - both must match the SAME element), which only exits
+# once that specific field visibly holds exactly the intended value,
+# retrying (re-tap, dismiss Skip if present, retype) up to 3 times if not.
+#
+# UPDATE (4th correction), confirmed live (2026-08-08, real BrowserStack
+# failure + user-provided screen recording on install_08's identical
+# pattern, HQ_WEB_USER_EMAIL="kbordoloi+maestro@dimagi.com"): the
+# self-verify condition's `text: "^${VALUE}$"` fed the value into a regex
+# with no escaping - "+" and "." in the email are regex metacharacters, so
+# the condition could never actually match itself, keeping the loop running
+# unconditionally and giving the real Gboard focus race extra chances to
+# fire mid-loop (the email field ended up genuinely doubled). Fixed by
+# wrapping the interpolated value in Java regex's \Q...\E literal-quote
+# syntax - see flows/common/login.yaml's own header for the fuller writeup.
+- repeat:
+    times: 3
+    while:
+      notVisible:
+        id: "org.commcare.dalvik:id/edit_email"
+        text: "^\\Q${HQ_WEB_USER_EMAIL}\\E$"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/edit_email"
+      - tapOn:
+          text: "Skip"
+          optional: true
+      - tapOn:
+          id: "org.commcare.dalvik:id/edit_email"
+      - eraseText
+      - inputText: "${HQ_WEB_USER_EMAIL}"
+# UPDATE (2nd correction) - a single hideKeyboard call, exactly where it was
+# originally, IS correct here and was never the actual problem: on Android
+# a back-press's FIRST effect, when an IME is genuinely showing, is to
+# dismiss ONLY the keyboard, not navigate the activity back - that only
+# happens on a SECOND back-press once no keyboard remains. The real bug
+# (see the UPDATE two comments below) was calling hideKeyboard MULTIPLE
+# times in a row after the keyboard was already gone, each one then falling
+# through to a real back-navigation. The previous edit here overcorrected by
+# removing hideKeyboard entirely and tapping id/feature_prompt instead -
+# confirmed via a real BrowserStack screenshot that this does NOT dismiss
+# the keyboard at all (tapping a plain, non-focusable TextView doesn't
+# reliably steal focus away from an EditText on Android), leaving the
+# keyboard covering get_apps_button. Restored the single hideKeyboard calls,
+# kept the repeat block removed.
+# TENTH CAVEAT, confirmed live (2026-08-08, frame-by-frame video review of
+# install_07_install_as_mobile_user.yaml's identical pattern): the Gboard
+# popup above isn't reliably tied to just the very FIRST tap of the whole
+# session - it can appear only once THIS field gets focus, after email was
+# already typed successfully. Dismissing it without a matching check here
+# left a stray hideKeyboard call falling through to a real back-press that
+# exited the app entirely (the same "password field got silently cleared"
+# class of bug this file's own earlier UPDATE comment already names).
+- hideKeyboard
+- repeat:
+    times: 3
+    while:
+      notVisible:
+        id: "org.commcare.dalvik:id/edit_password"
+        text: "^\\Q${HQ_WEB_USER_PASSWORD}\\E$"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/edit_password"
+      - tapOn:
+          text: "Skip"
+          optional: true
+      - tapOn:
+          id: "org.commcare.dalvik:id/edit_password"
+      - eraseText
+      - inputText: "${HQ_WEB_USER_PASSWORD}"
+- hideKeyboard
+- tapOn:
+    text: "Skip"
+    optional: true
+# UPDATE - do NOT retry hideKeyboard here (a previous version of this file
+# did, following install_07's example): confirmed against Maestro's own
+# docs, on Android hideKeyboard ALWAYS sends a back-button press regardless
+# of whether a keyboard is showing - calling it AGAIN once the single call
+# above has already dismissed the keyboard just navigates the activity back,
+# and enough repeats exit the app entirely. Confirmed via a real BrowserStack
+# failure whose commandlogs hierarchy dump showed the SAMSUNG HOME LAUNCHER
+# on screen at this exact point. A single wait for get_apps_button is enough
+# now that the one hideKeyboard call above has dismissed the keyboard.
+#
+# UPDATE (2nd correction), confirmed live (2026-08-08, install_07's
+# identical pattern, self-verify build
+# 3df3f4916d9308f1ca4e575975f869f206b3839d): per-field self-verify loops
+# alone weren't sufficient - a LATER field's popup handling can corrupt an
+# EARLIER field that already verified correct (a cross-field async event,
+# not a same-field timing issue). Fix: one final all-fields correction pass
+# here, at the very end of this screen's interaction, re-verifying and
+# re-fixing each field immediately before moving on. Each loop ends with
+# its OWN hideKeyboard (not a trailing standalone one) since hideKeyboard
+# with no keyboard actually showing falls through to a real back-press - a
+# correction loop that ran zero iterations (the common case) must not
+# re-hide an already-hidden keyboard.
+- repeat:
+    times: 2
+    while:
+      notVisible:
+        id: "org.commcare.dalvik:id/edit_email"
+        text: "^\\Q${HQ_WEB_USER_EMAIL}\\E$"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/edit_email"
+      - eraseText
+      - inputText: "${HQ_WEB_USER_EMAIL}"
+      - hideKeyboard
+- repeat:
+    times: 2
+    while:
+      notVisible:
+        id: "org.commcare.dalvik:id/edit_password"
+        text: "^\\Q${HQ_WEB_USER_PASSWORD}\\E$"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/edit_password"
+      - eraseText
+      - inputText: "${HQ_WEB_USER_PASSWORD}"
+      - hideKeyboard
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/get_apps_button"
+    timeout: 10000
+- tapOn:
+    id: "org.commcare.dalvik:id/get_apps_button"
+# UPDATE, confirmed live (2026-08-08, real BrowserStack failures on
+# install_07/install_08's identical wait, 3 separate builds): 30s isn't
+# consistently enough for HQ to return the app list - each failure showed
+# exactly a 30.0s gap between RUNNING and FAILED, a genuine slow server
+# response rather than a wrong selector. Raised to 60s.
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/apps_list_view"
+    timeout: 60000
+# FOURTH CAVEAT, learned from a real BrowserStack failure on "Case
+# Managements!": the apps_list_view is a SCROLLABLE list (confirmed sorted
+# alphabetically per InstallFromListActivity.java line 419), and a bare
+# tapOn cannot select an element that's below the fold - it only searches
+# the CURRENTLY RENDERED view hierarchy. The failing run's own hierarchyRoot
+# dump showed the visible page ending at "Advanced Settings" (last item
+# before the status bar) with no "Case Managements!" row present at all -
+# every app name that alphabetically sorts past roughly "Advanced Settings"
+# (i.e. nearly every APP_NAME used in this repo besides "[Master] Basic
+# Tests", which happens to sort near the top) needs a scroll first.
+# scrollUntilVisible is a no-op if the target is already on screen, so this
+# is safe to run unconditionally for every APP_NAME, including "Basic Tests".
+#
+# SEVENTH CAVEAT, learned from a real BrowserStack failure on "Session
+# Expiration Test": the qateam domain's app list turned out to be much
+# longer than earlier caveats assumed (confirmed live - the failing run's
+# hierarchyRoot dump showed dozens of unrelated apps spanning "KD Case
+# Management" through "Mobile2.47_test4_5" alphabetically, nowhere near "S").
+# 20s wasn't enough scroll time to reach a target that sorts late in a list
+# this long - raised to 60s.
+- scrollUntilVisible:
+    element:
+      text: "${APP_NAME}"
+    direction: DOWN
+    timeout: 60000
+- tapOn: "${APP_NAME}"
+- tapOn:
+    id: "org.commcare.dalvik:id/install_app_button"
+    retryTapIfNoChange: false
+    optional: true
+# EIGHTH CAVEAT, learned from a real BrowserStack failure on "Conditional
+# Enum in Case List" (and previously misread as a version-mismatch retry
+# case for "Case Managements!" too): some apps land on an "Almost there!
+# Press the button below to install your app." screen with its own "Start
+# Install"/"Start Over" buttons - text-based, not the same id/screen as
+# install_app_button above (that tap alone didn't reach it). Optional tap
+# so flows whose app skips straight to setup aren't affected.
+- tapOn:
+    text: "Start Install"
+    optional: true
+# SIXTH CAVEAT, learned from a real BrowserStack failure on "Case
+# Managements!": some apps' published CCZ requires a newer CommCare APK
+# version than the "release" build BrowserStack tests against (seen live:
+# "The application requires CommCare version 2.64.0. You are currently
+# running 2.63.4." with "UPDATE COMMCARE VIA THE PLAY STORE" / "I'LL UPDATE
+# LATER" buttons) - a genuine app/APK version drift, not a flow bug. Dismiss
+# with "I'LL UPDATE LATER" if it appears so the flow can proceed; this is an
+# environmental mismatch worth flagging to a human if the resulting app then
+# misbehaves, but blocking every caller of this shared subflow over it would
+# be worse.
+- tapOn:
+    text: "I.LL UPDATE LATER"
+    optional: true
+# NINTH CAVEAT, learned from a real BrowserStack failure on "Performance
+# Testing" (menu_badges) and confirmed by re-watching the recorded video:
+# dismissing the version-mismatch dialog above does NOT resume the install
+# by itself - it drops back onto the SAME "Almost there!" screen from the
+# EIGHTH CAVEAT, needing a second tap on the same "Start Install" button to
+# actually proceed. Without this, every caller whose app hits the version
+# mismatch was silently stuck here (previously misdiagnosed - on a first
+# look this looked identical to a missing-multimedia problem, since both
+# leave the flow stuck before edit_username ever appears). Optional since
+# this only matters when the version-mismatch detour happened at all.
+- tapOn:
+    text: "Start Install"
+    optional: true
+# FIFTH CAVEAT, learned from a real BrowserStack failure: this
+# extendedWaitUntil used to be a hard (non-optional) assertion, and it timed
+# out after the full 60s on 15/16 flows in one build - "Setting Up App" is
+# only a transitional loading screen, and evidently doesn't reliably render
+# for long enough (or at all, e.g. if BrowserStack's device already has the
+# CCZ cached) to be caught by a poll-based wait. The actual thing every
+# caller needs is the LOGIN screen that appears once setup finishes, which
+# the next wait below already asserts - this one is now optional so a fast
+# install doesn't fail the whole flow over a screen that isn't the real
+# success criterion.
+- extendedWaitUntil:
+    visible: "Setting Up App"
+    timeout: 60000
+    optional: true
+# UPDATE (2nd correction, 2026-08-13): the launchApp-based "force a
+# repaint" fix tried here was ITSELF causing real, confirmed damage - see
+# install_app_by_code.yaml's own 2nd-correction UPDATE comment for the
+# full writeup (CI run 31691239630 showed ~15+ unrelated flows across
+# every module failing at this exact wait, matching a user-supplied
+# recording of the install stalling and reverting to the pre-install
+# screen - launchApp backgrounding the app mid-install can interrupt
+# CommCare's own background install task). Removed the relaunch; just a
+# longer plain wait instead.
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/edit_username"
+    timeout: 120000

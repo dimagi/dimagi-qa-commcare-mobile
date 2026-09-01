@@ -1,0 +1,11 @@
+{
+  "_comment": "Master Mobile Plan (2026) > Recovery Measures > Recovery: Offline Reinstall and Update App > 'Recovery (offline) 4' - 'Mark Test Three released'. Run this once the device is confirmed on Test Two and before re-logging in to trigger the MEASURE_TYPE_APP_OFFLINE_REINSTALL_AND_UPDATE 'Select CCZ' screen (see offline_reinstall_update_app_flow.yaml's 'Recovery (offline) 3' step, which asserts that screen appears). saved_app_id must be the Test Three build id produced by offline_2_mark_test_two.json's create_new_build action. app_id/saved_app_id values are placeholders - refresh them each QA cycle per the sheet's reconfiguration note, do not reuse from a prior run.",
+  "actions": [
+    {
+      "type": "mark_build_status",
+      "app_id": "REPLACE_WITH_RECOVERY_OFFLINE_APP_ID",
+      "saved_app_id": "REPLACE_WITH_TEST_THREE_BUILD_ID",
+      "is_released": true
+    }
+  ]
+}

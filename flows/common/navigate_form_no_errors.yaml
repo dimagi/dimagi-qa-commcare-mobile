@@ -1,0 +1,132 @@
+appId: org.commcare.dalvik
+---
+# Reusable: from the home screen ("Start" visible), open FORM_NAME, complete
+# it via the form-entry Next/Finish button, and assert no generic/crash error
+# dialog appeared - lands back on the home screen. Backs the sheet's repeated
+# "Navigate through Form X, verify you receive no errors" verification steps.
+# Params: FORM_NAME - literal on-screen form/module name to tap (per the
+# calling scenario's own sheet wording, e.g. "Form 1"/"Form One").
+#
+# GENERIC/BEST-EFFORT CAVEAT: the specific pre-provisioned QA apps under test
+# here ("Mobile Updates - Test 1_2", "Mobile Updates - Test 3", "Mobile
+# Updates Test 4/5 Master") have menu/form structures that could not be
+# verified against any source in this repo (they are QA-only apps, not part
+# of the commcare-android source). FORM_NAME is tapped by text, assuming the
+# on-screen label matches the sheet's own shorthand exactly - a reasonable
+# but UNVERIFIED assumption. If it doesn't hold in practice, replace the
+# `tapOn: "${FORM_NAME}"` below with a position/index tap on
+# id/screen_suite_menu_list instead - see flows/common/submit_only_form.yaml
+# for that pattern (there used for a single-item list; extend with an index
+# for a multi-item one).
+#
+# UPDATE (2026-08-20), confirmed live via a real Appium dispatch against
+# "Mobile Updates - Test 1_2!" (scripts/appium_scenarios.py's
+# _navigate_form_no_errors port hit this first): the gap above was real -
+# tapping "Start" lands on an intermediate "Mobile updates" MODULE, not the
+# form list directly, so tapping FORM_NAME there timed out. Taps through
+# that module first below (optional, so this stays a no-op for any flat
+# single-level app that never shows it).
+#
+# UPDATE (2026-08-21), per direct user correction (a real-device screenshot
+# of Form 2's last question) that overturned this file's own original
+# design ("page through a few questions... exit WITHOUT saving"): the SAME
+# nav_btn_next button relabels itself "FINISH" on a form's last question,
+# and tapping it there actually SUBMITS the form - the sheet's own forms are
+# supposed to be completed and submitted, not discarded partway through.
+# Form 1 has "a few media files" (per the sheet's own Update 4/5 setup
+# note) so more questions than a small fixed tap count covers - loops
+# tapping Next/Finish WHILE nav_btn_next is still visible (bounded
+# generously) instead of a fixed small count that risked stopping mid-form
+# and discarding via "Exit Form?".
+#
+# Selectors verified against commcare-android source (read-only reference,
+# never modified by this repo):
+#   app/src/org/commcare/activities/HomeButtons.java (home.start -> "Start"
+#     tile -> enterRootModule()) enters the module/form list
+#     (app/res/layout/screen_suite_menu.xml -> id/screen_suite_menu_list).
+#   app/res/layout/screen_form_entry.xml +
+#     app/src/org/commcare/activities/components/FormNavigationUI.java ->
+#     id/nav_btn_next.
+#   Generic/unrecoverable error text (app/src/org/commcare/activities/
+#     UnrecoverableErrorActivity.java, android_translatable_strings.txt):
+#     activity.task.error.generic="Unexpected error! Please try again." and
+#     app.handled.error.explanation="CommCare will now restart." - matched
+#     case-insensitively as a best-effort net since there is no single fixed
+#     error-dialog resource id (dialogs here are built dynamically via
+#     StandardAlertDialog/AlertDialogFragment).
+- tapOn: "Start"
+- tapOn:
+    text: "Mobile updates"
+    optional: true
+# UPDATE (2026-08-21), per direct user confirmation via a real failure
+# screenshot: "Mobile2.47" (scenario_3's app) has the SAME intermediate-
+# module gap as "Mobile Updates - Test 1_2!" above, but its module is
+# named "Surveys" instead of "Mobile updates" - confirmed live, tapping
+# "Start" landed on a module list showing only "Surveys", not Form
+# One/Two directly.
+- tapOn:
+    text: "Surveys"
+    optional: true
+- tapOn: "${FORM_NAME}"
+# UPDATE (2026-08-19), same defensive dismiss as
+# flows/common/view_form_no_errors_from_menu.yaml's own UPDATE comment -
+# see that file for the full citation (a Google Play services "Location
+# Accuracy" system dialog can appear right after opening a form, blocking
+# nav_btn_next underneath it).
+- tapOn:
+    text: "No thanks"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_next"
+    timeout: 5000
+# Defensively dismisses a repeat-group "Add a new...?" dialog before each
+# Next/Finish tap (choice_dialog_panel_3 = "Do Not Add"/"Skip") - confirmed
+# live (2026-08-08) on flows/form_submissions/appearance_attributes_page_
+# through_and_submit.yaml/question_types_01_03_answer_and_submit.yaml/
+# repeat_groups_01_05_add_and_submit.yaml that this dialog can silently
+# block a generic Next-tap loop (Maestro logs the tap as COMPLETED even
+# though nothing on screen changed) - see repeat_groups_01_05's own header
+# for the full HorizontalPaneledChoiceDialog source citation. This helper's
+# own target forms haven't been confirmed to have one, but the dismiss is a
+# harmless no-op when the dialog never appears.
+#
+# Loops WHILE nav_btn_next is still visible (not a fixed count) - it stops
+# on its own once tapping FINISH has submitted the form and navigated away.
+- repeat:
+    times: 20
+    while:
+      visible:
+        id: "org.commcare.dalvik:id/nav_btn_next"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/choice_dialog_panel_3"
+          optional: true
+      - tapOn:
+          id: "org.commcare.dalvik:id/nav_btn_next"
+          optional: true
+- assertNotVisible:
+    text: "(?i).*unexpected error.*"
+- assertNotVisible:
+    text: "(?i).*commcare will now restart.*"
+# UPDATE (2026-08-21), confirmed live via a real dispatch (scenario_2,
+# build "scenario2-notvisible-while-verify": passed, 1/1) after two
+# earlier failures with a fixed 2-back count (one overshooting into the
+# Android launcher, one landing on the login screen) - the real nesting
+# depth genuinely varies by navigation (most likely because "Mobile
+# updates", tapped through above, doesn't always show on a later
+# navigation), so a fixed count can't be right for every case. Presses
+# back only WHILE "Start" is not yet visible (bounded) instead - a form
+# whose submission already lands on Start presses zero backs, one that
+# doesn't gets exactly as many as it needs.
+- repeat:
+    times: 3
+    while:
+      notVisible:
+        text: "Start"
+    commands:
+      - back
+- extendedWaitUntil:
+    visible:
+      text: "Start"
+    timeout: 5000

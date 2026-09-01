@@ -1,0 +1,99 @@
+appId: org.commcare.dalvik
+---
+# FINAL UPDATE - THIS SUBFLOW CANNOT WORK AGAINST A RELEASE APK, PERIOD.
+# Confirmed via commcare-android source: DeveloperPreferences.
+# hideOrShowDangerousSettings() unconditionally REMOVES this preference row
+# (and every other non-whitelisted dev preference) from the Developer
+# Options screen whenever !GlobalPrivilegesManager.isAdvancedSettingsAccessEnabled()
+# && !BuildConfig.DEBUG - i.e. on every release build, unless a device-level
+# "Advanced Settings"/"Mobile Privileges" privilege has been separately
+# unlocked. That privilege is NOT an HQ app-builder setting - it's granted by
+# the Master Mobile Plan's own "Setup 4" test case (already correctly marked
+# Not automatable in coverage_matrix.csv): open Developer Options' own
+# overflow menu > "Mobile Privileges" > "CLAIM PRIVILEGES" > scan a barcode
+# shown at https://www.commcarehq.org/account/mobile_privileges/ on a
+# SEPARATE logged-in browser session. WHITELISTED_DEVELOPER_PREF_KEYS
+# (DeveloperPreferences.java) confirms exactly which 6 rows survive without
+# that privilege - cc-offer-pin-for-login (this one) is not among them.
+# Confirmed live, repeatedly: after fixing every install/scroll/timing bug
+# in every mobile_pins flow, the Developer Options screen consistently
+# rendered only those 6 whitelisted rows (Show Update Options Item, Image
+# Above Question Text Enabled, Detect and Trigger Purge on Form Save,
+# Default Audio Quality, Certificate Transparency, Override Log Submission
+# Server) and never this one, on every attempt - scrolling doesn't help
+# because the row is never added to the screen at all, not merely
+# off-screen. Every mobile_pins Pin 1-14 / Mutiple App PIN test case
+# ultimately depends on this toggle (directly or via
+# set_pin_via_dialog.yaml/dismiss_pin_prompt_dont_ask_again.yaml assuming
+# "Create a PIN?" is already visible) and is therefore Not automatable via
+# Maestro against a release APK - reclassified in coverage_matrix.csv and
+# both tracking docs. The flow files under flows/mobile_pins/ are left on
+# disk (not deleted) since they're otherwise-correct, well-cited attempts
+# that would become useful again if this repo ever tests against a debug
+# APK variant or the account running BrowserStack's tests gets the Mobile
+# Privileges barcode-claim performed on it first.
+#
+# Reusable subflow: unlocks CommCare's "Developer Options" (via the classic
+# "About CommCare" x4 dismiss trick) and turns on the "Give option to use
+# PIN for login" developer preference (cc-offer-pin-for-login). Needed
+# before ANY "Create a PIN?" dialog will ever appear on login - confirmed
+# via commcare-android source (HomeScreenBaseActivity.checkForPinLaunchConditions()):
+# the dialog is gated behind DeveloperPreferences.shouldOfferPinForLogin(),
+# which defaults to NO/false on every fresh install (no HQ/restore-side
+# config sets it). This was the real root cause behind every mobile_pins
+# flow failing its very first "Create a PIN?" assertion on a live
+# BrowserStack run (build 5ad48d6e60be25f5ef8fbfe92eedb8618b5c3999) - the
+# toggle was simply never turned on; the dialog isn't purely "first login",
+# it's "first login AND this dev preference is enabled".
+#
+# Call once, right after the FIRST login.yaml in a flow and before expecting
+# the PIN prompt. The preference is a plain app-level SharedPreferences
+# value, not tied to a user session, so it persists across any
+# logout.yaml/login.yaml cycles later in the same flow - no need to call
+# this again after re-logins within one flow run.
+#
+# Verified against commcare-android source (read-only reference, not modified):
+#   app/src/org/commcare/activities/HomeScreenBaseActivity.java
+#     checkForPinLaunchConditions()/handleDeveloperModeClicks() (~line
+#     1674-1684): 4 dismissals of the "About CommCare" dialog sets
+#     cc-superuser-enabled=yes locally, unlocking the "Developer Options"
+#     Settings entry (same mechanism as
+#     flows/mobile_pins/setup_03_enable_developer_options.yaml).
+#   app/res/xml/preferences_developer.xml line 81-82: cc-offer-pin-for-login,
+#     a ListPreference titled "Give option to use PIN for login" with
+#     entries Enabled/Disabled (values yes/no) - app/res/values/strings.xml
+#     line 600-607. No stable per-row resource-id (shared
+#     androidx.preference RecyclerView row layout) - matched by visible
+#     title text instead. Tapping the row opens a single-choice dialog;
+#     selecting "Enabled" writes the value and auto-dismisses (standard
+#     ListPreferenceDialogFragmentCompat behavior - no separate OK tap).
+#   app/res/menu/menu_app_home.xml: R.id.action_about ("About CommCare"),
+#     R.id.action_preferences ("Settings").
+- repeat:
+    times: 4
+    commands:
+      - tapOn: "More options"
+      - tapOn: "About CommCare"
+      - tapOn: "OK"
+- assertVisible:
+    text: "Developer Mode Enabled"
+    optional: true # toast may dismiss before Maestro's screenshot poll catches it
+- tapOn: "More options"
+- tapOn: "Settings"
+- tapOn: "Developer Options"
+# UPDATE, found via a real BrowserStack failure: Developer Options is a long
+# scrollable preference list (confirmed live - the failing run's own
+# hierarchyRoot dump showed "Detect and Trigger Purge on Form Save" and
+# "Certificate Transparency" on screen, but not this row) - same
+# below-the-fold issue as the "Apps Available for Install" list in
+# install_app_as_web_user.yaml's FOURTH CAVEAT. scrollUntilVisible is a
+# no-op if already visible.
+- scrollUntilVisible:
+    element:
+      text: "Give option to use PIN for login"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "Give option to use PIN for login"
+- tapOn: "Enabled"
+- back
+- back

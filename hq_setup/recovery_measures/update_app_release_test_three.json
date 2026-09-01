@@ -1,0 +1,11 @@
+{
+  "_comment": "Master Mobile Plan (2026) > Recovery Measures > Recovery: Update App > 'Update 4' - 'Mark Test Three released'. Run this BEFORE update_app_02_forced_two_to_three.yaml (which installs Test Two/UPDATE_APP_TWO, v93). Releasing Test Three (v105, UPDATE_APP_THREE) while the device is on Test Two is what makes AppUtils.notOnLatestAppVersion() report true and, since v93 falls inside this app's MobileRecoveryMeasure app_version_min/max=85/104 gate, trips MEASURE_TYPE_APP_UPDATE's executeAutoUpdate() on next login (see ExecuteRecoveryMeasuresPresenter.executeMeasure() in commcare-android - confirmed against the live Django admin record, id 10). Needed as an EXPLICIT step here (unlike RU_TEST_THREE/OFFLINE_TEST_THREE/PT_REL_THREE, which rely on resolve_app_codes() auto-releasing whatever a flow references) because app_registry.py's UPDATE_APP_THREE entry is pinned with release_first=False - v84 (Test One) hit a real HQ platform migration error on mark_build_status ('mobile UCR restore version... needs to be updated to V2.0'), so this app's 3 pinned builds intentionally never get auto-re-released to avoid that same risk on any of them. phase1_unrelease_test_three.json un-releases v105 (among others) before phase1 (update_app_01) runs - this file is what re-releases it again before phase2 (update_app_02) runs. See scripts/app_registry.py's UPDATE_APP_THREE entry for the app_id/saved_app_id values (real, not placeholders - refresh only if this app's own builds are recut in a future QA cycle).",
+  "actions": [
+    {
+      "type": "mark_build_status",
+      "app_id": "9d63118c3eda4e56bebfb52762804d53",
+      "saved_app_id": "ab2fc77a762643cab4025c9607e66040",
+      "is_released": true
+    }
+  ]
+}

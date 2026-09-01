@@ -1,0 +1,272 @@
+appId: org.commcare.dalvik
+tags:
+  - update
+  - automatable
+---
+# Master Mobile Plan (2026) > Update (coverage_matrix.csv XLSX Tab "Update").
+# One combined, sequential flow covering these five "Automatable" Test Case
+# IDs, since the source sheet writes them as a single continuous narrative
+# (enable dev options -> change update target -> update -> revert target ->
+# confirm no-op update -> verify via logout/login):
+#   - "Change update target"
+#   - "Update + Check for changes"
+#   - "Change update target back"
+#   - "Confirm that no update occurs if you try"
+#   - "Verify update"
+# This intentionally departs from docs/FRAMEWORK.md's usual "one flow file
+# per test case" convention: splitting these five up would just force every
+# downstream flow to re-establish developer-mode + update-target state via
+# runFlow for no isolation benefit, since the sheet's own ordering makes them
+# inherently stateful/sequential (each step assumes the previous one's device
+# state).
+#
+# Two sibling rows from the same sheet section are NOT covered here, per the
+# task's explicit scope:
+#   - "Make a change" / "Check for new build" - both "Not automatable": an
+#     ad-hoc HQ app-builder edit with no fixed target, and an HQ release-page
+#     browser inspection.
+#   - Because of the above, "Update + Check for changes" here only verifies
+#     the update-check completes cleanly (lands back on an "up to date"
+#     indicator), NOT that a specific app-content change was reflected -
+#     asserting that would require the out-of-scope HQ-side edit.
+#
+# Selectors verified against commcare-android source (read-only reference,
+# never modified by this repo):
+#   - app/instrumentation-tests/src/org/commcare/utils/InstrumentationUtility.kt
+#     -> enableDeveloperMode(): tap "About CommCare" 4x, dismissing the
+#     resulting info dialog with "OK" each time, to unlock developer mode.
+#   - app/instrumentation-tests/src/org/commcare/androidTests/DeveloperOptionsTests.kt
+#     -> testDevelopersOptions() / testUpdateOptions(): a live Espresso test
+#     that exercises this *exact* scenario end to end (enable dev mode ->
+#     Settings > Developer Options > "Show Update Options Item" > Enabled ->
+#     Settings > "Update Options" > "Latest saved state" -> "Update App" ->
+#     assert "App is up to date"). Every on-screen text below ("Settings",
+#     "Developer Options", "Show Update Options Item", "Enabled",
+#     "Update Options", "Latest saved state", "Latest version", "Update App",
+#     "App is up to date") is copied verbatim from that test.
+#   - app/res/xml/preferences_developer.xml: title="Show Update Options Item"
+#     (key cc-show-update-target-options).
+#   - app/res/xml/main_preferences.xml: title="Update Options" (key
+#     cc-update-target) - only visible once "Show Update Options Item" is
+#     Enabled (see MainConfigurablePreferences.setVisibilityOfUpdateOptionsPref()).
+#   - app/res/values/strings.xml: update_target_labels array = ["Latest
+#     version", "Latest saved state"]; pref_enabled_labels array =
+#     ["Enabled", "Disabled"].
+#   - app/assets/locales/android_translatable_strings.txt:
+#       home.menu.settings=Settings
+#       home.menu.about=About CommCare
+#       home.menu.update=Update App
+#       settings.developer.options=Developer Options
+#       settings.developer.title=Developer Options
+#       updates.success=App is up to date
+#       commcare.version=CommCare Android, version "${0}"(${1}), built on: ${2}
+#       dialog.ok=OK (About CommCare dialog's positive button; R.string.ok,
+#         used directly by InstrumentationUtility.enableDeveloperMode(), is
+#         also "OK")
+#   - app/src/org/commcare/activities/UpdateUIController.java:108 sets the
+#     on-screen progress text to Localization.get("updates.success") when an
+#     update check finds nothing to install - this is the literal live text
+#     DeveloperOptionsTests.kt asserts, so it's used here in preference to
+#     the notification-only "notification.install.uptodate.detail" string.
+# Prepends install_app_as_web_user.yaml (APP_NAME: ".*Update Test Alternate!
+# Alternating test update") - a fresh BrowserStack session has no app
+# installed until this runs; see DispatchActivity.java's CommCareSetupActivity
+# routing when currentApp == null.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_UPDATE_TEST_ALTERNATE}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+
+# === "Change update target" =============================================
+# Enable developer mode: About CommCare x4, dismissing with OK each time.
+- repeat:
+    times: 4
+    commands:
+      - tapOn: "More options"
+      - tapOn: "About CommCare"
+      - tapOn: "OK"
+
+# Menu > Settings > Developer Options > Show Update Options Item > Enabled.
+- tapOn: "More options"
+- tapOn: "Settings"
+- tapOn: "Developer Options"
+- assertVisible: "Show Update Options Item"
+- tapOn: "Show Update Options Item"
+- tapOn: "Enabled"
+- back
+- back
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+
+# Menu > Settings > Update Options > Latest saved state.
+- tapOn: "More options"
+- tapOn: "Settings"
+- tapOn: "Update Options"
+- tapOn: "Latest saved state"
+- back
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+
+# === "Update + Check for changes" =======================================
+# No HQ-side app change was made (out of scope, see header comment), so we
+# only assert the update check completes cleanly rather than that any
+# content changed.
+- tapOn: "More options"
+- tapOn: "Update App"
+# UPDATE, confirmed live (2026-08-08, real BrowserStack failure, build
+# 6088f0f4e51f008e98bcec32581ae4d4c85e7231): the update-check genuinely
+# failed with "Failed to download updates due to an error" / "See Error
+# Details" and a "Recheck" button - a transient network/server hiccup on
+# the update-check callout, not a flow bug (same class of issue as
+# flows/common/login.yaml's own "Bad Server Response" retry, just a
+# different callout). Bounded retry tapping "Recheck" while the error is
+# showing, rather than assuming the very first check always succeeds.
+# UPDATE (2nd correction), confirmed live (run 31276111657): the SAME error
+# screen was still showing after all 3 retries plus the 30s wait. The
+# original loop tapped "Recheck" and immediately re-checked the `while`
+# condition with no pause, which can re-sample the UI before that recheck's
+# own network round-trip has had any time to resolve - effectively
+# interrupting/restarting the check rather than letting one attempt
+# complete. Added an explicit pause between tap and re-check (same
+# waitForAnimationToEnd-as-a-pause convention already used in
+# flows/common/login.yaml's "Bad Server Response" retry) and more
+# attempts/longer final wait to give a real network round-trip room to
+# finish.
+- repeat:
+    times: 5
+    while:
+      visible:
+        text: "Failed to download updates due to an error"
+    commands:
+      - tapOn: "Recheck"
+      - waitForAnimationToEnd:
+          timeout: 4000
+- extendedWaitUntil:
+    visible:
+      text: "(?i)(App is up to date|Update to version.*log out)"
+    timeout: 45000
+# UPDATE (2026-08-20), per direct user instruction: don't assume this app
+# has no pending update just because none was expected - HQ build
+# versions drift over time regardless of what this flow itself does
+# (confirmed live: a real CI run found a genuine new build had appeared
+# on this app between two otherwise-identical runs, with nothing in this
+# flow responsible for it). Accepts either outcome instead of asserting
+# "up to date" specifically: if a real update happens to be pending,
+# complete it - `repeat/while/times: 1` is this repo's own established
+# if-once idiom, executing the block only when its condition is actually
+# true right now, same as e.g. flows/updates_partial_failed's own
+# relogin-until-blocker loops.
+- repeat:
+    times: 1
+    while:
+      visible:
+        text: "Update to version.*log out"
+    commands:
+      - tapOn:
+          text: "Update to version.*log out"
+      - runFlow:
+          file: ../common/login.yaml
+          env:
+            USERNAME: ${CC_TEST_USERNAME}
+            PASSWORD: ${CC_TEST_PASSWORD}
+# Only dismiss via back if we actually landed on the "up to date" results
+# screen above (an overlay on top of Start) - if the update branch above
+# ran instead, we already relogged in fresh onto Start with no overlay to
+# dismiss, and an unconditional "back" here would navigate somewhere
+# unintended.
+- repeat:
+    times: 1
+    while:
+      visible: "App is up to date"
+    commands:
+      - back
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+
+# === "Change update target back" ========================================
+- tapOn: "More options"
+- tapOn: "Settings"
+- tapOn: "Update Options"
+- tapOn: "Latest version"
+- back
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+
+# === "Confirm that no update occurs if you try" ==========================
+- tapOn: "More options"
+- tapOn: "Update App"
+# Same retry-with-pause fix as the "Update + Check for changes" block above -
+# see that block's UPDATE comment for the full root-cause writeup.
+- repeat:
+    times: 5
+    while:
+      visible:
+        text: "Failed to download updates due to an error"
+    commands:
+      - tapOn: "Recheck"
+      - waitForAnimationToEnd:
+          timeout: 4000
+- extendedWaitUntil:
+    visible:
+      text: "(?i)(App is up to date|Update to version.*log out)"
+    timeout: 45000
+# Same drift-tolerant handling as "Update + Check for changes" above - see
+# that block's UPDATE comment for the full citation. This step's own name
+# ("Confirm that no update occurs if you try") describes the intended
+# steady-state behavior, not a guarantee this repo can enforce - HQ build
+# activity outside this flow's control can make a real update genuinely
+# pending regardless, and that's not a flow failure.
+- repeat:
+    times: 1
+    while:
+      visible:
+        text: "Update to version.*log out"
+    commands:
+      - tapOn:
+          text: "Update to version.*log out"
+      - runFlow:
+          file: ../common/login.yaml
+          env:
+            USERNAME: ${CC_TEST_USERNAME}
+            PASSWORD: ${CC_TEST_PASSWORD}
+- repeat:
+    times: 1
+    while:
+      visible: "App is up to date"
+    commands:
+      - back
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+
+# === "Verify update" =====================================================
+# Best-effort: logout/login should still work post-update, and the About
+# CommCare dialog should still report *some* version string. Not asserting a
+# specific version number since no controlled version bump happened on HQ
+# (out of scope, see header comment).
+- runFlow: ../common/logout.yaml
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+- tapOn: "More options"
+- tapOn: "About CommCare"
+- assertVisible:
+    text: "(?i).*CommCare Android, version.*"
+- tapOn: "OK"

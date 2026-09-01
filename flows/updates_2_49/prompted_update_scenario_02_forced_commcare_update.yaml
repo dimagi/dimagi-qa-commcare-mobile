@@ -1,0 +1,148 @@
+appId: org.commcare.dalvik
+tags:
+  - updates_2_49_apk_prompt
+  - partial
+---
+# Master Mobile Plan (2026) > Updates > "Prompted Update Scenario 2" (2.49
+# grab-bag section). NOTE: this is a distinct row from the "Prompted Update
+# Scenario 2" in the Prompted Updates tab (that one is about the *CCZ/app*
+# forced-update blocker; this row is about the CommCare *binary (APK)*
+# forced-update blocker screen - see
+# hq_setup/updates_2_49/prompted_update_scenario_02_forced.json's comment).
+#
+# ASSUMES hq_setup/updates_2_49/prompted_update_scenario_02_forced.json has
+# already run (apk_prompt=forced on HQ, same dynamically-resolved "(dev)"
+# apk_version target setup_02_commcare_version_plus_one.json pinned) and a
+# released version newer than the one installed on the device is available,
+# analogous to how
+# flows/updates_2_49/prompted_update_scenario_01_ill_update_later.yaml
+# assumes an *optional* APK update is pending. Only the on-device
+# login -> forced-blocker-screen portion is scripted below; per this task,
+# the flow stops right where a real Play Store interaction would be
+# required, and that remainder is flagged out of scope - the same
+# Not-automatable reasoning coverage_matrix.csv already uses for this same
+# tab's "In-App Update 1-10" rows ("Depends on real Google Play
+# internal-tester/app-sharing infrastructure that cloud device farms don't
+# reliably support").
+#
+# UPDATE (2026-08-24, 2nd correction), per direct user instruction: retagged
+# from "updates_2_49" to "updates_2_49_apk_prompt" - same reasoning as
+# prompted_update_scenario_01_ill_update_later.yaml's own UPDATE citation
+# (avoids group-a's main tag-based dispatch sweeping this in without the
+# right HQ pre-step, and keeps this app_id's mutated-settings window from
+# ever overlapping with other flows sharing the same app_id). Only ever run
+# via its own dedicated CI step, scheduled to run last in group-a's job.
+#
+# UPDATE (2026-08-24), per direct user instruction: this is the second half
+# of one logical combined scenario with
+# prompted_update_scenario_01_ill_update_later.yaml - see that file's own
+# UPDATE comment for the full citation on why they're two separate Maestro
+# dispatches (not one continuous device session) sharing the same HQ-side
+# apk_version target. This file's own job is proving the transition:
+# scenario_01 already showed BOTH escape hatches while apk_prompt=on; this
+# file's "no I'll update later escape hatch" assertion below proves that
+# option disappears once apk_prompt=forced. Always followed by
+# hq_setup/updates_2_49/prompted_update_scenario_teardown.json.
+#
+# Selectors/strings verified against commcare-android source (read-only
+# reference, never modified by this repo):
+#   app/src/org/commcare/activities/PromptActivity.java:
+#     setupUI() unconditionally calls setUpTypeSpecificUIComponents() (so the
+#     title/action-button text below are populated regardless of forced
+#     state) and then updateVisibilities(), which hides doLaterButton
+#     (R.id.do_later_button) whenever inForceMode() is true (toPrompt.isForced()
+#     == true) - this is the on-screen signal that distinguishes the forced
+#     blocker from the optional "I'll update later" prompt exercised by
+#     prompted_update_scenario_01_ill_update_later.yaml. onBackPressed()/
+#     isBackEnabled() also disable the back button in force mode, so the
+#     screen cannot be dismissed without acting.
+#   app/src/org/commcare/activities/PromptApkUpdateActivity.java
+#     setUpTypeSpecificUIComponents(): promptTitle text =
+#     Localization.get("apk.update.required.title", clientName) when
+#     inForceMode(); actionButton text =
+#     Localization.get("apk.update.action", clientName), with its
+#     onClickListener wired to launchCurrentAppOnPlayStore() (PromptActivity)
+#     - the real Play Store hand-off this flow does NOT execute.
+#   app/build.gradle line ~292 (defaultConfig, applicationId
+#     'org.commcare.dalvik' - matches this flow's appId): `def
+#     applicationName = 'CommCare'` -> resValue 'application_name' ->
+#     PromptActivity.getCurrentClientName() -> the "${0}" substituted into
+#     both strings below is literally "CommCare" for this build flavor.
+#   app/assets/locales/android_translatable_strings.txt:
+#     apk.update.required.title = "New version of ${0} is Required" (line 28)
+#       -> "New version of CommCare is Required"
+#     apk.update.action = "Update ${0} via the Play Store" (line 36) ->
+#       "Update CommCare via the Play Store"
+#     home.start = "Start" (line 59) - deliberately NOT asserted here, since
+#       a forced blocker screen should be the only thing on screen after
+#       login, not the home screen.
+#
+# A fresh BrowserStack session has no app installed until
+# install_app_by_code.yaml runs; see DispatchActivity.java's
+# CommCareSetupActivity routing when currentApp == null.
+#
+# UPDATE (2026-08-24), per direct user-supplied app link + screen
+# recording: moved from the shared APP_CODE_BASIC_TESTS_LATEST to
+# APP_CODE_BT_NS_COPY_LATEST ("[Master] Basic Tests NS Copy", a
+# dedicated copy) - same as scenario_01's own UPDATE citation (see that
+# file's header for the full reasoning on why a dedicated app, on the real
+# "<X.Y.Z>/dev" apk_version escape hatch this scenario's own hq_setup file
+# now uses, and on the shortened key name - the full
+# "APP_CODE_BASIC_TESTS_NS_COPY_LATEST" name hit the confirmed 30-char
+# setEnvVariables key limit with a real 422). Still the unfiltered/
+# "_LATEST" variant for the same original reason: this test's whole point
+# is the forced CommCare-APK-version-mismatch blocker screen below
+# actually appearing. See scripts/app_registry.py's NO_VERSION_FILTER_KEYS
+# for the full reasoning.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_BT_NS_COPY_LATEST}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+
+# --- Forced CommCare (APK) update blocker screen appears ---
+# UPDATE (2026-08-24), same real HQ-propagation-delay fix as
+# scenario_01_ill_update_later.yaml's own UPDATE citation (see that file
+# for the full reasoning) - the forced blocker's own reflection of a
+# set_prompt_update_settings call made moments before dispatch can lag,
+# same as the optional case. Retries via logout+relogin - safe to reach
+# the home screen for logout here, since if the blocker genuinely hasn't
+# propagated yet the device is sitting on the normal (unblocked) home
+# screen, not stuck.
+- extendedWaitUntil:
+    visible: "New version of CommCare is Required"
+    timeout: 20000
+    optional: true
+- repeat:
+    times: 4
+    while:
+      notVisible: "New version of CommCare is Required"
+    commands:
+      - runFlow: ../common/logout.yaml
+      - runFlow:
+          file: ../common/login.yaml
+          env:
+            USERNAME: ${CC_TEST_USERNAME}
+            PASSWORD: ${CC_TEST_PASSWORD}
+      - extendedWaitUntil:
+          visible: "New version of CommCare is Required"
+          timeout: 45000
+          optional: true
+- assertVisible: "New version of CommCare is Required"
+- assertVisible: "Update CommCare via the Play Store"
+
+# --- Confirm it's a genuine blocker: no "I'll update later" escape hatch ---
+- assertNotVisible: "I'll update later"
+
+# === Out of scope beyond this point ============================================
+# Tapping "Update CommCare via the Play Store" launches a real market://
+# / play.google.com/store Intent (PromptActivity.launchCurrentAppOnPlayStore())
+# and, for the forced case, PromptApkUpdateActivity.onCreate() also kicks off
+# Google Play Core's "immediate" in-app-update flow automatically - both
+# require actual Play Store/Play Core infrastructure BrowserStack's device
+# farm doesn't reliably provide (same reasoning as coverage_matrix.csv's
+# "In-App Update 1-10" rows on this tab). Not scripted here.

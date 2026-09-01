@@ -1,0 +1,89 @@
+appId: org.commcare.dalvik
+tags:
+  - multimedia
+  - partial
+---
+# Master Mobile Plan (2026) > Multimedia > "Image Resize 1", "Image Resize
+# 2", "Image Resize 3", "Image Resize 4" - View Large/Small/Wide/Tall image
+# form, at the app's default (out-of-the-box, no HQ change yet) Auto-Resize
+# Images setting. Per coverage_matrix.csv these 4 rows are each "Partial":
+# the on-device navigation is automatable, but confirming the viewed image
+# is genuinely "not distorted" at each resize tier is a visual-regression
+# check outside Maestro's built-in assertions - this flow only automates the
+# navigation half (open each form, confirm no crash/error surfaces, exit
+# cleanly) and leaves the visual-distortion judgment unautomated, same as
+# the CSV's own stated dependency.
+#
+# NAVIGATION CORRECTED (previously wrong, now source-verified): the real
+# "Multimedia" QA app's app_strings.txt (qateam - Multimedia CCZ, in this
+# repo's resources/ folder) shows "Image Resize" is its OWN top-level module
+# (modules.m1), a SIBLING of the "Multimedia" module (modules.m0) - NOT a
+# submenu nested under it. The previous `tapOn: "Multimedia"` before `tapOn:
+# "Image Resize"` was tapping into the wrong module first and would never
+# have reached this one. "Image Resize" (m1) does list exactly the four
+# sibling forms this flow expects: "Large Image" (m1f0), "Small Image"
+# (m1f1), "Wide Image" (m1f2), "Tall Image" (m1f3) - plus a fifth,
+# "Smart Image Resize" (m1f4), not exercised by any current flow.
+#
+# Each form's open/page/exit sequence is delegated to
+# ../common/view_form_no_errors_from_menu.yaml (see that file for the full
+# selector citation) so it lands back on the "Image Resize" menu ready for
+# the next form, without re-navigating "Start" -> "Image Resize" four times over.
+# Prepends install_app_as_web_user.yaml (APP_NAME: Multimedia) - a fresh
+# BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
+# null.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_MULTIMEDIA}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- tapOn: "Start"
+- tapOn: "Image Resize"
+# Image Resize 1 - Large Image
+- runFlow:
+    file: ../common/view_form_no_errors_from_menu.yaml
+    env:
+      FORM_NAME: "Large Image"
+# Image Resize 2 - Small Image
+- runFlow:
+    file: ../common/view_form_no_errors_from_menu.yaml
+    env:
+      FORM_NAME: "Small Image"
+# Image Resize 3 - Wide Image
+- runFlow:
+    file: ../common/view_form_no_errors_from_menu.yaml
+    env:
+      FORM_NAME: "Wide Image"
+# Image Resize 4 - Tall Image
+- runFlow:
+    file: ../common/view_form_no_errors_from_menu.yaml
+    env:
+      FORM_NAME: "Tall Image"
+# Back out of "Image Resize" -> home, confirming the app is still in a
+# healthy state.
+# UPDATE, confirmed live (2026-08-08, real BrowserStack failure, build
+# group-a/180): a single hardcoded `back` isn't reliably enough - some runs
+# need a second press to fully exit "Image Resize" back to "Start" (menu
+# depth here isn't perfectly deterministic run-to-run). Per the user's own
+# suggested fix, this is now a bounded while-loop that presses back until
+# "Start" is visible rather than hardcoding a fixed count - the same
+# approach any other flow with variable submenu depth should use instead of
+# guessing a specific number of back-presses. times: 5 is just a generous
+# upper bound to avoid a genuine infinite loop if "Start" never appears;
+# the extendedWaitUntil below remains the actual pass/fail assertion.
+- repeat:
+    times: 5
+    while:
+      notVisible:
+        text: "Start"
+    commands:
+      - back
+- extendedWaitUntil:
+    visible:
+      text: "Start"
+    timeout: 5000

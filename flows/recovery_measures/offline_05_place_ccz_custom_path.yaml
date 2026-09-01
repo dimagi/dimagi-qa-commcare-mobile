@@ -1,0 +1,79 @@
+appId: org.commcare.dalvik
+tags:
+  - recovery_measures
+  - partial
+---
+# Master Mobile Plan (2026) > Recovery Measures > Recovery: Offline Reinstall
+# and Update App > "Recovery (offline) 5" - "Publish + download CCZ, move to
+# a custom non-Downloads device path".
+#
+# PARTIAL - REAL PREREQUISITE GAP, not fully automated by this flow or by
+# this repo's orchestrator (scripts/run_suite.py has no adb-push step for
+# any flow today - checked scripts/run_suite.py and scripts/browserstack_client.py,
+# neither shell out to `adb`). This flow file exists to document the exact
+# manual/scripted step someone must run BEFORE this flow, and to assert the
+# on-device consequence (the CCZ is reachable from a location other than the
+# system file picker's default Downloads view) as far as Maestro is able to
+# check that non-app-specific fact. Do NOT read this file's tags as claiming
+# full automation - it is intentionally still "partial" for this exact
+# reason, matching the coverage_matrix.csv row's own "Needs adb push to a
+# custom (non-Downloads) path" dependency note.
+#
+# REQUIRED MANUAL/CI PRE-STEP (not run by Maestro/this flow):
+#   1. Publish + download the target CCZ by whatever means your QA cycle
+#      normally uses (HQ app-preview CCZ download link, or
+#      scripts/download_apk.py's sibling process for CCZ builds - this repo
+#      has no dedicated CCZ-download script to point to, only download_apk.py
+#      for the CommCare binary itself).
+#   2. Push it to a BrowserStack App Automate device's storage at a path
+#      OTHER than the standard public Downloads directory
+#      (Environment.DIRECTORY_DOWNLOADS, which resolves to /sdcard/Download/
+#      on a typical Android device - this is general Android platform
+#      knowledge, not something read out of commcare-android source, since
+#      CommCare itself does not choose this path; the system file picker
+#      does):
+#        adb push <local-path-to>.ccz /sdcard/RecoveryMeasuresTest/test.ccz
+#      BrowserStack App Automate's own file-push mechanism (if using their
+#      API instead of a raw adb session against a device already reserved
+#      for this session) is the "Custom Media"/file upload feature - see
+#      BrowserStack's App Automate docs; this repo's browserstack_client.py
+#      does not currently wrap that endpoint, so wiring it in is future work,
+#      not something this flow file can do from inside a Maestro YAML.
+#   3. Only once that push has completed should this flow (or
+#      offline_06_select_ccz_via_picker.yaml, which is the flow that actually
+#      drives the "Select CCZ" -> file-picker step) be run.
+#
+# The path/filename above (/sdcard/RecoveryMeasuresTest/test.ccz) is this
+# flow's own placeholder convention for referring to "wherever the adb push
+# above landed the file" - offline_06_select_ccz_via_picker.yaml's file-picker
+# navigation references the same folder/file name in its comments. Change
+# both consistently if your real QA cycle uses a different custom path.
+#
+# UPDATE (2026-08-10): this is the "Recovery: Offline Reinstall and Update
+# App" app (id 8009e8a2814a465b818d56284011b1e9, confirmed via that app's
+# own Releases page title) - a SEPARATE app from the non-offline
+# "Reinstall and Update App" other recovery_measures flows use. See
+# scripts/app_registry.py's OFFLINE_TEST_ONE/TWO/THREE entries.
+# UPDATE (2nd correction, 2026-08-10): this used to end with a plain logout
+# ("nothing CommCare-specific to assert... just login/logout to reach a
+# known device state"). Confirmed live in ISOLATION (run
+# 6151522a9e31384f43802347b2456fef83391a5b - this exact flow, alone, in its
+# own BrowserStack build) that the logout step FAILS: logging into this app
+# on a fresh Test One install triggers the forced "Select CCZ" recovery
+# screen IMMEDIATELY - there is no home screen, so "Log out of CommCare" is
+# never reachable. This is real, useful evidence in its own right (it's how
+# this file's true on-device end state was discovered), so asserts that
+# state directly instead of attempting an impossible logout.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_OFFLINE_TEST_ONE}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- assertVisible:
+    text: "(?i).*recovery (procedures|measures).*initiated.*"
+- assertVisible:
+    text: "(?i).*select ccz.*"

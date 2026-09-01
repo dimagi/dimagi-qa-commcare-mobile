@@ -1,0 +1,131 @@
+appId: ${EXTAPP_APP_ID}
+tags:
+  - externalapp_tests
+  - partial
+env:
+  # CONFIRMED (2026-08-09) against the real companion APK - see
+  # external_app_01_launch_and_verify_buttons.yaml's env block for the full
+  # aapt citation.
+  EXTAPP_APP_ID: "com.dimagi.test.external"
+  EXTAPP_BTN_VIEW_CASE_DATA: "View Case Data"
+  # Value typed into the update form's answer field - the sheet doesn't specify a concrete
+  # value, any accepted string/number satisfies "Enter Data".
+  EXTAPP_FORM_ANSWER_VALUE: "42"
+  # Same "sansar" domain login Setup 3 uses - see setup_03_login_and_background.yaml.
+  EXTAPP_QA_USERNAME: "qa_user"
+  EXTAPP_QA_PASSWORD: "123"
+---
+# Master Mobile Plan (2026) > ExternalApp Tests > "External App 4" (Launch Update Form):
+#   1. In the ExternalApp, select View Case Data
+#   2. Ensure a series of cases are visible
+#   3. Long press on a case (click and hold)
+#   4. Verify an update form is launched
+#   5. Enter Data and submit the update form
+#
+# Steps 1-2 are identical to External App 3 (view external_app_03_view_case_data.yaml's
+# comments for the CaseDataContentProvider citation and the case-list UI caveat) - this flow
+# re-establishes the same state itself per this repo's "each flow runnable in isolation"
+# convention rather than depending on External App 3 having run first.
+- runFlow:
+    file: ../common/login_and_background.yaml
+    env:
+      USERNAME: ${EXTAPP_QA_USERNAME}
+      PASSWORD: ${EXTAPP_QA_PASSWORD}
+- launchApp:
+    appId: ${EXTAPP_APP_ID}
+- tapOn: "${EXTAPP_BTN_VIEW_CASE_DATA}"
+- assertNotVisible: "${EXTAPP_BTN_VIEW_CASE_DATA}"
+
+# STEP 3, "long press on a case (click and hold)": Maestro's long-press command is
+# `longPressOn` (confirmed against Maestro's published command reference -
+# https://docs.maestro.dev/reference/commands-available/longpresson - "performs a long press
+# (3 seconds) gesture", accepting the same selector properties as `tapOn`).
+#
+# UPDATE (2026-08-17): the previous point-based "50%, 45%" placeholder was
+# confirmed live to miss the real target - BrowserStack's own hierarchy
+# dump (build 8d2334866d9f9580091421ecbef01be36657a0e7) showed the device
+# still sitting on the case-data LIST screen after the full 120s wait for
+# an update form, having never navigated anywhere. That same dump revealed
+# the real row structure though: a plain android.widget.ListView
+# (com.dimagi.test.external:id/list_view) with standard two-line rows
+# (android:id/text1 name / android:id/text2 uuid, the stock
+# simple_list_item_2 layout - not app-specific ids, but stable regardless
+# of which case's data happens to be in them). Long-pressing the FIRST
+# such row by id+index, rather than a blind screen-percentage guess, hits
+# a real row every time no matter how this shared domain's case list grows
+# or reorders.
+- longPressOn:
+    id: "android:id/text1"
+    index: 0
+
+# STEP 4, "verify an update form is launched": same cross-app "auto-follow" reasoning as
+# external_app_02_start_commcare_submit_form.yaml (see that file's CROSS-APP CONTEXT SWITCH
+# comment for the full explanation of why no explicit `launchApp: appId: org.commcare.dalvik`
+# is used here). nav_btn_next/nav_btn_finish ids verified against
+# app/res/layout/screen_form_entry.xml + FormNavigationUI.java, matched via a regex `id`
+# selector since either being visible confirms an update form launched.
+#
+# UPDATE (2026-08-17): confirmed live via a user-supplied recording - the
+# real "Add a Nickname" update form does launch and submit successfully,
+# but the same real "Logging in / Contacting Server" round-trip
+# external_app_02_start_commcare_submit_form.yaml's own UPDATE comment
+# documents can happen here too before form-entry appears. Raised to match
+# that same generous, real-server-round-trip timeout.
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_(next|finish)"
+    timeout: 120000
+
+# STEP 5, "Enter Data and submit the update form": same auto-focus reasoning as
+# external_app_02_start_commcare_submit_form.yaml's "ENTER A VALUE" comment - the first
+# question widget on a freshly-navigated screen is auto-focused
+# (app/src/org/commcare/views/QuestionsView.java:setFocus()), so `inputText` types directly
+# into it with no preceding tapOn needed. An update form pre-fills existing answers, so this
+# assumes the field is still editable/clearable the same way a blank one is - UNVERIFIED
+# against the real fixture app's update-form field types.
+# UPDATE, confirmed live (2026-08-18, Android 16): dropped hideKeyboard -
+# same fix as this file's own sibling external_app_02_start_commcare_submit_form.yaml
+# already made for this exact bug (nav_btn_next lives in the top toolbar,
+# never covered by an open keyboard; hideKeyboard falls back to a real
+# back-press once the keyboard's already auto-dismissed, popping an
+# unwanted "Exit Form?" dialog instead).
+- inputText: "${EXTAPP_FORM_ANSWER_VALUE}"
+- repeat:
+    while:
+      visible:
+        id: "org.commcare.dalvik:id/nav_btn_next"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/nav_btn_next"
+# UPDATE (2026-08-17): confirmed live via BrowserStack's own hierarchy
+# dump (build d0d08a9715a371bc06443489ef3ea35d985a1875) - this hard wait
+# +tap failed with the device ALREADY back on ExternalApp's own case-data
+# list screen (com.dimagi.test.external:id/list_view visible) - the SAME
+# already-advanced-past-Finish race hardened in
+# external_app_02_start_commcare_submit_form.yaml's own UPDATE comment:
+# the form submitted and control returned to the companion app FASTER
+# than this assertion's poll window. Made optional, with the real end
+# state (back on ExternalApp's case list) asserted afterward instead.
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_finish"
+    timeout: 10000
+    optional: true
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: "com.dimagi.test.external:id/list_view"
+    timeout: 15000
+    optional: true
+
+# Same "no confirmed success string, assert absence of the generic error instead" reasoning
+# as external_app_02_start_commcare_submit_form.yaml (UnrecoverableErrorActivity.java +
+# android_translatable_strings.txt citation).
+- assertNotVisible:
+    text: "(?i).*unexpected error.*"
+- assertNotVisible:
+    text: "(?i).*commcare will now restart.*"
+- assertNotVisible:
+    id: "org.commcare.dalvik:id/nav_btn_finish"

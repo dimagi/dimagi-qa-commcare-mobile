@@ -1,0 +1,82 @@
+appId: org.commcare.dalvik
+tags:
+  - mobile_pins
+  - automatable
+---
+# Master Mobile Plan (2026) > Mobile Pins > "Setup 5" - Remove Application
+# From Device (uninstall via App Manager). In the sheet's narrative this
+# resets the "Create a PIN?" first-login-prompt / PIN-set state between the
+# Pin 1..14 cycle and "Setup 6"'s reinstall (see
+# hq_setup/mobile_pins/setup_06_reinstall_application.json).
+# coverage_matrix.csv's own Dependency/Reason column notes this could also be
+# done via `adb uninstall` instead of on-screen navigation - this flow
+# implements the on-screen App Manager path instead, since that's what the
+# sheet's test case actually exercises (adb uninstall would remove the
+# CommCare Android app entirely, not just the CCZ, and wouldn't exercise the
+# app's own uninstall-confirmation UI the sheet is checking).
+#
+# UPDATE, found via a real BrowserStack failure: this flow used to assume an
+# app was already installed/seated (its own launchApp had no preceding
+# install step) - but per this framework's "every flow runnable in
+# isolation" convention, a fresh BrowserStack session has NOTHING installed,
+# so "Go To App Manager" isn't even a valid menu option yet (the failing
+# run's hierarchy dump showed only "Offline Install"/"See Apps for My User" -
+# the two options shown when no app is seated at all). Added the standard
+# install_app_as_web_user.yaml step every other self-contained flow in this
+# repo already uses, and removed the now-redundant bare launchApp (that
+# subflow's own launchApp with clearState:true covers it).
+#
+# Selectors verified against commcare-android source (read-only reference,
+# never modified by this repo):
+#   app/instrumentation-tests/src/org/commcare/utils/InstrumentationUtility.kt
+#     -> uninstallCurrentApp(): openOptionsMenu() [from the login screen] ->
+#     click "Go To App Manager" -> click the first apps_list_view row ->
+#     click "Uninstall" -> confirm the reboot-warning dialog's OK button ->
+#     lands back on the app-manager screen with install_app_button visible
+#     (no app currently installed). This flow mirrors that exact sequence.
+#   app/src/org/commcare/activities/LoginActivity.java (~line 709,
+#     MENU_APP_MANAGER case -> new Intent(this, AppManagerActivity.class)) -
+#     "Go To App Manager" is a LOGIN-SCREEN overflow item, not a home-screen
+#     one (android_translatable_strings.txt line 345:
+#     login.menu.app.manager=Go To App Manager).
+#   app/res/layout/app_manager.xml: id/apps_list_view (ListView of installed
+#     apps), id/install_app_button (MaterialButton shown once no app is
+#     seated - see AppManagerActivity.installAppClicked()/installApp()).
+#   app/res/layout/single_app_view.xml: id/uninstall_button ->
+#     SingleAppManagerActivity.rebootAlertDialog() -> StandardAlertDialog
+#     titled getString(R.string.uninstalling) ("Uninstalling your app") with
+#     message getString(R.string.uninstall_reboot_warning) ("CommCare will
+#     uninstall your app and then reboot to save changes."), positive button
+#     getString(R.string.ok) ("OK") -> SingleAppManagerActivity.uninstall().
+#   app/res/values/strings.xml: uninstall_app="Uninstall" (button text).
+#
+# UPDATE, confirmed live 2026-08-11 (CI run 31476507436, build
+# 606d5932732d5f9a92c405940f6ee35974d96d5a): "Tap on OK" failed - the
+# failure screenshot showed the real dialog's positive button rendered as
+# "OKAY", not "OK" as the source's R.string.ok literal suggested.
+#
+# UPDATE (2nd correction), confirmed live 2026-08-11 (build
+# 3ec77beea7c895ced8c8cb0eddd6fbad3db8119d): switching the literal match to
+# "OKAY" then failed the SAME way in reverse - that run's own failure
+# screenshot showed the button rendered as plain "OK" instead. The button's
+# rendered text is genuinely inconsistent between runs (not a single
+# fixed string this build always uses), so matched both via a
+# case-insensitive regex instead of a literal.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_BASIC_TESTS}
+- tapOn: "More options"
+- tapOn: "Go To App Manager"
+- assertVisible:
+    id: "org.commcare.dalvik:id/apps_list_view"
+- tapOn:
+    id: "org.commcare.dalvik:id/apps_list_view"
+    index: 0
+- tapOn: "Uninstall"
+- assertVisible: "CommCare will uninstall your app and then reboot to save changes."
+- tapOn: "(?i)^ok(ay)?$"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/install_app_button"
+    timeout: 30000

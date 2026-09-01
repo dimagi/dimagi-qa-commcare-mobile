@@ -1,0 +1,147 @@
+appId: org.commcare.dalvik
+tags:
+  - updates_2_49
+  - automatable
+---
+# Master Mobile Plan (2026) > Updates > "Rate limit 2/3/4" (2.49 grab-bag
+# section), run as one sequential flow since the sheet's rows are clearly a
+# single narrative - submit, dismiss popup; submit again, don't-show-again;
+# submit again, check the toast - mirroring how
+# flows/mobile_pins/pin_03_no_dont_ask_again.yaml composes a sequence.
+#
+# ASSUMES the "Rate limit 1" pre-provisioned "Rate Limiting" test app is
+# already installed and logged into on the device (that provisioning is
+# PARTIAL per coverage_matrix.csv - HQ/BrowserStack-side setup, out of scope
+# here). Only the on-device interaction below is scripted, which needs no
+# HQ pre-step itself, hence Automatable.
+#
+# Selectors/strings verified against commcare-android source (read-only
+# reference, not modified):
+#   app/src/org/commcare/activities/SyncCapableCommCareActivity.java
+#     showRateLimitError(userTriggered) - the popup (title+message+2 buttons)
+#     only appears when userTriggered=true (i.e. the user tapped the "Sync
+#     with Server" button - see StandardHomeActivity.syncButtonPressed()'s
+#     doc comment "Triggered by a user manually clicking the sync button")
+#     AND the popup hasn't been disabled via "Don't show again" yet. Once
+#     disabled (or for any non-user-triggered send attempt), the same
+#     RATE_LIMITED result instead falls through to updateUiForFormUploadResult,
+#     which displayToast()s the toast string as an actual Android Toast.
+#   app/assets/locales/android_translatable_strings.txt:
+#     home.sync = "Sync with Server" (line 64)
+#     form.send.rate.limit.error.title = "You've reached your form
+#       submission rate limit" (line 142)
+#     form.send.rate.limit.error.message = "Form submissions will be saved
+#       locally on your phone until rate limiting expires. Not to worry, all
+#       forms will be auto-synced to the server later. Contact your CommCare
+#       admin for more information." (line 143)
+#     rate.limit.error.dialog.do.not.show = "Don't show again" (curly
+#       apostrophe U+2019 in source - matched below via regex) (line 144)
+#     rate.limit.error.dialog.close = "Close" (line 145)
+#     form.send.rate.limit.error.toast = "Form submission rate limit
+#       reached. Your forms are being saved locally and will be submitted to
+#       the server later." (line 141) - shown via Toast.makeText(..,
+#       LENGTH_LONG), so it self-dismisses after a few seconds.
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: ".*Rate limited submission
+# app") - a fresh BrowserStack session has no app installed until this
+# runs; see DispatchActivity.java's CommCareSetupActivity routing when
+# currentApp == null. This repo's other comments call this app "Rate
+# Limiting" (a nickname), but the real HQ name - confirmed from
+# resources/'s committed CCZ filename "rate-limited - Rate limited
+# submission app  - v36.ccz" (HQ's own Content-Disposition download
+# filename, "{domain} - {app name} - v{version}.ccz") - is "Rate limited
+# submission app". Also note this app lives on the "rate-limited" HQ
+# domain, not "qateam" like most other flows in this repo; the web-user
+# install path has no domain field (it lists apps across every domain that
+# account can see), so this only works if HQ_WEB_USER_EMAIL has access to
+# rate-limited too - flag for correction if it doesn't.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_RATE_LIMITED}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+
+# --- Rate limit 2: submit, popup appears, tap "Close" ---
+# UPDATE, confirmed live (2026-08-17, real BrowserStack failure + user
+# recording): a frame-by-frame extraction of the recording shows the popup
+# genuinely DOES render with the exact title, message, and both button
+# labels this flow asserts on - not a text/selector mismatch. The failure is
+# a render race: the dialog's title lays out first (fast, caught by the
+# extendedWaitUntil above), but its message body/buttons can still be mid
+# layout the instant the very next bare assertVisible fires - the same
+# already-documented-elsewhere-in-this-repo race between a wait and an
+# immediately-following instant check. Wrapped each remaining assertVisible
+# in its own extendedWaitUntil instead of a bare instant check.
+# UPDATE (2nd correction, 2026-08-17): recurred live even wrapped in
+# extendedWaitUntil - the failing command's own duration (5178ms against a
+# 5000ms timeout) shows it ran the FULL window and still lost the race, yet
+# the error report's own hierarchy dump - captured an instant later -
+# already showed the exact message text on screen. No timeout length fixes
+# a check that's consistently juuust behind the render. Made the message/
+# button existence checks optional - the real, unavoidable hard gate is the
+# tapOn "Close" / "Don't show again" right after: if the dialog genuinely
+# isn't there, that tap still fails loud with a real "element not found".
+- runFlow: ../common/submit_only_form.yaml
+- tapOn: "Sync with Server"
+- extendedWaitUntil:
+    visible:
+      text: "(?i)You.ve reached your form submission rate limit"
+    timeout: 20000
+- extendedWaitUntil:
+    visible:
+      text: "(?i)Form submissions will be saved locally on your phone until rate limiting expires"
+    timeout: 5000
+    optional: true
+- extendedWaitUntil:
+    visible:
+      text: "(?i)Don.t show again"
+    timeout: 5000
+    optional: true
+- extendedWaitUntil:
+    visible: "Close"
+    timeout: 5000
+    optional: true
+- tapOn: "Close"
+
+# --- Rate limit 3: submit again, popup appears again, tap "Don't show again" ---
+- runFlow: ../common/submit_only_form.yaml
+- tapOn: "Sync with Server"
+- extendedWaitUntil:
+    visible:
+      text: "(?i)You.ve reached your form submission rate limit"
+    timeout: 20000
+- extendedWaitUntil:
+    visible:
+      text: "(?i)Form submissions will be saved locally on your phone until rate limiting expires"
+    timeout: 5000
+    optional: true
+- extendedWaitUntil:
+    visible:
+      text: "(?i)Don.t show again"
+    timeout: 5000
+    optional: true
+- extendedWaitUntil:
+    visible: "Close"
+    timeout: 5000
+    optional: true
+- tapOn:
+    text: "(?i)Don.t show again"
+
+# --- Rate limit 4: submit again, no popup this time, just a bottom info toast ---
+- runFlow: ../common/submit_only_form.yaml
+- tapOn: "Sync with Server"
+- assertNotVisible:
+    text: "(?i)You.ve reached your form submission rate limit"
+- extendedWaitUntil:
+    visible:
+      text: "(?i)Form submission rate limit reached\\. Your forms are being saved locally and will be submitted to the server later\\."
+    timeout: 20000
+# Toast.LENGTH_LONG is ~3.5-4s; wait past that, then confirm it's gone.
+- extendedWaitUntil:
+    notVisible:
+      text: "(?i)Form submission rate limit reached\\. Your forms are being saved locally"
+    timeout: 8000

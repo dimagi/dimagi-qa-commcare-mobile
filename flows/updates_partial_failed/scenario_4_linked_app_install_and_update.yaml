@@ -1,0 +1,97 @@
+appId: org.commcare.dalvik
+tags:
+  - updates_partial_failed
+  - partial
+---
+# Master Mobile Plan (2026) > Updates (partial and failed) > Test Case ID: 4.
+# App under test: "Mobile Updates Test 4/5 Master" (per the tab's own "Apps"
+# note) - a CommCare master app with a linked app.
+#
+# Setup 1 ("Master App") and Setup 2 ("Linked App") rows are Not automatable
+# per coverage_matrix.csv (pure HQ release-page references, no device
+# action) and are skipped entirely.
+#
+# - Installation 1: "Install the CommCare apk version in test" is a
+#   harness-level action - BrowserStack App Automate installs the APK under
+#   test before any Maestro flow runs (scripts/run_suite.py, per
+#   docs/FRAMEWORK.md's architecture diagram), so there is no in-app Maestro
+#   step for the install itself. The on-device equivalent this flow can
+#   assert is that a fresh install lands on the expected pre-login screen.
+# - Installation 2: "Install version V2 of the linked app" - reuses the exact
+#   selectors flows/install/install_07_install_as_mobile_user.yaml already
+#   verified against InstallFromListTest.kt (edit_username/edit_domain/
+#   edit_password/get_apps_button/apps_list_view/install_app_button).
+#   PARTIAL: needs valid HQ mobile-worker credentials, same as
+#   install_07/install_08.
+# - Update 13: "On HQ, ensure Version V6 is marked Released on the linked
+#   app's release page" - already satisfied for free (see the
+#   LINKED_APP_TEST45 citation above): "Version V6" is ALREADY the current
+#   top-released build for this app, confirmed live via HQClient.
+#   list_releases, so the on-device "Update App" menu action below finds
+#   it naturally with no extra HQ step needed.
+# - Update 14: Form A verification (contains Registration Date + Age
+#   questions).
+# - Update 15: Form B verification (contains a photo-upload question).
+#
+# GENERIC/BEST-EFFORT: "Mobile Updates Test 4/5 Master" is a pre-provisioned
+# QA app whose exact form/question structure isn't available in this repo -
+# see flows/common/verify_form_a_questions.yaml and
+# flows/common/verify_form_b_photo_question.yaml for the specific caveats on
+# "Form A"/"Form B" naming and question order/wording.
+# --- Installation 2: install the linked app pinned to "Version V2". ---
+# UPDATE (2026-08-21), per direct user correction with the real app link
+# (https://www.commcarehq.org/a/let-sdoit/apps/view/07f49277d22d6c77ecc2df0489a80aae/) -
+# supersedes every UPDATE below this one, which was chasing a DIFFERENT,
+# wrong app that happened to share a similar name under the qateam domain.
+# The mobile-worker "See Apps for My User" discovery flow always installs
+# whatever's the app's CURRENT top release, not "Version V2" specifically
+# (confirmed live: this app's actual current top release is "Version V6",
+# so that path would install V6 directly and skip the update-verification
+# steps below entirely) - and for scenario_5's copy of this same flow, was
+# also logging into the WRONG domain via the shared
+# HQ_MOBILE_WORKER_USERNAME/HQ_DOMAIN (qateam) vars, since this app is
+# under "let-sdoit". Switched to installing by app-code, pinned to
+# "Version V2" (see scripts/app_registry.py's LINKED_APP_TEST45 entry for
+# the full citation) - bootstraps a fresh CommCare install AND lands on
+# the right version in one step, same pattern as every other scenario
+# fixed today.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_LINKED_APP_TEST45}
+
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+
+# --- Update 13: update to "Version V6" (already released, see header). ---
+- runFlow: ../common/update_app_via_menu.yaml
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+# UPDATE (2026-08-19), per direct user instruction: dropped EXPECTED_VERSION
+# - see check_app_version_via_about.yaml's own UPDATE comment for the full
+# citation (HQ build version drift, not a real regression signal).
+- runFlow: ../common/check_app_version_via_about.yaml
+
+# --- Update 14: Form A verification (contains Registration Date + Age). ---
+- runFlow:
+    file: ../common/verify_form_a_questions.yaml
+    env:
+      FORM_NAME: "Form A"
+
+# --- Update 15: Form B verification (contains photo-upload question). ---
+- runFlow:
+    file: ../common/verify_form_b_photo_question.yaml
+    env:
+      FORM_NAME: "Form B"

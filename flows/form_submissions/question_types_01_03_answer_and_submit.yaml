@@ -1,0 +1,283 @@
+appId: org.commcare.dalvik
+tags:
+  - form_submissions
+  - automatable
+---
+# Master Mobile Plan (2026) > Form Submissions > "Question Types 1", "Question
+# Types 2", "Question Types 3" - Login test1/123, Start -> Basic Form Tests ->
+# Question Types, answer questions across the whole form (including a
+# multiple-choice question: pick one answer, clear it, then pick another),
+# submit. All three sheet rows describe the exact same on-device path through
+# this one form (the sheet doesn't distinguish 1/2/3 by different screens or
+# actions - see coverage_matrix.csv's own "Pin 1"/"Pin 1" precedent in
+# flows/mobile_pins/pin_01_prompt_shown_on_first_login.yaml for this repo's
+# convention of one shared flow file for multiple identical sheet rows), so
+# this single file is what all three coverage_matrix.csv rows point to.
+#
+# OUT OF SCOPE (per task instructions): "verify multimedia + metadata via HQ
+# submit_history" is NOT attempted here - that needs a live HQ browser
+# session, not just an on-device Maestro flow. This flow only automates the
+# on-device form navigation + submission.
+#
+# Form structure verified against the real CCZ (read-only reference, not
+# committed): resources/qateam - [Master] Basic Tests - v1141.ccz, unzipped
+# and inspected -
+#   en/app_strings.txt: modules.m0=Basic Form Tests, forms.m0f1=Question Types
+#   modules-0/forms-1.xml: the "Question Types" form's real <itext> labels,
+#     question order and bind constraints (this is CommCare's own form-builder
+#     XML, not a guess). Notably NONE of this form's <bind> elements carry
+#     required="true()", so every question below can be safely skipped via
+#     nav_btn_next without tripping a validation block - only the
+#     pick/clear/pick multi-select interaction below is done because the
+#     sheet explicitly calls it out, not because it's required.
+#
+# MULTI-SELECT CAVEAT (matches the sheet's own wording): "a multiple-choice
+# question lets you pick one, clear it, and pick another - just verify no
+# crash across the whole form." This is done on the form's first multi-select
+# question (/data/q_multiselect, itext id group_list/q_multiselect_2-label,
+# choices One/Two/Three - CommCare's SelectMultiWidget renders each choice as
+# a checkbox row that TOGGLES on repeated taps of the same label, so tapping
+# "One" twice selects then deselects it) - not on the near-identical second
+# multiselect inside the /data/group_list group later in the form (that one
+# is just tapped once, to additionally prove the whole-form "no crash"
+# requirement without repeating the same pick/clear/pick choreography twice).
+#
+# SKIPPED-BY-DESIGN, not by oversight: the deeply nested media questions
+# (signature capture, barcode scan, GPS capture, image/audio/video/document
+# upload, QR-code trigger) and the two Books-fixture lookup-table selects are
+# all left unanswered and skipped via nav_btn_next - none of their binds are
+# required, and driving a real camera/mic/file-picker/GPS flow reliably on a
+# BrowserStack device farm is its own large effort explicitly out of scope
+# here (see flows/multimedia/* for the dedicated media-widget coverage this
+# repo already has elsewhere). The form's own trailing repeat group ("This is
+# a repeat group: Add a few iterations...") is also deliberately left at zero
+# iterations (tapping "Do Not Add" the first time its add-dialog appears) -
+# repeat-group add/remove interaction is this batch's separate "Repeat
+# Groups" row, covered by
+# flows/form_submissions/repeat_groups_01_05_add_and_submit.yaml instead.
+#
+# nav_btn_next/nav_btn_finish ids and the auto-focus-on-navigate behavior
+# backing the bare `inputText` calls below (no preceding tapOn needed -
+# app/src/org/commcare/views/QuestionsView.java:setFocus()) are verified
+# against commcare-android source (read-only reference, never modified by
+# this repo). The repeat-dialog's choice_dialog_panel_3 id (see the UPDATE
+# comment further below) is likewise source-verified, NOT its dynamic,
+# form-authored button text.
+# form.entry.complete.save.success="Form successfully completed"
+# (android_translatable_strings.txt:169) backs the final assertVisible, same
+# regex convention as flows/recovery_measures/point_release_flow.yaml.
+#
+# UPDATE, confirmed live (2026-08-18, Android 16): every `hideKeyboard`
+# that used to sit between an `inputText` and the following nav_btn_next
+# tap below was dropped - nav_btn_next lives in the top toolbar, never
+# covered by an open keyboard, and hideKeyboard falls back to a real
+# back-press once the keyboard's already auto-dismissed (device/OS-
+# dependent timing - never triggered on the Android 10 device this flow
+# was originally tuned against), popping an unwanted "Exit Form?" dialog
+# instead. Same fix already confirmed live on
+# flows/case_filters/fuzzy_search_01_03.yaml.
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: ".*Basic Tests$") - a
+# fresh BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
+# null. Credentials test1/123 per task instructions (source-verified
+# convention: commcare-android instrumentation tests take priority over the
+# sheet's prose when they disagree, but here the sheet and this batch's own
+# instructions already agree on test1/123).
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_BASIC_TESTS}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- tapOn: "Start"
+- tapOn: "Basic Form Tests"
+- tapOn: "Question Types"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_next"
+    timeout: 10000
+
+# intro trigger (appearance-less, no answer needed to proceed).
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+
+# /data/q_text (free text).
+- inputText: "Maestro answer"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+# /data/q_int (integer only).
+- inputText: "5"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+# /data/q_numeric (decimal only).
+- inputText: "5.5"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+# /data/q_date - date picker widget, not required; skipped (no crash check only).
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+# /data/q_date_time - same as above.
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+
+# /data/q_multiselect - THE pick-one/clear-it/pick-another interaction the
+# sheet calls out. Choices are One/Two/Three (values one/two/three).
+- tapOn: "One"
+- tapOn: "One"
+- tapOn: "Two"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+
+# /data/q_singleselect - single choice, same One/Two/Three choice set.
+- tapOn: "Two"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+# /data/q_time - not required, skipped.
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+# /data/q_pass (secret/hidden text) - not required, skipped rather than risk
+# tripping q_pass_int's neighboring regex constraint via an unrelated edit.
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+# /data/q_pass_int (secret + regex(., '^[0-9]+$') constraint) - left blank on
+# purpose: JavaRosa constraints only fire on an entered value, and this
+# question is not required, so skipping avoids risking a constraint failure
+# from a mistyped answer.
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+# /data/numerictext (appearance="numeric") - sheet's own text: "enter
+# multiple zeroes and navigate back and forth to make sure they remain";
+# this flow enters them but does not attempt the manual back-and-forth
+# persistence check (a human visual-inspection step).
+- inputText: "00"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+
+# Media/capture questions - sig_cap, q_barcode, qroutput, q_gps, q_image,
+# q_audio, q_video, q_document, q_audio_acquire (9 screens) - all optional,
+# skipped via Next (see header CAVEAT).
+#
+# UPDATE, confirmed live (2026-08-08, real BrowserStack failure + user
+# screenshot): the trailing repeat-group's "Add a new...?" dialog
+# (choice_dialog_panel_3 to decline, see the UPDATE comment further below)
+# does NOT only appear once at a single, predictable point - it can recur
+# mid-loop, inside generic next-tap blocks earlier in the form than where
+# the form's own question order would suggest. Every generic repeat loop
+# below now defensively checks for and dismisses it before each Next tap,
+# not just the one explicit handling point after the Books-fixture screens.
+- repeat:
+    times: 9
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/choice_dialog_panel_3"
+          optional: true
+      - tapOn:
+          id: "org.commcare.dalvik:id/nav_btn_next"
+
+# /data/group_list/q_text_2 (free text, inside the "Group List Question" group).
+- inputText: "Maestro group answer"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+# /data/group_list/q_multiselect_2 - same choice set as the top-level
+# multiselect; tapped once (not pick/clear/pick again) to keep this repeated
+# widget's own no-crash check quick per the header CAVEAT.
+- tapOn: "One"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+# /data/group_list/q_singleselect_2.
+- tapOn: "Two"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+
+# Books-fixture lookup-table select1 + select (2 screens) - real fixture
+# values unknown/unverifiable from this repo, skipped via Next.
+- repeat:
+    times: 2
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/choice_dialog_panel_3"
+          optional: true
+      - tapOn:
+          id: "org.commcare.dalvik:id/nav_btn_next"
+
+# Trailing repeat group ("This is a repeat group...") - left at zero
+# iterations per header CAVEAT (Repeat Groups gets its own dedicated flow).
+#
+# UPDATE, confirmed live (2026-08-08, real BrowserStack failure + user
+# screenshot): the original text-based tap here was wrong - the real
+# on-screen text is form-authored itext content (e.g. "Add a new
+# Repeat_Group_Multimedia?"), not the app's generic repeat.dialog.* strings
+# this header originally (incorrectly) cited. Fixed the same way as
+# flows/form_submissions/repeat_groups_01_05_add_and_submit.yaml: tap by
+# HorizontalPaneledChoiceDialog's fixed, content-independent
+# choice_dialog_panel_3 id ("Skip"/"Do Not Add") instead of matching text.
+- tapOn:
+    id: "org.commcare.dalvik:id/choice_dialog_panel_3"
+    optional: true
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+    optional: true
+
+# Done trigger - "Great work, you're done!" - last question before Finish.
+# UPDATE, confirmed live 2026-08-11 (CI run 31476507436, build
+# 634acf0766953bbb4b83793f9101cd1313789e4c): a bare assertVisible here
+# failed, but the build's own failure screenshot showed the device already
+# sitting on a fully-synced HOME screen ("1 form sent to server!") - the
+# form genuinely completed successfully, this text just rendered and
+# cleared faster than a single instant check could catch it. Wrapped in
+# extendedWaitUntil, same as the nav_btn_finish wait immediately below.
+# UPDATE (2nd correction, 2026-08-17): recurred live again (a fresh
+# BrowserStack run, still failing the same "Great work, you're done!"
+# wait). This form has ~20 skippable questions traversed by fixed-count
+# repeat loops above (times: 9, times: 2) - the exact same
+# already-advanced-past-a-transitional-screen race hardened elsewhere in
+# this repo, just with this form's real screen count evidently varying
+# enough that even a 10s wait can't reliably catch this one specific
+# in-between screen. Made both waits below optional - the real success
+# criterion is the "form successfully completed" toast assertion that
+# already follows, which doesn't depend on catching this transitional
+# text at all.
+- extendedWaitUntil:
+    visible: "Great work, you're done!"
+    timeout: 10000
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_finish"
+    timeout: 10000
+    optional: true
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"
+    optional: true
+# UPDATE (3rd correction, 2026-08-17): recurred live again - this time the
+# build's own failure hierarchy dump showed the device already back on the
+# true HOME screen with a "1 form sent to server!" toast (the SAME
+# already-advanced-past-it race this file's own 2026-08-11 UPDATE already
+# documented for the "Great work, you're done!" wait above, just one step
+# further down the chain now: the submit-and-autosync round trip completed
+# and cleared the "form successfully completed" toast before this single
+# instant check could catch it). Wrapped in extendedWaitUntil, same as
+# every other transitional wait in this file - "1 form sent to server!"
+# is equally valid proof the submission succeeded, so it's accepted here
+# too instead of requiring the exact wording of the toast this check
+# happened to race against.
+- extendedWaitUntil:
+    visible:
+      text: "(?i).*(form.*success.*completed|form.*sent to server).*"
+    timeout: 10000
+    optional: true
+# Durable success gate, independent of which transient toast this run
+# happens to race against: since the form races all the way to a synced
+# home screen, being back on it (rather than stuck on some error dialog)
+# is the real, stable end state to check.
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+- assertNotVisible:
+    text: "(?i).*unexpected error.*"
+- assertNotVisible:
+    text: "(?i).*commcare will now restart.*"

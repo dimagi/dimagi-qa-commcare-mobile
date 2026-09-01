@@ -1,0 +1,108 @@
+appId: org.commcare.dalvik
+tags:
+  - updates_partial_failed
+  - partial
+---
+# Master Mobile Plan (2026) > Updates (partial and failed) > Test Case ID: 3
+# ("Update between reverted app versions"). App under test: the sheet's own
+# "Apps" note calls it "Mobile Updates - Test 3", but per that tab's notes
+# column: Version 1 has Forms A and B, Version 2 removes Form A, Version 3
+# reverts to Version 1, Version 4 changes Form A again.
+#
+# UPDATE (2026-08-21), per direct user-supplied recording: "Mobile Updates -
+# Test 3" does not exist under that name anywhere in the qateam domain's app
+# list (confirmed live via /apps/api/list_apps/, all 123 apps checked) - the
+# real app, per the recording's own on-screen title bar, is "Mobile2.47".
+# Its release history (HQClient.list_releases) has the exact Version 1-4
+# progression the notes column describes - see scripts/app_registry.py's
+# MOBILE2_47 entry for the full citation, including why the initial install
+# below is pinned to a specific build (v19, "Version V1 - Form A & B", the
+# only one low enough for the OLD 2.45 APK to install via app-code at all).
+#
+# SIMPLIFIED SCOPE (per direct user decision, 2026-08-21), confirmed via TWO
+# real HQClient.mark_build_status calls: every build on this app EXCEPT the
+# two that are already released (v19 "V1", v68 "V4") fails to release with
+# a real HQ platform error - "The mobile UCR restore version... needs to be
+# updated to V2.0" (an app-level migration, see the linked guide in that
+# error) - tried both v26-class-old (v60, "Version V2 - Form B") and
+# confirmed it's not build-specific. This means Update 9's "mark Version V2
+# Released" step is currently IMPOSSIBLE via this repo's HQ API access, not
+# a script gap - V2/V3 are unreachable until someone completes that HQ-side
+# migration. Per direct user decision, this flow now tests the ACHIEVABLE
+# V1 -> V4 jump directly (skipping V2/V3 entirely) rather than blocking on
+# an unfixable dependency - Updates 9/10 are collapsed into the single real
+# "Update App" action below, which finds v68 ("V4") directly since it's the
+# only released build above v19.
+#
+# - Update 8: "Update CommCare from 2.45 to the version in test" - the sheet's
+#   own wording literally means swapping the CommCare BINARY, which (like
+#   Setup above) happens at the harness/BrowserStack-APK-upload level
+#   (scripts/run_suite.py), not via any in-app Maestro action - there is no
+#   real action to run here, so (unlike this file's own PRIOR version) this
+#   step no longer calls update_app_via_menu.yaml: that helper's own final
+#   wait is a HARD assertion that an update exists, which is false at this
+#   exact point (nothing is released above v19 relative to what a bare
+#   binary swap alone implies) - confirmed live, that mismatch is exactly
+#   what made this step fail on a real dispatch. Treat the actual binary
+#   swap as already done by the harness before this flow runs, matching
+#   the same "not automatable in-app" conclusion as
+#   flows/updates_partial_failed/scenario_1_staged_update_auto_apply.yaml's
+#   own "REMAINING GAP" note.
+# - Update 9/10 (collapsed, see SIMPLIFIED SCOPE above): the one real
+#   "Update App" action - finds and applies v68 ("V4") directly.
+# - Update 11: Form One verification.
+# - Update 12: Form Two verification.
+#
+# Prepends install_app_by_code.yaml (APP_CODE_MOBILE2_47, pinned to v19 -
+# see the MOBILE2_47 citation above) - a fresh BrowserStack session has no
+# app installed until this runs; see DispatchActivity.java's
+# CommCareSetupActivity routing when currentApp == null.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_MOBILE2_47}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+
+# --- Setup (substitute check): confirm Version 1 is the starting state. ---
+# UPDATE (2026-08-19), per direct user instruction: dropped EXPECTED_VERSION
+# on every call in this file - see check_app_version_via_about.yaml's own
+# UPDATE comment for the full citation (HQ build version drift, not a real
+# regression signal).
+- runFlow: ../common/check_app_version_via_about.yaml
+
+# --- Update 8: CommCare binary update - no in-app action (see header). ---
+
+# --- Update 9/10 (collapsed, see SIMPLIFIED SCOPE above): update straight to V4. ---
+- runFlow: ../common/update_app_via_menu.yaml
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+- runFlow: ../common/check_app_version_via_about.yaml
+
+# --- Update 11: Form One (on-screen: "Form A") verification. ---
+# UPDATE (2026-08-21), confirmed live via a real failure screenshot: the
+# sheet's prose ("Navigate through Form One/Two") doesn't match the
+# on-screen labels - they're actually "Form A"/"Form B", matching the
+# notes column's own "Version 1 has Forms A and B" wording literally.
+- runFlow:
+    file: ../common/navigate_form_no_errors.yaml
+    env:
+      FORM_NAME: "Form A"
+
+# --- Update 12: Form Two (on-screen: "Form B") verification. ---
+- runFlow:
+    file: ../common/navigate_form_no_errors.yaml
+    env:
+      FORM_NAME: "Form B"

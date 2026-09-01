@@ -1,0 +1,70 @@
+appId: org.commcare.dalvik
+tags:
+  - date_widgets
+  - partial
+---
+# Master Mobile Plan (2026) > Date Widgets > "Date 3" - Ethiopian: same
+# structure as date_02_nepali.yaml (see that file's header for the full
+# rationale/caveats - PARTIAL for the same "exhaustive month-order/exact
+# calendar cross-reference" reason), just the Ethiopian form/widget instead.
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: ".*Date Widgets") - a fresh
+# BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
+# null.
+#
+# Verified against commcare-android source (read-only reference, not modified):
+#   The CCZ's own modules-0/forms-1.xml (extracted read-only from
+#     resources/qateam - Date Widgets - v40.ccz, never committed/modified):
+#     forms.m0f1="Ethiopian" - identical question structure to Nepali
+#     (ethiopian_intro -> gregorian_calendar -> ethiopian_widget -> display),
+#     just a different title/module.
+#   Same DateWidgetsTests.kt ids/credentials as date_02_nepali.yaml.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_DATE_WIDGETS}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: "test1"
+      PASSWORD: "123"
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+- tapOn: "Start"
+- tapOn: "Date Widgets"
+- tapOn: "Ethiopian"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+# Gregorian calendar question - defaults to today, no interaction needed.
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+# Ethiopian Calendar question - exercise the month/day up/down controls.
+- assertVisible:
+    id: "org.commcare.dalvik:id/monthtxt"
+- tapOn:
+    id: "org.commcare.dalvik:id/monthupbtn"
+- tapOn:
+    id: "org.commcare.dalvik:id/daydownbtn"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+# UPDATE, found via a real BrowserStack failure: same id/dateGregorian issue
+# as date_02_nepali.yaml's own header note - that id belongs to the widget's
+# entry screen, not "Display Dates" (confirmed live: "This should display
+# the Gregorian date based on the date selected in the Ethiopian calendar:
+# ..." with no dateGregorian id present).
+# UPDATE, confirmed live 2026-08-12: hardened against the same
+# already-advanced-past-Finish race fixed elsewhere in this repo today
+# (flows/login/commcare_odk_01_login.yaml,
+# flows/other_error_tests/keyboard_navigation.yaml) - the tap is now
+# optional and the real end state (Start) is asserted with a generous
+# timeout, rather than requiring nav_btn_finish to still be on screen.
+- assertVisible:
+    text: "(?s).*Gregorian date based on the date selected in the Ethiopian calendar.*"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"
+    optional: true
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 15000

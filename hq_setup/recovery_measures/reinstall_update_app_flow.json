@@ -1,0 +1,11 @@
+{
+  "_comment": "Master Mobile Plan (2026) > Recovery Measures > Recovery: Reinstall and Update App. This is the mid-flow HQ state change between Reinstall/Update steps 2-4: after installing Test One and confirming no forced update (step 1), HQ marks Test Two Released and Test Three In Test, the device updates to Test Two, then HQ marks Test Three Released to trigger the reinstall-needed recovery message. Run this between the two halves of reinstall_update_app_flow.yaml (see that file's comments for exactly where). app_id/saved_app_id values are placeholders - Recovery Measures apps get rebuilt each QA cycle per the sheet's own 'Dimagi must reconfigure setup here prior to each run' note, so these must be filled in fresh every time, not reused from a prior run.",
+  "actions": [
+    {
+      "type": "mark_build_status",
+      "app_id": "REPLACE_WITH_RECOVERY_REINSTALL_APP_ID",
+      "saved_app_id": "REPLACE_WITH_TEST_TWO_BUILD_ID",
+      "is_released": true
+    }
+  ]
+}

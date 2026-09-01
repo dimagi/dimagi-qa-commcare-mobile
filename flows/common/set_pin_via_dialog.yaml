@@ -1,0 +1,19 @@
+appId: org.commcare.dalvik
+---
+# Reusable: from the initial "Create a PIN?" dialog, choose "Yes, set my PIN
+# now" and set PIN=${PIN}. Assumes the dialog is already visible (i.e. run
+# right after common/login.yaml on a fresh install with no PIN set yet).
+- assertVisible: "Create a PIN?"
+- tapOn: "Yes, set my PIN now"
+- assertVisible: "Enter a 4-digit PIN"
+- tapOn:
+    id: "org.commcare.dalvik:id/pin_entry"
+- inputText: "${PIN}"
+- tapOn:
+    id: "org.commcare.dalvik:id/pin_confirm_button"
+- assertVisible: "Re-Enter the PIN you chose"
+- tapOn:
+    id: "org.commcare.dalvik:id/pin_entry"
+- inputText: "${PIN}"
+- tapOn:
+    id: "org.commcare.dalvik:id/pin_confirm_button"

@@ -1,0 +1,128 @@
+appId: org.commcare.dalvik
+tags:
+  - multimedia
+  - partial
+---
+# Master Mobile Plan (2026) > Multimedia > "MM4" - Question Image/Audio/Select
+# Choice navigation + submit.
+#
+# PARTIAL DEPENDENCY (per coverage_matrix.csv: "Navigation/tap/checkbox steps
+# automatable; 'audio plays correctly' is a human judgment call and is
+# skipped" - kept tagged `partial`, but the on-device navigation below is
+# fully automated): this assumes the Multimedia QA test app is installed
+# with a "Multimedia" menu containing a "Media Demo" form (name taken
+# verbatim from the task description - could not be verified against any
+# source in this repo, since it's a QA-only app, not part of
+# commcare-android). tapOn-by-visible-text so it matches regardless of list
+# position.
+#
+# AUDIO CAVEAT (matches coverage_matrix.csv's own note): this only taps the
+# hint-audio icon per question and moves on - it does NOT assert the audio
+# actually plays, since that's an explicit human-judgment call per the sheet.
+# Selector verified against source (read-only reference, not modified):
+#   app/res/layout/media_layout.xml -> id/audio_button (ImageButton, no fixed
+#     text - MediaLayout.java:437 wires it via findViewById(R.id.audio_button))
+#   MediaLayout.java:180-185 setupStandardAudio() only VISIBLE when the
+#     question has a hint audioURI at all, so this tap is marked optional in
+#     case a given question has no audio hint.
+#
+# IMAGE CAVEAT: "verify images display" is checked via the same MediaLayout
+# hint-image mechanism used by gif_can_add_gif.yaml (see that flow's header
+# comment for the full setupImage()/useResizingImageView() citation) - both
+# id/image and id/resizing_image are asserted as optional since which one is
+# active depends on this app's Auto-Resize Images setting, which isn't known
+# here.
+#
+# SELECT CHOICE CAVEAT (UNVERIFIED, TODO before relying on this): SelectOneWidget
+# and SelectMultiWidget (app/src/org/commcare/views/widgets/SelectOneWidget.java,
+# SelectMultiWidget.java) create their RadioButton/CheckBox views with
+# dynamically-generated ids (`i + buttonIdBase`, buttonIdBase derived from
+# `prompt.getIndex().hashCode()`), NOT fixed Android resource ids - so there is
+# no stable `org.commcare.dalvik:id/...` selector Maestro could target here.
+# The only viable Maestro strategy is tapping the choice's own label TEXT, but
+# the real label text for this specific "Media Demo" form's select questions
+# could not be verified against any source in this repo. The two placeholder
+# labels below ("Yes" / "Option 1") are GUESSES, marked `optional: true` so a
+# mismatch skips rather than fails the flow - replace them with this app's
+# actual choice-label text once the real CCZ is available.
+#
+# nav_btn_next / nav_btn_finish ids verified against res/layout/screen_form_entry.xml
+# and FormAttachmentUploadTest.java's use of R.id.nav_btn_next/nav_btn_finish.
+# Prepends install_app_as_web_user.yaml (APP_NAME: Multimedia) - a fresh
+# BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
+# null.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_MULTIMEDIA}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- tapOn: "Start"
+# UPDATE, confirmed live (run 31276111657): "Tap on 'Media Demo'" failed -
+# the failure screenshot showed the device STILL on the root module list
+# (Multimedia/Image Resize/Icons/Formplayer Tests/External File in Forms/
+# Media Capture), meaning the preceding `tapOn: "Multimedia"` never
+# actually navigated anywhere. Root cause: this app's own display name IS
+# "Multimedia" (module m0's name too), and CommCare's root menu screen
+# titles its toolbar with the app's display name - so "Multimedia" appears
+# TWICE on the root screen (the (non-interactive) toolbar title, and the
+# m0 list row underneath it). A bare tapOn-by-text can match the title
+# instead of the row, silently doing nothing. Fixed by scoping the tap to
+# the list row's own TextView id (row_txt, confirmed via MenuAdapter.java -
+# see flows/right_to_left_text/question_types_02_open_first_form.yaml's own
+# citation) combined with the text, which only the row (not the title)
+# carries.
+- tapOn:
+    id: "org.commcare.dalvik:id/row_txt"
+    text: "Multimedia"
+- tapOn: "Media Demo"
+# UPDATE, confirmed live (LOCAL-VERIFY-mm-isolate): "Assert nav_btn_finish
+# visible" failed with the device already back on the HOME screen ("1 form
+# sent to server!" showing on the Sync tile) - the form had ALREADY
+# auto-submitted during the loop below, same auto-submit-bypass class of
+# bug already root-caused and fixed elsewhere this session (see
+# flows/form_submissions/incomplete_forms_01_03_save_resume_submit.yaml's
+# header for the full nav_btn_next/nav_btn_finish source citation):
+# nav_btn_next is never guaranteed to disappear one-for-one with
+# nav_btn_finish appearing, so looping on `while: visible: nav_btn_next`
+# and then hard-requiring nav_btn_finish afterward races a form that can
+# finish itself mid-loop. Fixed with the same proven pattern used
+# everywhere else: loop on nav_btn_finish's own appearance (folding the old
+# separate "final question" block into the loop itself, since each
+# iteration already does the same per-question checks/taps), trailing
+# finish-tap optional, and accept either Start or this module's own name as
+# the real success signal.
+- repeat:
+    times: 10
+    while:
+      notVisible:
+        id: "org.commcare.dalvik:id/nav_btn_finish"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/audio_button"
+          optional: true
+      - assertVisible:
+          id: "org.commcare.dalvik:id/image"
+          optional: true
+      - assertVisible:
+          id: "org.commcare.dalvik:id/resizing_image"
+          optional: true
+      # TODO(verify): replace with this app's real select-choice label text.
+      - tapOn:
+          text: "Yes"
+          optional: true
+      - tapOn:
+          text: "Option 1"
+          optional: true
+      - tapOn:
+          id: "org.commcare.dalvik:id/nav_btn_next"
+          optional: true
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"
+    optional: true
+- assertVisible:
+    text: "(?i)^(Start|Multimedia)$"

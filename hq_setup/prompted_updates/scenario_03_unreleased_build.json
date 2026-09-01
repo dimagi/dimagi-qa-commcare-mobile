@@ -1,0 +1,10 @@
+{
+  "_comment": "Master Mobile Plan (2026) > Prompted Updates > Prompted Update Scenario 3 ('No prompt for an un-starred build'). Run once via `python scripts/hq_client.py hq_setup/prompted_updates/scenario_03_unreleased_build.json` after the flow's initial logout (device keeps its current released version installed/logged out) and before its relogin. DELIBERATELY does not include a mark_build_status step - the whole point of this test case is that a build which exists but was never marked Released ('un-starred') must not trigger any update prompt. UPDATE (2026-08-20): app_id filled in - 'cdfa6c85eb594b23b0c08729cd2beff1' ('[Master] Basic Tests', same app as setup_02_mark_in_test.json's own UPDATE comment).",
+  "actions": [
+    {
+      "type": "create_new_build",
+      "app_id": "cdfa6c85eb594b23b0c08729cd2beff1",
+      "comment": "unreleased QA build - Prompted Update Scenario 3"
+    }
+  ]
+}

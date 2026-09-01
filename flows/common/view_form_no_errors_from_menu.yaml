@@ -1,0 +1,71 @@
+appId: org.commcare.dalvik
+---
+# Reusable: from a module/form-list MENU screen that's already open (i.e.
+# the caller has already navigated past "Start" into some submenu), open
+# FORM_NAME, page through with the form-entry Next button, exit WITHOUT
+# saving, and assert no generic/crash error dialog appeared - lands back on
+# that SAME menu screen.
+#
+# Differs from ../common/navigate_form_no_errors.yaml (which itself taps
+# "Start" and exits all the way back to the home screen) only in scope: this
+# one is meant for callers that need to open several sibling forms under the
+# same menu in a row - e.g. the Image Resize family's "Large/Small/Wide/Tall
+# Image" forms, all siblings under one "Image Resize" menu - without paying
+# for a Start-menu round trip between each one.
+# Params: FORM_NAME - literal on-screen form name to tap.
+#
+# ASSUMPTION (unverified, flagged per this repo's convention): asserts
+# nav_btn_next is visible after opening the form, i.e. assumes the form has
+# more than one screen - the same assumption
+# ../common/navigate_form_no_errors.yaml and
+# ../common/verify_form_a_questions.yaml already make for their own target
+# forms. If a given FORM_NAME turns out to be a single-screen form (only
+# nav_btn_finish, no nav_btn_next), callers should not use this subflow
+# as-is; swap the initial assertVisible for nav_btn_finish instead.
+#
+# Selectors are the exact ones ../common/navigate_form_no_errors.yaml already
+# verified against commcare-android source - see that file's header for the
+# full citation of screen_form_entry.xml / FormNavigationUI.java's
+# nav_btn_next, strings.xml's quit_form_title="Exit Form?" /
+# do_not_save="EXIT WITHOUT SAVING", and the generic-error strings
+# (activity.task.error.generic / app.handled.error.explanation). Not
+# re-derived here to avoid drift between the two copies.
+- tapOn: "${FORM_NAME}"
+# UPDATE (2026-08-19), confirmed live via a real CI failure (group-a,
+# multimedia/image_resize_21_24_none_resize): a Google Play services
+# system dialog ("To continue, your device will need to use Location
+# Accuracy" / "No thanks" / "Turn on") can appear right after opening a
+# form, blocking nav_btn_next underneath it - not a CommCare runtime
+# permission prompt (same class of gap as flows/common/capture_camera_photo.yaml's
+# own "Turn on Location tags?" dismissal), so it can't be pre-granted via
+# launchApp's `permissions:` config either. Declines it (no location
+# feature under test here) rather than granting, same reasoning as that
+# file.
+- tapOn:
+    text: "No thanks"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_next"
+    timeout: 5000
+- repeat:
+    times: 10
+    while:
+      visible:
+        id: "org.commcare.dalvik:id/nav_btn_next"
+    commands:
+      - assertNotVisible:
+          text: "(?i).*unexpected error.*"
+      - assertNotVisible:
+          text: "(?i).*commcare will now restart.*"
+      - tapOn:
+          id: "org.commcare.dalvik:id/nav_btn_next"
+          optional: true
+- assertNotVisible:
+    text: "(?i).*unexpected error.*"
+- assertNotVisible:
+    text: "(?i).*commcare will now restart.*"
+- back
+- tapOn:
+    text: "(?i).*exit without saving.*"
+    optional: true

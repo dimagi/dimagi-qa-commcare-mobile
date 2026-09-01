@@ -1,0 +1,117 @@
+appId: org.commcare.dalvik
+tags:
+  - form_submissions
+  - partial
+---
+# Master Mobile Plan (2026) > Form Submissions > "Markdown" - Start -> Basic
+# Form Tests -> Markdown, page through, submit.
+#
+# PARTIAL: the sheet's verification here is "confirm markdown renders per
+# [the] Confluence page" - i.e. that each question's markdown source (bold,
+# italics, strikethrough, headers, tables, clickable phone/web links,
+# markdown-in-select-choices) renders as correctly-formatted rich text on
+# screen. That is a visual-rendering judgment call with no text/
+# accessibility-tree equivalent Maestro can assert (a rendered "**bold**"
+# and a literal, un-rendered "**bold**" string both count as the identical
+# text node to Maestro's selectors), so the actual rendering check is NOT
+# automated here and stays a documented gap - same convention as
+# flows/date_widgets/date_02_nepali.yaml's own PARTIAL header for an
+# analogous "eyeball the rendered output" limitation. The on-device
+# navigation through every markdown question and the final submission ARE
+# fully automated below.
+#
+# Form structure verified against the real CCZ (read-only reference, not
+# committed): resources/qateam - [Master] Basic Tests - v1141.ccz, unzipped
+# and inspected -
+#   en/app_strings.txt: forms.m0f6=Markdown.
+#   modules-0/forms-6.xml: the real question order/appearances/binds - every
+#     question in this form is either a `trigger` (no answer needed to
+#     proceed) or a `select1` with NO required bind (/data/question13,
+#     "This question *should* have markdown in the selects" - optional), so
+#     a plain generic next-loop safely walks the entire form.
+#
+# nav_btn_next/nav_btn_finish ids and form.entry.complete.save.success="Form
+# successfully completed" (android_translatable_strings.txt:169) verified
+# against commcare-android source (read-only reference, never modified),
+# same regex-assertion convention as
+# flows/recovery_measures/point_release_flow.yaml.
+#
+# UPDATE, confirmed live (real BrowserStack failure, build
+# f9a044e733ffb6fc41a1712b29aec8728ae75c5d, reproduced on both the main
+# attempt and its --retry-failed re-run - NOT flaky): the old code below
+# hard-required nav_btn_finish to become visible then tapped it. For THIS
+# form that never happens. Root cause, verified against
+# FormEntryActivityUIController.showNextView()'s EVENT_END_OF_FORM handling
+# (read-only commcare-android source): "if (questionsView != null) {
+# refreshCurrentView(); } else { activity.triggerUserFormComplete(); }" -
+# i.e. if stepping past the last question lands on a NULL questionsView,
+# the form auto-submits and exits immediately, and nav_btn_finish's own
+# grow-in reveal animation (FormNavigationUI.expandAndShowFinishButton())
+# never gets a chance to run. This form's trailing minimal-appearance
+# Pragma-Form-Descriptor trigger (forms-6.xml, cited above) renders exactly
+# such a view-less final screen. Confirmed live: the failing build's own
+# maestro log shows the repeat-while loop below tapping nav_btn_next only 8
+# times then exiting early (nav_btn_next disappeared well before the
+# times: 15 cap) - i.e. the 8th tap silently auto-submitted the form - and
+# the build's own screenshot at the moment the subsequent nav_btn_finish
+# wait timed out shows the device already back on the CommCare app's HOME
+# screen (Start/Saved/Incomplete/Sync tiles, "1 form sent to server!"), not
+# still inside the form. The success toast this path DOES raise
+# (form.entry.complete.save.success, Toast.LENGTH_SHORT per
+# FormEntryActivity.java) had already faded by the time the old hard wait's
+# own 10s timeout elapsed, so asserting that toast's text afterward is not
+# reliable either.
+#
+# Fix: the nav_btn_finish wait+tap below are now best-effort
+# (optional: true) so a form that already auto-completed mid-loop doesn't
+# fail here, and the closing assertion checks the REAL, stable
+# post-submission state - nsv_home_screen, the same home-screen container
+# id already relied on by flows/common/login_and_background.yaml and
+# flows/form_submissions/multiple_submissions_10x_background_sync.yaml -
+# instead of the transient success toast, since both the manual-finish and
+# auto-complete paths land on that same home screen.
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: ".*Basic Tests$") - a
+# fresh BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
+# null.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_BASIC_TESTS}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- tapOn: "Start"
+- tapOn: "Basic Form Tests"
+- tapOn: "Markdown"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_next"
+    timeout: 10000
+- repeat:
+    times: 15
+    while:
+      visible:
+        id: "org.commcare.dalvik:id/nav_btn_next"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/nav_btn_next"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_finish"
+    timeout: 10000
+    optional: true
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nsv_home_screen"
+    timeout: 10000
+- assertNotVisible:
+    text: "(?i).*unexpected error.*"
+- assertNotVisible:
+    text: "(?i).*commcare will now restart.*"

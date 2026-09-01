@@ -1,0 +1,11 @@
+{
+  "_comment": "Master Mobile Plan (2026) > Mobile Pins > 'Setup 2' - Install Application (publish the app to the device via HQ). Run once via `python scripts/hq_client.py hq_setup/mobile_pins/setup_02_install_application.json` before the Pin 1..14 flows in flows/mobile_pins/. This only covers the HQ half of Setup 2: marking the CCZ app's latest build Released so it becomes installable. It does NOT cover 'Setup 4' (claim mobile privileges via a barcode scan rendered by a live desktop-browser session on commcarehq.org/account/mobile_privileges/) - that step is Not automatable per coverage_matrix.csv and must still be done by hand between running this JSON and running the on-device Pin flows. flows/common/login.yaml itself installs nothing; every CC_TEST_USERNAME/CC_TEST_PASSWORD (test1/123) flow in this repo assumes an app is already seated on the device, same as here. app_id/saved_app_id are placeholders for the 'Basic Tests' app on the qateam domain (the same app referenced by flows/updates_2_49/prompted_update_scenario_01_ill_update_later.yaml's header comment and implied by test1/123 being this repo's default test-user credentials) - confirm the app id is still current before relying on this, app ids get recreated between QA cycles.",
+  "actions": [
+    {
+      "type": "mark_build_status",
+      "app_id": "REPLACE_WITH_BASIC_TESTS_APP_ID",
+      "saved_app_id": "REPLACE_WITH_BASIC_TESTS_BUILD_ID",
+      "is_released": true
+    }
+  ]
+}

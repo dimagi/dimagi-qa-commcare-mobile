@@ -1,0 +1,121 @@
+appId: org.commcare.dalvik
+tags:
+  - recovery_measures
+  - partial
+  - superseded_by_appium
+---
+# UPDATE (2026-08-25): SUPERSEDED by scripts/appium_offline_ccz_scenarios.py's
+# run_offline_06_custom_folder_picker (dispatched via
+# scripts/run_appium_offline_ccz_suite.py, wired into CI's group-c job) -
+# this flow's own real gap below (no way to get a .ccz file onto the device)
+# is exactly what that Appium-based module solves via a real push_file() call,
+# something Maestro is structurally unable to do. Tagged
+# `superseded_by_appium` and excluded from normal tag-based dispatch (see
+# scripts/run_suite.py's select_flow_files) - kept on disk for reference
+# only; expect it to keep failing if ever run directly or via --tag
+# superseded_by_appium.
+#
+# Master Mobile Plan (2026) > Recovery Measures > Recovery: Offline Reinstall
+# and Update App > "Recovery (offline) 6" - "Trigger 'no CCZ found' + manual
+# file-picker select".
+#
+# PARTIAL, best-effort/unverified - two independent reasons:
+#   1. Depends on offline_05_place_ccz_custom_path.yaml's adb-push
+#      prerequisite having actually run first (that file's own header
+#      documents the exact `adb push ... /sdcard/RecoveryMeasuresTest/
+#      test.ccz` command and why it isn't automated by this repo yet). If
+#      that push hasn't happened, this flow's file-picker navigation below
+#      has nothing real to select.
+#   2. The system file picker Android launches for
+#      ExecuteRecoveryMeasuresPresenter.selectCczFromFileSystem()'s
+#      ACTION_GET_CONTENT intent is the Storage Access Framework (SAF) - a
+#      SEPARATE system UI process (com.android.documentsui or a device OEM's
+#      equivalent), not part of the org.commcare.dalvik app. Maestro's
+#      appId-scoped session and this repo's other flows' resource-id
+#      selectors (org.commcare.dalvik:id/...) do not apply to it - SAF's own
+#      view/button ids vary by Android version and OEM and are not part of
+#      commcare-android's source tree, so there is nothing to "verify against
+#      commcare-android source" for this step the way every other selector in
+#      this repo's Recovery Measures flows is verified. The taps below use
+#      plain visible-text matches (folder/file name) as the only
+#      reasonably-portable selector across SAF implementations - flag this
+#      whole step as best-effort/unverified and expect to need Android
+#      version-specific tweaks per real device.
+#
+# "No CCZ found" (the row's own phrase): there is no dedicated CommCare
+# in-app string for this - checked app/res/values/strings.xml and
+# android_translatable_strings.txt for anything matching "no ccz"/"not
+# found" in this context; recovery_measure_invalid_ccz_path ("Unable to
+# process the CCZ file you selected. Please retry") is CommCare's OWN error
+# for an invalid/corrupt selection, which is a different condition. The
+# sheet's "no CCZ found" instead almost certainly refers to the SAF picker's
+# own default view (typically the device's Downloads folder) showing no
+# .ccz file - i.e. exactly the situation offline_05's custom, non-Downloads
+# push path is meant to create, which is why "manual file-picker select"
+# (browsing elsewhere in the SAF UI to the custom folder) is the other half
+# of this same row. No assertion is made on "no CCZ found" text below since
+# no such CommCare string exists to assert against; only the resulting
+# "Select CCZ" screen and the eventual picker navigation are asserted.
+#
+# Verified against commcare-android source (the CommCare-side portion only):
+#   ExecuteRecoveryMeasuresActivity/-Presenter, same as
+#   offline_reinstall_update_app_flow.yaml's header:
+#   recovery_measure_detail, recovery_measure_select_ccz = "Select CCZ"
+#   (app/res/values/strings.xml), R.id/select_ccz_button.
+#
+# Assumes the MEASURE_TYPE_APP_OFFLINE_REINSTALL_AND_UPDATE measure is
+# already pending (per hq_setup/recovery_measures/offline_4_mark_test_three.json
+# having run) and the device is at the point offline_reinstall_update_app_flow.yaml's
+# "Recovery (offline) 3" step already asserts ("Select CCZ" visible) - this
+# flow re-establishes that precondition via login rather than assuming the
+# other flow ran first in the same session, per this repo's "each flow
+# runnable in isolation" convention.
+# UPDATE (2026-08-10): this is the "Recovery: Offline Reinstall and Update
+# App" app (id 8009e8a2814a465b818d56284011b1e9) - see
+# scripts/app_registry.py's OFFLINE_TEST_ONE/TWO/THREE entries.
+# UPDATE (2nd correction, 2026-08-10): removed the normal update-to-Test-Two
+# step this used to require first - confirmed live in ISOLATION (run
+# 6151522a9e31384f43802347b2456fef83391a5b, a single-flow build containing
+# only offline_05_place_ccz_custom_path.yaml) that logging into this app on
+# a fresh Test One install triggers the forced "Select CCZ" recovery screen
+# IMMEDIATELY, with no home screen (and so no "More options" menu) ever
+# reachable - the update-to-Two step was not only unnecessary but literally
+# unreachable (its own "Update App" tap would fail to find that menu item,
+# since the recovery activity has already taken over).
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_OFFLINE_TEST_ONE}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- assertVisible:
+    text: "(?i).*recovery (procedures|measures).*initiated.*"
+- assertVisible:
+    text: "(?i).*select ccz.*"
+- tapOn:
+    text: "(?i).*select ccz.*"
+# From here on, control has left org.commcare.dalvik for the system file
+# picker (SAF) - see header CAVEAT above. Text-based, best-effort only.
+- extendedWaitUntil:
+    visible:
+      text: "(?i).*RecoveryMeasuresTest.*"
+    timeout: 15000
+- tapOn:
+    text: "(?i).*RecoveryMeasuresTest.*"
+- extendedWaitUntil:
+    visible:
+      text: "(?i).*test\\.ccz.*"
+    timeout: 10000
+- tapOn:
+    text: "(?i).*test\\.ccz.*"
+# Back in org.commcare.dalvik: unzip + reinstall proceeds automatically
+# (unZipCcz() -> onUnzipSuccessful() -> doOfflineAppInstall()) and the device
+# auto-logs out on completion, same as offline_reinstall_update_app_flow.yaml's
+# "Recovery (offline) 10".
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/edit_username"
+    timeout: 60000

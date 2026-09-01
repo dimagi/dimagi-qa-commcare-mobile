@@ -1,0 +1,78 @@
+appId: org.commcare.dalvik
+tags:
+  - form_submissions
+  - partial
+---
+# Master Mobile Plan (2026) > Form Submissions > "Geoservice 2" - "Auto
+# Capture Location". The sheet's actual verification step is "submit any
+# form, then go to Submit History > View Form > Raw XML" on CommCareHQ's
+# web UI to confirm a location got captured into the submission's metadata -
+# that half is a desktop-browser HQ report inspection, out of scope for this
+# device-only Maestro harness (same class of gap as every other
+# "HQ Submit History ..." row already marked Not automatable elsewhere in
+# coverage_matrix.csv, e.g. Multimedia's "Image Resize 27/28", "Media 4").
+#
+# This flow automates ONLY the ON-DEVICE half - "submit any form" - since
+# that's a genuine prerequisite step Maestro CAN drive, and the location
+# capture itself (if the CommCare build/app has "Auto Capture Location"
+# enabled) happens transparently as part of any ordinary form submission,
+# with no distinct on-screen UI of its own to interact with or assert
+# against; the only way to actually confirm the capture succeeded is the
+# HQ-side raw XML inspection this flow deliberately does NOT attempt.
+#
+# NOT flows/common/submit_only_form.yaml - that generic subflow blindly taps
+# the sole row of a single-module/single-form app (built for the dedicated
+# "Rate Limiting" app); "[Master] Basic Tests" has ~30 modules, so a blind
+# single-item-list tap would land on whatever module happens to sort first,
+# not a specific known-good form. Reuses the exact same concrete
+# "Basic Form Tests" > "Basic Form" navigation already verified against
+# this app's real content by
+# flows/trigger_device_logs/device_logs_1_submit_form.yaml (see that file's
+# header for the underlying en/app_strings.txt + modules-0/forms-0.xml
+# citations - modules.m0="Basic Form Tests", forms.m0f0="Basic Form", whose
+# only real question is /data/enter_a_name, auto-focused so `inputText`
+# alone reaches it with no preceding tap needed).
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: ".*Basic Tests$") - a
+# fresh BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
+# null.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_BASIC_TESTS}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+# UPDATE, confirmed live (2026-08-08, real BrowserStack failure on BOTH the
+# main attempt and its --retry-failed re-run, build
+# af73a71fe00d14a20fc6d59a0b3a2da22c1211a0, session
+# .../e4c3ec923b0ad37805250109aede2c9d8c688860d33bfa4f): the very next step,
+# `tapOn: "Start"`, failed - the maestroScreenshot for that exact failure
+# showed the device never left LoginActivity at all, with red "Bad Server
+# Response" text below LOG IN (a transient server-side hiccup on the
+# key-exchange callout, not a selector bug - see flows/common/login.yaml's
+# own header for the full root-cause citation and source evidence). Fixed
+# centrally in flows/common/login.yaml itself (a bounded retry that re-taps
+# LOG IN while "Bad Server Response" is visible) rather than duplicated
+# here, since every flow that calls this shared subflow shares the same
+# exposure.
+- tapOn: "Start"
+- tapOn: "Basic Form Tests"
+- tapOn: "Basic Form"
+- inputText: "Geoservice 2 Auto Capture Location"
+# UPDATE, confirmed live (2026-08-19, Android 16, full CI run 32178919171):
+# dropped hideKeyboard - the failure hierarchy dump showed an unwanted
+# "Exit Form?" dialog, same hideKeyboard-falls-back-to-a-real-back-press
+# bug already fixed across this repo (nav_btn_finish lives in the top
+# toolbar, never covered by an open keyboard - see
+# flows/case_filters/fuzzy_search_01_03.yaml's own UPDATE for the full
+# citation).
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_finish"
+    timeout: 10000
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"

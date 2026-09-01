@@ -1,0 +1,68 @@
+appId: org.commcare.dalvik
+tags:
+  - recovery_measures
+  - automatable
+---
+# Master Mobile Plan (2026) > Recovery Measures > Heartbeat Request
+# Improvement (Test Case ID "Heartbeat Request Improvement 1" - "Install
+# Test One (Released)/Test Two (In Test) via HQ, login, submit a form").
+# Only the HQ half (marking Test One released and Test Two in-test) is
+# Partial - run hq_setup/recovery_measures/heartbeat_1_setup.json's actions
+# BEFORE this flow (see that file's header). The on-device half automated
+# here is plain login + a single form submission, which per task framing is
+# "fine"/fully Automatable once that HQ state exists.
+#
+# Reuses flows/common/submit_only_form.yaml verbatim - see that file's own
+# header for its CAVEAT (assumes the seated test app has exactly one module
+# and one form) and selector citations (InstrumentationUtility.kt
+# openModule()/openForm()/submitForm(), R.id.screen_suite_menu_list /
+# nav_btn_next / nav_btn_finish - all in commcare-android, read-only
+# reference, never modified by this repo). Not re-deriving those selectors
+# here to avoid duplicating that file's citations.
+#
+# Note on scope: "Heartbeat Request Improvement" as a feature is about
+# org.commcare.heartbeat.HeartbeatRequester's periodic ping to HQ (which,
+# per HeartbeatRequester.java, can also update HiddenPreferences'
+# "latest CommCare version" the same way RecoveryMeasuresRequester does) -
+# this flow does not attempt to assert anything about the heartbeat request
+# itself firing or its timing (that is what "Heartbeat Request Improvement
+# 2" - the 1-hour real-time wait - covers, and that row is explicitly out of
+# scope per task instructions). This flow only covers the login+submit
+# on-device steps of row 1.
+# UPDATE, confirmed live (run 31276111657): this flow's very first step
+# used to be a bare `runFlow: ../common/login.yaml` with no app ever
+# installed first - it assumed some "Test One"/"Test Two"/"Test Three" app
+# was already on the device from an earlier, undocumented step. That's
+# never true when this flow runs on its own (this repo's "each flow
+# runnable in isolation" convention, docs/FRAMEWORK.md), so it failed
+# outright stuck on the pre-install "Welcome to CommCare!" screen -
+# `login.yaml` could never find edit_username there.
+# RESOLVED (2026-08-10): this is its OWN dedicated app, "Heartbeat"
+# (id 35b9a60884c8f8e69e507c56cbe8f370, per the sheet's own A65/C67
+# hyperlinks) - NOT the shared "Test One/Two/Three" Reinstall/Update app
+# other recovery_measures flows use. See scripts/app_registry.py's
+# HEARTBEAT entry. Per C67 ("install the version corresponding with the
+# Test One release note - it should be marked as Released... ensure Test
+# Two is marked In Test"), this app DOES have its own Test One/Two
+# multi-version narrative too, but resolving to specific pinned builds
+# wasn't done here (this app's own release history wasn't inspected the
+# way the two Reinstall/Update apps' were) - the unpinned entry below
+# resolves to whatever this app's current top build is, which may not
+# exactly match "Test One" if that's not also the newest build. Revisit
+# with pinned saved_app_ids (same pattern as
+# RU_TEST_ONE/TWO/THREE) if this proves wrong live.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_HEARTBEAT}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+- runFlow: ../common/submit_only_form.yaml
+- assertVisible:
+    text: "(?i).*form.*success.*completed.*"

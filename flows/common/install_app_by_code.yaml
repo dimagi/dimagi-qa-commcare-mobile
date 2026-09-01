@@ -1,0 +1,182 @@
+appId: org.commcare.dalvik
+---
+# Reusable "install a specific app via its short alphanumeric HQ install
+# code" subflow. Params: APP_CODE (e.g. "455h9iR" for "[Master] Basic
+# Tests" - get this from the app's Releases page on HQ: Download to Android
+# > Online Install > "Enter app code on installation screen: <code>").
+#
+# Replaces install_app_as_web_user.yaml's much longer "More options -> See
+# Apps for My User -> web-user login -> Get Apps -> scroll the (often very
+# long, alphabetically-sorted) app list -> tap by name" sequence with a
+# single direct entry point - no HQ web-user credentials, no scrolling, no
+# app-list ambiguity between similarly-named apps. This is the SAME "Online
+# Install" mechanism CommCareHQ's own web UI surfaces per-app (distinct from
+# "Offline Install", which is the CCZ-file-based path install_app_as_web_
+# user.yaml drives) - confirmed live via a recorded screen capture of that
+# HQ Releases-page dialog.
+#
+# Verified against commcare-android source (read-only reference, not modified):
+#   CommCareSetupActivity (@ManagedUi(R.layout.first_start_screen_modern),
+#     app/src/org/commcare/activities/CommCareSetupActivity.java) hosts
+#     SelectInstallModeFragment in its default initial UiState
+#     (CHOOSE_INSTALL_ENTRY_METHOD) - the very first screen after a fresh
+#     launch, no navigation needed to reach it.
+#   select_install_mode_fragment.xml line 110-118: id/enter_app_location, a
+#     SquareButtonWithText with hardcoded (non-@string) subtitle "Enter
+#     Code" - tapping it (SelectInstallModeFragment.java:102-117) swaps in
+#     SetupEnterURLFragment and sets uiState = IN_URL_ENTRY.
+#   fragment_setup_enter_url.xml line 56-65: id/edit_profile_location (NOT
+#     "profile_code" - that id doesn't exist anywhere in this codebase,
+#     despite appearing in a sibling repo's older Appium test; flag for
+#     correction if a future commcare-android version renames this again),
+#     hint "Enter code here".
+#   fragment_setup_enter_url.xml line 68-78 + SetupEnterURLFragment.java
+#     line 46-61: id/start_install, text "Start Install" (strings.xml line
+#     111, install_button_start) - starts DISABLED, only enables once text
+#     is typed (a TextWatcher), so inputText must happen before this tap.
+#     Clicking it sets uiState = READY_TO_INSTALL
+#     (CommCareSetupActivity.java line 319-324).
+#   install_confirm_fragment.xml line 74-83 + InstallConfirmFragment.java
+#     line 42-44: id/btn_start_install - a SECOND, DIFFERENT-ID button that
+#     ALSO renders as "Start Install" (same install_button_start string,
+#     different screen) - there is no button anywhere in this flow whose
+#     text is literally just "Install". Do not "fix" this to search for
+#     that text - it doesn't exist.
+#   CommCareSetupActivity.java line 696-713 (reportSuccess): if the code
+#     resolves to an app that's already installed and current, this shows a
+#     Toast "App is up to date" (android_translatable_strings.txt line 8,
+#     updates.success) instead of a "new app installed" path - both cases
+#     land on the login screen either way, so this flow doesn't need to
+#     branch on it.
+#   strings.xml line 118 (install_wrong_code): a wrong/unresolvable code
+#     shows "The app code you have entered is incorrect. Please try
+#     scanning barcode or entering correct code." back on the entry-method
+#     screen - if this flow ever fails waiting for edit_username, check for
+#     that text first before assuming a different bug.
+# UPDATE, confirmed live (2026-08-18, real Android 16/Galaxy S26 failure):
+# a genuine Android 16 OS-level onboarding overlay ("Swipe down from the
+# top right corner of the screen to open the quick settings panel...",
+# "OK" button) can appear right after clearState on this newer OS -
+# confirmed via the failure hierarchy dump, not app content at all. Never
+# happened on the Android 10/Galaxy S20 device this flow was tuned
+# against. Dismiss it defensively if present before continuing.
+# UPDATE, confirmed live (2026-08-25, real failure dispatching against
+# resources/commcare_2.45_release.apk): the "Allow CommCare to send you
+# notifications?" (Allow/Don't allow) runtime permission prompt can block
+# enter_app_location below - the same dialog scripts/appium_browserstack_
+# client.py's own auto_grant_permissions capability already works around
+# for Appium sessions, but this is a plain Maestro build, which normally
+# auto-grants permissions on BrowserStack without ever showing this at all
+# (confirmed true for every other flow in this repo, all run against the
+# current release APK) - only reproduced against this old 2019-era binary,
+# most likely because it predates Android's POST_NOTIFICATIONS runtime-
+# permission model entirely, so BrowserStack's manifest-driven auto-grant
+# heuristic has nothing to pre-approve even though the (much newer) OS
+# still prompts for it live. Dismiss defensively if present.
+- launchApp:
+    clearState: true
+- tapOn:
+    text: "OK"
+    optional: true
+- tapOn:
+    text: "Allow"
+    optional: true
+- tapOn:
+    id: "org.commcare.dalvik:id/enter_app_location"
+- tapOn:
+    id: "org.commcare.dalvik:id/edit_profile_location"
+- inputText: "${APP_CODE}"
+- hideKeyboard
+# UPDATE (2026-08-26): confirmed live across multiple independent CI
+# sessions today (e.g. login/commcare_odk_03_logout, right_to_left_text/
+# case_list_01_load_case_list, and 20+ other completely unrelated flows,
+# spanning different apps/app-codes/workflows) that a bare tapOn here can
+# time out - Maestro's own default implicit wait isn't always enough for
+# start_install to actually become enabled (it starts DISABLED, per this
+# file's own citation above, and only flips on via a TextWatcher once
+# inputText above has genuinely registered) under whatever device
+# conditions BrowserStack is serving that session. Same real evidence
+# every one of those failures showed: types the code, hides the keyboard,
+# then the tap itself times out ~17s later with nothing else different.
+# Same extendedWaitUntil-then-tapOn idiom this file already uses lower
+# down (screen_multimedia_retry) - gives Maestro a longer, explicit window
+# to catch the button once it's actually ready, rather than relying on
+# tapOn's own shorter implicit wait. Can't fix a genuinely crashed/dead
+# session (that needs the existing build-level retry), but removes this
+# step's own contribution to flakiness for the more common "just slow"
+# case, which is common to virtually every flow in this repo since they
+# all install through this same file.
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/start_install"
+    timeout: 45000
+- tapOn:
+    id: "org.commcare.dalvik:id/start_install"
+- tapOn:
+    id: "org.commcare.dalvik:id/btn_start_install"
+# Confirmed live (2026-08-08, date_widgets validation run 31247897876): a
+# build can require a newer CommCare APK than BrowserStack's release build,
+# showing "The application requires CommCare version X. You are currently
+# running Y." with an "I'LL UPDATE LATER" button - the exact same dialog
+# install_app_as_web_user.yaml's own SIXTH CAVEAT already handles. Without
+# this tap the edit_username wait below times out at 90s with this dialog
+# still on screen. Text uses "I.LL" (period, not apostrophe) matching every
+# other occurrence of this tap in this repo.
+- tapOn:
+    text: "I.LL UPDATE LATER"
+    optional: true
+# Confirmed live (2026-08-08, retest run 31248486050): dismissing the
+# version-mismatch dialog above doesn't resume the install - it drops back
+# onto this SAME InstallConfirmFragment ("Almost there! Press the button
+# below to install your app.") screen, needing a second tap on the same
+# btn_start_install to actually proceed. Optional since this whole detour
+# only happens when the version-mismatch dialog showed in the first place.
+- tapOn:
+    id: "org.commcare.dalvik:id/btn_start_install"
+    optional: true
+# Confirmed live (2026-08-08, full-suite validation run 31250864473, on the
+# Performance Testing app used by menu_badges): CommCareVerificationActivity
+# (missing_multimedia_layout) can show "Some of your application's
+# multimedia has not been installed..." with a Retry button - unlike a CCZ
+# install (which bundles media locally, so this check always passes
+# immediately), online/Enter-Code install fetches media as a background
+# resource-install task that may not have finished by the time this
+# verification screen first renders. id/skip_verification_button (see
+# CommCareVerificationActivity.java) is NOT an option here - it's only
+# shown when launched with fromManager=true, which this entry point isn't -
+# so retrying (giving the background fetch more time) is the only path
+# through. Same bounded repeat-while-visible pattern as
+# flows/multimedia/lazy_video_02_file_missing_popup.yaml.
+- repeat:
+    times: 6
+    while:
+      visible:
+        id: "org.commcare.dalvik:id/screen_multimedia_retry"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/screen_multimedia_retry"
+      - extendedWaitUntil:
+          visible:
+            id: "org.commcare.dalvik:id/edit_username"
+          timeout: 15000
+          optional: true
+# UPDATE (2nd correction, 2026-08-13): the launchApp-based "force a
+# repaint" fix tried here was ITSELF causing real, confirmed damage -
+# CI run 31691239630 showed ~15+ completely unrelated flows across every
+# module all failing at this exact wait, with a user-supplied recording
+# showing the install stalling at "Setting Up App - Step 10 of 12" and
+# then reverting all the way back to the pre-install "Welcome to
+# CommCare! Please choose an installation method" screen. launchApp
+# backgrounds and re-foregrounds the app UNCONDITIONALLY on every single
+# run (not just the black-screen edge case) - if CommCare's background
+# install/resource-download task is still finishing at that moment,
+# backgrounding it via launchApp can interrupt that OS-level task
+# entirely, losing the whole install. The original black-screen premise
+# was also never solidly confirmed to begin with - the one case fully
+# root-caused via a hierarchy dump (capture_01/02's "Basic Form Tests"
+# tap) turned out to be a plain text mismatch, not a rendering bug.
+# Removed the relaunch; just a longer plain wait instead.
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/edit_username"
+    timeout: 120000

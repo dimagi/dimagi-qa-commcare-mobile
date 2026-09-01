@@ -1,0 +1,80 @@
+appId: org.commcare.dalvik
+tags:
+  - mobile_pins
+  - automatable
+---
+# Master Mobile Plan (2026) > Mobile Pins > "Setup 3" - Enable Developer
+# Options (tap About CommCare 4x from the home screen).
+# NOTE: Prepends install_app_as_web_user.yaml (APP_NAME: ".*[Master] Basic
+# Tests") - a fresh BrowserStack session has no app installed until this
+# runs; see DispatchActivity.java's CommCareSetupActivity routing when
+# currentApp == null.
+# No reusable dev-options-enable subflow exists yet in flows/common/ (checked
+# first, per this task's instructions) - the only other place this exact tap
+# sequence appears is inlined at the top of
+# flows/update/update_target_developer_options_flow.yaml, which isn't a
+# common/ helper and covers five different Update test cases beyond just this
+# one step. Reusing its verified sequence here rather than duplicating a new
+# flows/common/ file for a single other caller.
+#
+# Selectors verified against commcare-android source (read-only reference,
+# never modified by this repo):
+#   app/instrumentation-tests/src/org/commcare/utils/InstrumentationUtility.kt
+#     -> enableDeveloperMode(): openOptionsMenu() -> click "About CommCare" ->
+#     click OK (R.string.ok), repeated 4 times.
+#   app/src/org/commcare/activities/HomeScreenBaseActivity.java
+#     showAboutCommCareDialog()/handleDeveloperModeClicks(): the 4th dismissal
+#     of the About CommCare dialog from the HOME SCREEN (not App Manager,
+#     which has its own separate 4-tap counter/toast) calls
+#     DeveloperPreferences.setSuperuserEnabled(true) and shows a toast with
+#     Localization.get("home.developer.options.enabled").
+#   app/assets/locales/android_translatable_strings.txt:
+#     home.menu.about=About CommCare (line 86)
+#     home.developer.options.enabled=Developer Mode Enabled (line 100)
+#     settings.developer.options=Developer Options (line 903) - the Settings
+#       menu item title, only shown once DeveloperPreferences.isSuperuserEnabled()
+#       is true (app/src/org/commcare/preferences/MainConfigurablePreferences.java
+#       findPreference(DEVELOPER_SETTINGS)).
+#     dialog.ok=OK (About CommCare dialog's positive button).
+#
+# UPDATE, confirmed live 2026-08-11 (CI run 31476507436, build
+# 606d5932732d5f9a92c405940f6ee35974d96d5a): the final "Assert that 'Start'
+# is visible" failed - the failure screenshot showed the device sitting on
+# the Samsung OS home screen (Gallery/Play Store/Google folder, phone dock),
+# not CommCare at all. Settings is only ONE screen deep from Start - a
+# single `back` already returns there; the second `back` this flow used to
+# send afterward over-shot past the app's own root activity and exited to
+# the OS. Removed the redundant second back.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_BASIC_TESTS}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+
+# About CommCare x4, dismissing with OK each time, unlocks developer mode.
+- repeat:
+    times: 4
+    commands:
+      - tapOn: "More options"
+      - tapOn: "About CommCare"
+      - tapOn: "OK"
+- assertVisible:
+    text: "Developer Mode Enabled"
+    optional: true # toast may dismiss before Maestro's screenshot poll catches it
+
+# Confirm the Settings menu now exposes "Developer Options" (only visible
+# once superuser/developer mode is enabled - see header comment).
+- tapOn: "More options"
+- tapOn: "Settings"
+- assertVisible: "Developer Options"
+- back
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000

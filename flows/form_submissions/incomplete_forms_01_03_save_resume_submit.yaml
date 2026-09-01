@@ -1,0 +1,236 @@
+appId: org.commcare.dalvik
+tags:
+  - form_submissions
+  - partial
+---
+# Master Mobile Plan (2026) > Form Submissions > "Incomplete Forms 1", "2",
+# "3" - log in, open Question Types, answer only the first two real
+# questions (q_text, q_int - the "intro" step before them is a Next-only
+# label/trigger, not a question), leave the form via `back`, confirm the app
+# offers "SAVE INCOMPLETE", save it. Go home, open the saved form from the
+# "Incomplete" home card, verify both prior answers are still shown, answer
+# a third question (q_numeric), save incomplete again, then reopen once more
+# and finish the rest of the form to fully submit it.
+#
+# Run once for all three sheet rows, same convention as
+# flows/mobile_pins/pin_01_prompt_shown_on_first_login.yaml covering two
+# rows with one file - the on-device mechanics these three rows describe are
+# identical, only the sheet's own narrative framing differs across them.
+# ALSO COVERS coverage_matrix.csv's "Incomplete Forms 4" row for its
+# on-device half - see that row's own Partial note in coverage_matrix.csv
+# about the HQ Submit History web-report verification step, which has no
+# on-device equivalent and is out of scope for this Maestro-based,
+# device-only framework (see docs/FRAMEWORK.md's own scope statement).
+#
+# FIXED (2026-08-08, live BrowserStack evidence, build
+# af73a71fe00d14a20fc6d59a0b3a2da22c1211a0, test
+# e4c3ec923b0ad37805250109aede2c9d8c6888606f8d9023): the header below used
+# to flag re-entry behavior as unsettled; it is now settled BOTH by source
+# and by a live screenshot. Reopening a saved/incomplete form does NOT drop
+# you back on the question-entry screen (nav_btn_next etc.) - it ALWAYS
+# opens FormHierarchyActivity first. Source proof: FormEntryActivity.java's
+# handleFormLoadCompletion(), the `else if (!isRestartAfterSessionExpiration)`
+# branch (around line 1223): "// we've just loaded a saved form, so start
+# in the hierarchy view" -> `startActivityForResult(new Intent(this,
+# FormHierarchyActivity.class), HIERARCHY_ACTIVITY_FIRST_START)`, with an
+# explicit early `return` so the intro/question screen is never shown
+# first. The failing run's screenshot confirms this exactly: after tapping
+# the "Question Types" row, the device showed a "Form Hierarchy" screen
+# (title string form.hierarchy="Form Hierarchy" per
+# android_translatable_strings.txt:856) listing every question/answer so
+# far (intro text, q_text="MaestroIncompleteText1", q_int="42", ...) with
+# GO UP / GO TO START / GO TO END buttons - not the form-entry UI this
+# flow's subsequent `nav_btn_next` taps expect, which is exactly why the
+# very next required (non-optional) nav_btn_next tap timed out (element
+# never existed on that screen).
+# Fix: after re-opening the record, tap the hierarchy screen's "GO TO
+# START" button (id jumpBeginningButton) to jump the form index back to
+# the beginning and return to normal question-entry mode, matching what
+# this flow already assumed happens automatically. Verified id/behavior:
+# hierarchy_layout.xml's jumpBeginningButton (android:text=
+# "@string/jump_to_beginning", strings.xml line 190:
+# jump_to_beginning="Go To Start", rendered as "GO TO START" via the
+# button's allCaps style - matches the screenshot verbatim) is wired in
+# FormHierarchyActivity.onCreateSessionSafe() to
+# `mFormController.jumpToIndex(FormIndex.createBeginningOfFormIndex());
+# setResult(RESULT_OK); finish();` - i.e. a single tap lands you back in
+# FormEntryActivity at the very first screen (the intro trigger), which is
+# exactly what the pre-existing "optional nav_btn_next" tap right after was
+# already defensively written to skip past.
+#
+# Verified against commcare-android source (read-only reference, not modified):
+#   FormEntryDialogs.createQuitDialog(): back-press on an in-progress form
+#     shows a PaneledChoiceDialog titled quit_form_title="Exit Form?" with
+#     choices do_not_exit="STAY IN FORM", do_not_save="EXIT WITHOUT SAVING",
+#     and (isIncompleteEnabled, true by default per
+#     HiddenPreferences.isIncompleteFormsEnabled()) keep_changes="SAVE
+#     INCOMPLETE" (app/res/values/strings.xml lines 183-216).
+#   android_translatable_strings.txt: form.entry.incomplete.save.success=
+#     "Form saved as incomplete" (toast shown after tapping SAVE INCOMPLETE -
+#     transient, so asserted as optional below, same convention as the "1
+#     form sent to server!" toast in flows/date_widgets/date_04_05_standard_widget.yaml);
+#     home.forms.incomplete="Incomplete" (home card's static label -
+#     HomeButtons.java's getIncompleteButtonTextSetter() appends a live
+#     "(<count>)" suffix asynchronously via home.forms.incomplete.indicator,
+#     hence the "(?i)incomplete.*" regex tap below rather than a fixed
+#     literal); app.workflow.incomplete.heading="Incomplete Forms" (list
+#     screen title).
+#   InstrumentationUtility.kt openFirstIncompleteForm(): taps the home card
+#     via onView(withText(startsWith("Incomplete"))), then
+#     clickListItem(R.id.screen_entity_select_list, 0) - a single tap opens
+#     the form directly (FormRecordListActivity.onItemClick() -> returnItem(),
+#     no separate confirm step) - matches this flow's approach of tapping the
+#     row directly by its visible form-name text.
+#   FormRecordListActivity.java: listView id is screen_entity_select_list;
+#     IncompleteFormRecordView.java: each row's form-name text lives in the
+#     formrecord_txt_main TextView.
+#   The CCZ's own en/app_strings.txt + modules-0/forms-1.xml (extracted
+#     read-only from resources/qateam - [Master] Basic Tests - v1141.ccz,
+#     never committed/modified): modules.m0="Basic Form Tests",
+#     forms.m0f1="Question Types"; the form body order is intro (trigger,
+#     Next-only) -> q_text -> q_int -> q_numeric -> ~20 more questions
+#     (including media/GPS/signature/barcode types) with NO
+#     `<bind ... required="true()">` anywhere in the form (confirmed by
+#     grepping every <bind> in the form) - so Next can be tapped through
+#     every remaining question with no answer at all and Finish will still
+#     succeed, avoiding this framework's total lack of camera/GPS/signature-
+#     driving support.
+#   Credentials: test1/123 (InstrumentationUtility.kt's login() default,
+#     preferred over the sheet's own prose which elsewhere says "1234").
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: ".*Basic Tests$") - a
+# fresh BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
+# null.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_BASIC_TESTS}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: "test1"
+      PASSWORD: "123"
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+
+# --- Incomplete Forms 1/2/3: answer 2 of ~20+ questions, save incomplete. ---
+- tapOn: "Start"
+- tapOn: "Basic Form Tests"
+- tapOn: "Question Types"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+- inputText: "MaestroIncompleteText1"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+- inputText: "42"
+- hideKeyboard
+- back
+- assertVisible: "Exit Form?"
+- assertVisible: "STAY IN FORM"
+- assertVisible: "SAVE INCOMPLETE"
+- tapOn: "SAVE INCOMPLETE"
+- assertVisible:
+    text: "(?i).*form saved as incomplete.*"
+    optional: true
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+
+# --- Reopen: verify both prior answers persisted, answer a third question. ---
+- tapOn:
+    text: "(?i)incomplete.*"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/screen_entity_select_list"
+    timeout: 10000
+- assertVisible: "Question Types"
+- tapOn: "Question Types"
+# Reopening a saved form always lands on FormHierarchyActivity first (see
+# header comment) - jump back to the beginning of the form to resume normal
+# question-entry navigation.
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/jumpBeginningButton"
+    timeout: 10000
+- tapOn:
+    id: "org.commcare.dalvik:id/jumpBeginningButton"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+    optional: true
+- assertVisible: "MaestroIncompleteText1"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+- assertVisible: "42"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+- inputText: "3.5"
+- hideKeyboard
+- back
+- assertVisible: "Exit Form?"
+- tapOn: "SAVE INCOMPLETE"
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+
+# --- Reopen again and fully submit (no remaining question is required). ---
+- tapOn:
+    text: "(?i)incomplete.*"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/screen_entity_select_list"
+    timeout: 10000
+- tapOn: "Question Types"
+# Same FormHierarchyActivity re-entry as above - jump to the beginning
+# before resuming the page-through-and-finish loop.
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/jumpBeginningButton"
+    timeout: 10000
+- tapOn:
+    id: "org.commcare.dalvik:id/jumpBeginningButton"
+# UPDATE, confirmed live (2026-08-08, real BrowserStack failure + user
+# screen recording, build fc7ff420bd1deb299f7f8a391f2287999c1cf0bd): "Assert
+# that nav_btn_finish is visible" failed, but the recording showed the form
+# had ALREADY submitted successfully by that point - a real auto-submit
+# path, not a stuck form. Confirmed against commcare-android source
+# (FormEntryActivityUIController.java): nav_btn_next and nav_btn_finish are
+# two DISTINCT, separately-inflated views (not one relabeled button) -
+# nav_btn_next is NEVER removed from the view tree even once nav_btn_finish
+# is shown covering it, so the old `while: visible: nav_btn_next` loop
+# condition could keep "succeeding" (and, being unbounded with no `times:`,
+# had no safety cap either). Two confirmed code paths
+# (FormEntryActivityUIController.java's EVENT_END_OF_FORM handler when
+# questionsView is null, and a repeat-prompt dialog's "Skip" choice) call
+# triggerUserFormComplete() DIRECTLY, submitting the form without
+# nav_btn_finish's visibility ever being touched - matching this form's own
+# "Question Types" content, which has a repeat group (see
+# flows/form_submissions/question_types_01_03_answer_and_submit.yaml's own
+# choice_dialog_panel_3 handling for the same form). Fixed: loop on
+# nav_btn_finish's own appearance (bounded, with a defensive repeat-group
+# dialog dismiss each iteration) instead of nav_btn_next's, and make the
+# trailing finish-tap optional since the loop exiting doesn't guarantee
+# nav_btn_finish is what caused it to exit (auto-submit could have too) -
+# the real success criterion is "Start" below, unchanged.
+- repeat:
+    times: 30
+    while:
+      notVisible:
+        id: "org.commcare.dalvik:id/nav_btn_finish"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/choice_dialog_panel_3"
+          optional: true
+      - tapOn:
+          id: "org.commcare.dalvik:id/nav_btn_next"
+          optional: true
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"
+    optional: true
+# Per explicit guidance: a form submission can land on EITHER the "Start"
+# home screen OR the calling module screen ("Basic Form Tests", the module
+# "Question Types" lives in) depending on context - accept either as the
+# real success signal rather than assuming just one.
+- assertVisible:
+    text: "(?i)^(Start|Basic Form Tests)$"

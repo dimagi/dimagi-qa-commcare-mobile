@@ -1,0 +1,55 @@
+appId: org.commcare.dalvik
+tags:
+  - login
+  - automatable
+---
+# Master Mobile Plan (2026) > Login > "CommCare ODK 1" - Login: enter
+# username/password, verify the "logging in" progress message appears, and
+# confirm the home screen is reached.
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: ".*Basic Tests$") - a fresh
+# BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
+# null. Uses the same "[Master] Basic Tests" app (cdfa6c85eb594b23b0c08729cd2beff1)
+# this tab's own header cites, not LoginTest.kt's own "Test: List Searching"
+# companion app - that instrumentation test exercises generic login
+# mechanics with its own convenience app, but this Master Mobile Plan tab's
+# Domain/Application header specifically names "Basic Test", matching
+# Support Menus/Case Filters' shared app in this same repo.
+#
+# Verified against commcare-android source (read-only reference, not modified):
+#   app/src/org/commcare/activities/LoginActivity.java line 816-817: the
+#     "logging in" progress dialog uses Localization keys key.manage.title/
+#     key.manage.start, both = "Logging in" (android_translatable_strings.txt).
+#     Shown briefly during the real network/local login sequence - flagged
+#     optional since Maestro's screenshot poll may not catch a fast dialog.
+#   flows/common/login.yaml's own citation of edit_username/edit_password/
+#     login_button (LoginActivity.java field ids).
+#   android_translatable_strings.txt home.start=Start - the home-screen
+#     landmark asserted below (same as every other flow in this repo).
+#
+# UPDATE, confirmed live 2026-08-11 (CI run 31476507436, build
+# cab0f13a6eade2841d2eedc5e9376bdeb398cbb4): this used to hand-roll its own
+# username/password entry + login tap instead of calling
+# ../common/login.yaml, missing every real-world hardening that shared
+# subflow has picked up (Gboard's one-time keyboard-consent popup, a "Bad
+# Server Response" transient key-exchange failure needing a real retry, and
+# - the actual cause of this specific failure - the post-login data-restore/
+# sync dialog, which can sit on "Processing Data from Server" well past
+# when a bare `assertVisible: "Start"` fires). Switched to the shared
+# subflow rather than re-duplicating its own fixes here - this drops the
+# "Logging in" dialog check (common/login.yaml has no hook for it), but
+# that check was already flagged `optional` above since Maestro's poll may
+# not catch a fast dialog anyway, so nothing reliably-tested is lost.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_BASIC_TESTS}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000

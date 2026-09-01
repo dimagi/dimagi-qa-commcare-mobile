@@ -1,0 +1,151 @@
+appId: org.commcare.dalvik
+tags:
+  - form_submissions
+  - partial
+---
+# Master Mobile Plan (2026) > Form Submissions > "Appearance Attributes" -
+# Start -> Basic Form Tests -> Appearance Attributes, page through and
+# submit.
+#
+# PARTIAL (downgraded from Automatable 2026-08-08, real BrowserStack
+# failure): this form has a THIRD required question beyond the two
+# documented below - an image-only single-select (GridWidget, "This
+# question should display ONLY images as your answer choices... select
+# only 1 choice at a time") that blocks navigation with "Sorry, this
+# response is required!" if left unanswered. Confirmed against
+# GridWidget.java (read-only reference, not modified): its grid cells are
+# plain runtime-created ImageViews with NO resource id, NO text, and NO
+# content-description assigned anywhere in the widget's code - position is
+# only computed at render time from each image's own pixel dimensions
+# (maxImageWidth/maxImageHeight), so there is no stable, non-coordinate
+# selector Maestro could target, and no fixed coordinate a text-based
+# assertion could verify actually landed on a real choice rather than
+# empty space. Submitting past this question is out of scope for this
+# reason - this flow instead verifies the form renders correctly UP TO
+# this exact question (its own instructional text is a reliable
+# assertion), then stops there rather than claim a submission that can't
+# actually complete.
+#
+# Form structure verified against the real CCZ (read-only reference, not
+# committed): resources/qateam - [Master] Basic Tests - v1141.ccz, unzipped
+# and inspected -
+#   en/app_strings.txt: forms.m0f12=[Mobile] Appearance Attributes.
+#   modules-0/forms-12.xml: the real question order/appearances/binds.
+# Real on-screen form title is "[Mobile] Appearance Attributes" (leading
+# "[Mobile] " prefix) - per install_app_as_web_user.yaml's hard-won FULL-MATCH
+# lesson (Maestro's tapOn text match is a full match, not substring), tapped
+# below via the same ".*<suffix>$" wildcard-prefix pattern this repo now uses
+# everywhere a form/app label may carry a bracketed prefix.
+#
+# REQUIRED-FIELD CAVEAT: this form has exactly two required questions -
+# /data/q_singleselect_compact (appearance="compact", choices Choice
+# A/B/C/D) and /data/automatic_advancing_with_images (appearance="quick
+# compact", choices Yes/No) - both use CommCare's "quick"/"compact" grid
+# widgets, which auto-advance to the next question the instant a choice is
+# tapped (SelectImageWidget/GridWidget "quick" appearance). Every other
+# question on this form is optional and is paged through via nav_btn_next
+# without answering (a plain "page through" per the sheet's own wording) -
+# this matches this repo's established generic-navigation convention (see
+# flows/common/navigate_form_no_errors.yaml, flows/multimedia/
+# mm4_question_types.yaml) rather than hand-modeling every appearance widget
+# (combobox filtering, grid views, collapsible groups, force-capture media,
+# etc. are all genuinely human-judgment-heavy per their own question text -
+# e.g. q_singleselect_combobox's label is itself a 9-step manual test script
+# - out of scope for a device-only Maestro flow).
+#
+# "Choice A" and "Yes" taps below are wrapped `optional: true` since the
+# quick/compact widgets auto-advance the SCREEN the moment they're tapped
+# (so nav_btn_next may already be gone/replaced by the time this step runs
+# depending on Maestro's screen-settle timing) - if the tap lands, great; if
+# the screen already moved on for some other reason, this is a no-op rather
+# than a hard failure. The subsequent generic repeat-next loop is generous
+# (times: 30) to safely walk the rest of this long form regardless of exactly
+# how many screens the "quick" auto-advance widgets collapse.
+#
+# nav_btn_next/nav_btn_finish ids and form.entry.complete.save.success="Form
+# successfully completed" (android_translatable_strings.txt:169) verified
+# against commcare-android source (read-only reference, never modified),
+# same regex-assertion convention as
+# flows/recovery_measures/point_release_flow.yaml.
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: ".*Basic Tests$") - a
+# fresh BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
+# null.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_BASIC_TESTS}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- tapOn: "Start"
+- tapOn: "Basic Form Tests"
+# Confirmed live (2026-08-08, full-suite run 31259796789): "Appearance
+# Attributes" sorts below the fold in this module's form list (Basic Form,
+# Question Types, Repeats, Nested Field Lists, Date Entry UI's, References,
+# Markdown, Groups, ... all visible before it) - a bare tapOn only searches
+# the currently-rendered hierarchy, same FOURTH CAVEAT lesson as
+# install_app_as_web_user.yaml's own scrollable app list.
+# scrollUntilVisible is a no-op if the target is already on screen.
+- scrollUntilVisible:
+    element:
+      text: ".*Appearance Attributes$"
+    direction: DOWN
+    timeout: 15000
+- tapOn: ".*Appearance Attributes$"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_next"
+    timeout: 10000
+# UPDATE, confirmed live (2026-08-08, real BrowserStack failure on
+# question_types_01_03/repeat_groups_01_05's identical dialog): this form
+# apparently has its own embedded repeat group too - the loop exhausted all
+# 30 iterations without ever reaching nav_btn_finish, matching the same
+# "Add a new...?" dialog silently blocking a nav_btn_next tap (Maestro logs
+# it as COMPLETED even though nothing on screen actually changed).
+# Defensively dismiss it (Do Not Add, choice_dialog_panel_3 - see
+# repeat_groups_01_05_add_and_submit.yaml's own header for the full source
+# citation) before every generic Next tap.
+# Loop condition is deliberately still just nav_btn_next visibility, not
+# "and not blocked by the image-only question" - Maestro's `while:` doesn't
+# support an OR/AND of two conditions here, and since that question can't
+# be answered, nav_btn_next stays on screen for the rest of these 30
+# iterations regardless (each one a harmless no-op tap) once it's reached.
+- repeat:
+    times: 30
+    while:
+      visible:
+        id: "org.commcare.dalvik:id/nav_btn_next"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/choice_dialog_panel_3"
+          optional: true
+      # Best-effort answers for the two required "quick"/"compact" auto-advancing
+      # selects - no-ops (optional) on every other screen.
+      - tapOn:
+          text: "Choice A"
+          optional: true
+      - tapOn:
+          text: "Yes"
+          optional: true
+      - tapOn:
+          id: "org.commcare.dalvik:id/nav_btn_next"
+          optional: true
+
+# PARTIAL boundary: if the image-only required question was reached (per
+# the header CAVEAT), the loop above exhausts all 30 iterations without
+# ever reaching nav_btn_finish - this is the expected, documented stopping
+# point, not a failure. Verify the form got this far and rendered the
+# question correctly, rather than asserting a submission that can't
+# actually complete.
+- assertVisible:
+    text: "(?i).*this question should display only images.*"
+- assertVisible:
+    text: "(?i).*sorry, this response is required.*"
+- assertNotVisible:
+    text: "(?i).*unexpected error.*"
+- assertNotVisible:
+    text: "(?i).*commcare will now restart.*"

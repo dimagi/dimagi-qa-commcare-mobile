@@ -1,0 +1,125 @@
+appId: org.commcare.dalvik
+tags:
+  - multimedia
+  - automatable
+---
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_BASIC_TESTS_NS_COPY}
+# Prepends install_app_as_web_user.yaml (APP_NAME: Basic Tests) - a fresh
+# BrowserStack session has no app installed until this runs; see DispatchActivity.java's
+# CommCareSetupActivity routing when currentApp == null.
+#
+# Master Mobile Plan (2026) > Multimedia > "Capture 1" - Verify user is able
+# to capture a signature without any errors.
+#
+# UPDATE (2026-08-13): switched from APP_CODE_BASIC_TESTS to
+# APP_CODE_BASIC_TESTS_NS_COPY. Root cause of the earlier image-widget
+# workaround this flow used (see git history, commit eedbe28 and its
+# follow-up) was never a CommCare version difference - a real
+# physical-device recording showed the same sig_cap question rendering as
+# a genuine "GATHER SIGNATURE" button/DrawActivity canvas, but on a
+# DIFFERENT, unregistered app ("[Master] Basic Tests NS Copy!!", visible
+# in the recording's own toolbar). User confirmed the app_id
+# (qateam/8a04cdf1b9474ee2b090b1d7896b1bd7); registered as
+# BASIC_TESTS_NS_COPY in scripts/app_registry.py. This restores the
+# original signature-canvas implementation from before eedbe28, now
+# pointed at the correct app.
+#
+# Navigation confirmed against the REAL "Basic Tests" app content (extracted
+# basic_tests.ccz from commcare-android/app/instrumentation-tests/resources -
+# read-only reference, not committed here, not fabricated): its module list
+# (per en/app_strings.txt) is "Basic Form Tests" (modules.m0) - NOT "Basic
+# Tests", which is only the app's own display name, not a menu item (see the
+# same correction made to capture_03_04_take_and_remove_photo.yaml, which had
+# this exact mistake). That module's "Multimedia Only" form (forms.m0f10,
+# modules-0/forms-10.xml) has a signature-capture binary question (`sig_cap`)
+# as its second question, on the same single screen as the other multimedia
+# questions Capture 3/4/etc. already interact with directly (no Next-taps
+# between them - same "Question List" convention capture_03_04 established).
+#
+# Selectors verified against source (read-only reference, not modified):
+#   app/res/values/strings.xml: sign_button="Gather Signature" (line 236),
+#     save_and_close="Save and Close" (line 235).
+#   app/src/org/commcare/activities/DrawActivity.java line 188-189: the
+#     "Save and Close" action is id/btnFinishDraw.
+#   app/res/layout/draw_layout.xml: the signature canvas (DrawView) is added
+#     programmatically filling id/drawViewLayout, with no fixed id of its own
+#     - the draw gesture below uses percentage screen coordinates instead of
+#     an id selector, same technique app/instrumentation-tests/src/org/
+#     commcare/androidTests/SignatureTests.kt uses (a CENTER_LEFT -> TOP_RIGHT
+#     swipe) to put ink on an unidentified canvas view.
+#   app/src/org/commcare/views/widgets/SignatureWidget.java line 92-146: after
+#     saving, the "Gather Signature" button text does NOT change (it stays
+#     "Gather Signature" - reused by Capture 2 to reopen the same signature)
+#     - a signature THUMBNAIL is added alongside it instead. That thumbnail
+#     ImageView has no fixed id either, so this asserts the widget's own
+#     decode-failure text stays absent instead (mErrorTextView, "Selected
+#     file is not a valid image", only shown if the saved file fails to
+#     decode as an image) - the best available concrete signal that the save
+#     succeeded, short of a screenshot comparison.
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- tapOn: "Start"
+# UPDATE (3rd correction, 2026-08-13): the previous two "fixes" here
+# (launchApp relaunch, then a wait+gated-relogin) were both solving the
+# WRONG problem - confirmed live via BrowserStack's own commandlogs
+# hierarchy dump (build 989f8bdf32a73c6c5bc9503c4e795bafba6c9807) that the
+# screen was fully, correctly rendered the entire time (full real content:
+# toolbar "[Master] Basic Tests NS Copy!!", a real module list with
+# "Formplayer Specific Tests", "Logic Tests 1", "Case Tests", etc.) - the
+# ONLY actual problem was that this app's own module row for this module
+# reads "Basic_Form_Tests" (an underscored name, NOT "Basic Form Tests"
+# with spaces like the regular Basic Tests app) - this specific "NS Copy"
+# app really does use a different literal string here, it's not a
+# rendering issue at all. Reverted to a plain tap with the correct text.
+- tapOn: "Basic_Form_Tests"
+# UPDATE, confirmed live (run 31276111657): "Multimedia Only" is form m0f10
+# (confirmed via en/app_strings.txt in the real Basic Tests CCZ) - the 11th
+# form in this module's list, below the fold on a single screen (the
+# failure screenshot showed only 8 forms visible, Basic Form through
+# Groups, with the scrollbar barely into the list). A bare tapOn only
+# searches the current viewport - scrollUntilVisible first.
+- scrollUntilVisible:
+    element:
+      text: "Multimedia Only"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Multimedia Only"
+# UPDATE, confirmed live (LOCAL-VERIFY-mm-isolate): "Tap on 'Gather
+# Signature'" failed - the failure screenshot showed the form's own INTRO
+# screen ("This form contains questions that allow you to record or save
+# multimedia."), not the question content directly. This form uses the
+# X/">" swipe-style top bar (a per-form display setting, distinct from the
+# nav_btn_next/nav_btn_finish icon buttons other Basic Form Tests forms
+# use) - one tap past the intro is needed before "Gather Signature" is
+# reachable. nav_btn_next is still the real underlying id regardless of
+# which style renders it (confirmed via screen_form_entry.xml - the same
+# view, just styled differently per form).
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+- tapOn: "Gather Signature"
+- swipe:
+    start: "20%, 80%"
+    end: "80%, 20%"
+- tapOn:
+    id: "org.commcare.dalvik:id/btnFinishDraw"
+- assertNotVisible: "Selected file is not a valid image"
+# UPDATE (2026-08-13): confirmed live via BrowserStack's own commandlogs
+# hierarchy dump (build 087e0eb5802773a34c2497712b8fe722447b8c0d) - after
+# Save and Close, this app auto-advances the form to the NEXT question
+# ("If available on your device, this question should only allow you to
+# take a picture." / TAKE PICTURE), rather than staying on sig_cap with a
+# thumbnail added alongside "Gather Signature" as the source citation
+# above assumed (that assumption held for the regular Basic Tests app, but
+# this "NS Copy" variant's build evidently isn't the same single-screen
+# "Question List" layout for every question - this is a real, confirmed
+# navigation difference on this app, not a rendering glitch). Step back
+# one question first to land on sig_cap again before re-checking it.
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_prev"
+- assertVisible: "Gather Signature"

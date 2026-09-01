@@ -1,0 +1,16 @@
+{
+  "_comment": "Master Mobile Plan (2026) > Recovery Measures > Recovery: Reinstall and Update App > 'Reinstall and update 2' - 'Mark Test Two released, Test Three in-test'. Run this after 'Reinstall and update 1' (pre-update sanity check on Test One) and before 'Reinstall and update 3' (mobile-side update to Test Two) in reinstall_update_03_update_to_test_two.yaml. Split into two Maestro runs around this HQ step, or extend run_suite.py to pause here - same convention as hq_setup/recovery_measures/reinstall_update_app_flow.json. mark_build_status releases the already-built Test Two saved build. create_new_build then cuts a NEW build ('Test Three') and deliberately does NOT release it, so it lands in the default in-test state - this satisfies the 'Test Three in-test' half of this row without an extra API call, since app_manager builds are in-test (unreleased) by default until release_build() is called. app_id/saved_app_id values are placeholders - Recovery Measures apps get rebuilt each QA cycle per the sheet's own 'Dimagi must reconfigure setup here prior to each run' note, so these must be filled in fresh every time, not reused from a prior run.",
+  "actions": [
+    {
+      "type": "mark_build_status",
+      "app_id": "REPLACE_WITH_RECOVERY_REINSTALL_APP_ID",
+      "saved_app_id": "REPLACE_WITH_TEST_TWO_BUILD_ID",
+      "is_released": true
+    },
+    {
+      "type": "create_new_build",
+      "app_id": "REPLACE_WITH_RECOVERY_REINSTALL_APP_ID",
+      "comment": "Test Three (in-test) - Reinstall and update 2"
+    }
+  ]
+}

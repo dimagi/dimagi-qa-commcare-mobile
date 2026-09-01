@@ -1,0 +1,73 @@
+appId: org.commcare.dalvik
+tags:
+  - multimedia
+  - automatable
+---
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_LAZY_VIDEOS}
+# Master Mobile Plan (2026) > Multimedia > "Lazy Video 4" - Videos still
+# play after relogin.
+#
+# UPDATE (2026-08-13): switched from APP_CODE_MULTIMEDIA to
+# APP_CODE_LAZY_VIDEOS - see lazy_video_02_file_missing_popup.yaml's own
+# UPDATE comment for the full root-cause writeup (app-identity mismatch,
+# not a Multimedia-app menu).
+#
+# PARTIAL DEPENDENCY (kept tagged `automatable` to match
+# coverage_matrix.csv, but flagging this in the header comment per the
+# task): same Multimedia/lazy-video QA test app + "Video Questions" ->
+# "Videos with valid references" dependency as lazy_video_02 - see that
+# flow's comment for the full source citation of the navigation and
+# missing-media selectors reused below.
+#
+# Self-contained per this repo's convention (flows/mobile_pins/pin_11 etc.):
+# logs in, logs out, and logs back in within this same flow rather than
+# assuming a previous flow already established a session - the sheet's
+# "Logout and re-login" step is only meaningful relative to some prior
+# state, so that state is (re-)established here first.
+#
+# "ensure videos play properly" is a human/visual judgment call the sheet
+# itself can't fully automate (per coverage_matrix.csv's own notes on
+# similar rows, e.g. Video Types / Capture 5), so this is a best-effort
+# stand-in: it re-enters the same video form after relogin and confirms no
+# crash/error surface is shown while paging through every question, rather
+# than asserting playback quality.
+#   app.handled.error.title = "Unrecoverable Error"
+#   (android_translatable_strings.txt:264, shown by
+#   HomeScreenBaseActivity's/CommCareActivity's generic error-dialog path)
+#   crash.warning.header = "CommCare crashed and needs to restart."
+#   (android_translatable_strings.txt:753, shown by CrashWarningActivity /
+#   res/layout/activity_crash_warning.xml after CommCare's own crash
+#   handler intercepts an uncaught exception)
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: Multimedia) - a fresh
+# BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp == null.
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- runFlow: ../common/logout.yaml
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- tapOn: "Start"
+- tapOn: "Video Questions"
+- tapOn: "Videos with valid references"
+- repeat:
+    times: 10
+    while:
+      visible:
+        id: "org.commcare.dalvik:id/nav_btn_next"
+    commands:
+      - assertNotVisible: "Unrecoverable Error"
+      - assertNotVisible: "CommCare crashed and needs to restart."
+      - tapOn:
+          id: "org.commcare.dalvik:id/nav_btn_next"
+- assertNotVisible: "Unrecoverable Error"
+- assertNotVisible: "CommCare crashed and needs to restart."

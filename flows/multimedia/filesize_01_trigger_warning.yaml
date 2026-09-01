@@ -1,0 +1,89 @@
+appId: org.commcare.dalvik
+tags:
+  - multimedia
+  - partial
+  - blocked_missing_asset
+---
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_MULTIMEDIA}
+# Master Mobile Plan (2026) > Multimedia > "Filesize 1" - Trigger the
+# oversized-file warning.
+#
+# ******************************************************************
+# ** BLOCKED ON A MISSING TEST ASSET - DO NOT RUN UNTIL ADDED **
+# ******************************************************************
+# This flow's addMedia step below references
+# "./assets/oversized_test_video.mp4", which DOES NOT YET EXIST in this repo
+# (only flows/multimedia/assets/sample_image.png exists, and it's far too
+# small - a few dozen bytes - to trigger this test). A real dummy video file
+# **larger than 15 MB** must be added at that path before this flow can run;
+# it has NOT been fabricated here (a >15MB binary has no place being
+# generated/committed by this task). Any small placeholder video works as
+# long as its file size exceeds 15 MB - e.g. `ffmpeg -f lavfi -i
+# color=c=black:s=640x480:d=60 -t 60 oversized_test_video.mp4` tuned for
+# >15MB output, or simply padding a short real video with junk bytes.
+# Until that asset exists, keep this Test Case ID classified as NOT actually
+# passing/runnable, even though the flow file itself now exists.
+#
+# PARTIAL DEPENDENCY (per coverage_matrix.csv: "Needs a >15MB test file
+# pushed via addMedia"): the sheet also calls for installing "the Disabled
+# Filesize Warning app with release note 'Filesize Warning'" first - a
+# separate HQ-side app-install/build-selection step, analogous to
+# filesize_02_no_warning.yaml's HQ pre-step
+# (hq_setup/multimedia/filesize_no_warning_update.json) but NOT implemented
+# here since it wasn't asked for by name; if this app isn't already the one
+# installed on the device, run flows/common/update_app_via_menu.yaml (or an
+# equivalent HQ mark_build_status pre-step releasing whichever build carries
+# the "Filesize Warning" release note) before this flow.
+#
+# WIDGET-TYPE GUESS (UNVERIFIED): assumes the form's oversized-file question
+# is a video question (uses "Choose Video"), since a large dummy video is the
+# most natural fit for a >15MB size test and matches the same file family
+# used by filesize_02_no_warning.yaml / filesize_warning_02_select_large_video.yaml.
+# If the real form's oversized-file question is actually an image/audio
+# question, change the "Choose Video" tap and the asset's extension to match.
+#
+# WARNING MESSAGE (verified against source, read-only reference, not
+# modified): app/src/org/commcare/views/widgets/QuestionWidget.java's
+# checkForOversizedMedia()/showOversizedMediaWarning() (line 313-324) fires
+# when the widget's answer comes back InvalidData for being oversized, and
+# renders via R.string.attachment_above_size_limit = "Media attachment too
+# large (%1$s mb). Max allowed size is %2$s mb." The %2$s max-size arg is
+# FileUtil.bytesToMeg(FormUploadUtil.MAX_BYTES); MAX_BYTES = (15 * 1048576) -
+# 1024 (FormUploadUtil.java:63) and bytesToMeg() does integer division
+# (FileUtil.java:833-835), so the rendered max is actually "14 mb", NOT "15
+# mb" (a real off-by-one in the app's own math, not a typo here) - the regex
+# below tolerates either value in case that's ever fixed upstream.
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: Multimedia) - a fresh
+# BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp == null.
+- addMedia:
+    - "./assets/oversized_test_video.mp4"
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- tapOn: "Start"
+- tapOn: "Multimedia"
+- tapOn: "Filesize Warning"
+- tapOn: "Choose Video"
+- runFlow: ../common/pick_first_gallery_image.yaml
+- extendedWaitUntil:
+    visible:
+      text: "(?i)Media attachment too large.*Max allowed size is (14|15) mb"
+    timeout: 10000
+# UNVERIFIED whether this specific CCZ's form actually lets navigation past
+# an InvalidData (oversized) answer proceed to nav_btn_finish, or blocks it -
+# the sheet's own wording calls for attempting submit regardless, so that's
+# what happens here; if the real form blocks navigation, this step will just
+# fail at the extendedWaitUntil below, which is an honest failure.
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_btn_finish"
+    timeout: 10000
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"

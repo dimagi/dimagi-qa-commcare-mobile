@@ -1,0 +1,126 @@
+appId: org.commcare.dalvik
+tags:
+  - recovery_measures
+  - partial
+  - superseded_by_appium
+---
+# UPDATE (2026-08-25): SUPERSEDED by scripts/appium_offline_ccz_scenarios.py's
+# run_offline_reinstall_update_app_flow (dispatched via
+# scripts/run_appium_offline_ccz_suite.py, wired into CI's group-c job) -
+# this flow's own real gap below (no way to get a .ccz file onto the device)
+# is exactly what that Appium-based module solves via a real push_file() call,
+# something Maestro is structurally unable to do. Tagged
+# `superseded_by_appium` and excluded from normal tag-based dispatch (see
+# scripts/run_suite.py's select_flow_files) - kept on disk for reference
+# only; expect it to keep failing if ever run directly or via --tag
+# superseded_by_appium.
+#
+# Master Mobile Plan (2026) > Recovery Measures > Recovery: Offline
+# Reinstall and Update App (Setup 1, Recovery (offline) 10, 11 - the
+# Automatable rows this file actually covers). Recovery (offline) 1 and 3
+# were REMOVED from this file's scope (2026-08-10) - see the UPDATE note
+# below: the forced trigger fires immediately on login, so there is no
+# "no forced screen yet" state to observe and no normal update-to-Two step
+# to exercise for this app. Recovery (offline) 2, 4, 5, 6, 7, 8, 9 live in
+# their own separate flow files (offline_05/06/08/09) or remain out of scope
+# per those files' own headers (adb file pushes to custom paths, adb file
+# relocation, "no CCZ found" + manual file-picker recovery).
+#
+# UNVERIFIED TEXT WARNING: as with reinstall_update_app_flow.yaml (this
+# file's template), treat the sheet's literal wording as
+# admin-configurable/unverified and match via best-effort case-insensitive
+# regex rather than exact strings, per docs/FRAMEWORK.md's "Known gaps"
+# item 4.
+#
+# What IS verified against commcare-android source (read-only reference,
+# never modified by this repo):
+#   - RecoveryMeasure.MEASURE_TYPE_APP_OFFLINE_REINSTALL_AND_UPDATE, handled
+#     in ExecuteRecoveryMeasuresPresenter.executeMeasure(): unlike the
+#     online-or-CCZ chooser dialog used by the plain "Reinstall and Update
+#     App" measure, this measure type skips straight to the CCZ-only path -
+#     mActivity.hideReinstall() + setCczSelectionVisibility(true) - so only
+#     a single "Select CCZ" button is shown (no chooser dialog, no "Online
+#     Reinstall" option).
+#   - The generic screen detail text and the button label ARE real hardcoded
+#     strings in app/res/values/strings.xml (distinct from
+#     android_translatable_strings.txt, which is the only file the original
+#     template checked):
+#       recovery_measure_detail = "Recovery procedures have been initiated
+#       for your CommCare App due to a problem with it. Please wait..."
+#       recovery_measure_select_ccz = "Select CCZ"
+#   - execute_recovery_measures.xml: R.id/select_ccz_button.
+#
+# CAVEAT (beyond text wording): completing the actual CCZ file-selection
+# step below assumes a .ccz file is already reachable from the system
+# document picker's default view (e.g. the device's standard Downloads
+# folder) by the time this flow reaches that step. This flow does NOT push
+# any file via adb (that's explicitly what makes Recovery (offline) 5/6/8
+# Partial instead of Automatable) - it assumes the file got there through
+# some other non-adb mechanism (e.g. a normal browser download of a
+# CCZ/profile link HQ can serve) that happens before/alongside the HQ
+# pre-step below. If no such file is present when this flow runs, the
+# "Select CCZ" -> file-picker step will need a human to intervene or this
+# flow's tapOn to be pointed at a known real filename.
+#
+# UPDATE (2026-08-10): this app (id 8009e8a2814a465b818d56284011b1e9,
+# "Recovery: Offline Reinstall and Update App" - a SEPARATE app from the
+# non-offline "Reinstall and Update App" other recovery_measures flows use,
+# confirmed via each app's own Releases page title) has its own real
+# Test One/Two/Three builds - see scripts/app_registry.py's
+# OFFLINE_TEST_ONE/TWO/THREE entries.
+# UPDATE (2nd correction, 2026-08-10): the "Recovery (offline) 1 - no forced
+# recovery screen yet" assumption below and the normal update-to-Test-Two
+# step that used to follow it were both WRONG - confirmed live in ISOLATION
+# (run 6151522a9e31384f43802347b2456fef83391a5b, a single-flow build) that
+# logging into this app on a FRESH TEST ONE install triggers the forced
+# "Select CCZ" recovery screen IMMEDIATELY, with no home screen ever
+# reachable at all (so there is no "Start" to assert, and the "Update App"
+# menu the removed step depended on is unreachable regardless).
+# UPDATE (3rd correction, 2026-08-10): the measure IS still gated on release
+# status, same mechanism as the non-offline family (device version <
+# currently-released top version => stale => trigger) - see
+# offline_09_uninstall_reinstall_test_two.yaml's own 3rd-correction note for
+# the live evidence that disproved "unconditional." Test One simply almost
+# always looks stale under normal test setup, since it's the lowest of the
+# three real builds and something newer is normally released - not because
+# release status is irrelevant.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_OFFLINE_TEST_ONE}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+# Recovery (offline) 10 - the forced measure triggers immediately on login;
+# only the CCZ-only path is shown (see header comment), no chooser dialog.
+- assertVisible:
+    text: "(?i).*recovery (procedures|measures).*initiated.*"
+- assertVisible:
+    text: "(?i).*select ccz.*"
+# Recovery (offline) 7 - pick the CCZ file via the system document picker.
+# See CAVEAT above: this assumes the file is already reachable from the
+# picker's default view.
+- tapOn:
+    text: "(?i).*select ccz.*"
+- tapOn:
+    text: "(?i).*\\.ccz$"
+# Recovery (offline) 10 - install completes and the device auto-logs out.
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/edit_username"
+    timeout: 60000
+# Recovery (offline) 11 - negative check: no further forced recovery screen.
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+- assertNotVisible:
+    text: "(?i).*recovery (procedures|measures).*initiated.*"
+- assertNotVisible:
+    text: "(?i).*select ccz.*"

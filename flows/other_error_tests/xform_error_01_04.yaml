@@ -1,0 +1,78 @@
+appId: org.commcare.dalvik
+tags:
+  - other_error_tests
+  - automatable
+---
+# Master Mobile Plan (2026) > Other - Error Tests > "XForm Error 1" through
+# "4" - Immediate Fail, Delayed Fail, Relevancy Fail, Repeat Error, run as
+# one sequential flow since the sheet's own rows and XFormErrorTests.kt's
+# combined testXformErrors() are clearly a single narrative (same
+# "XForm Error Tests" module, dismissing each error back to the same form
+# list).
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: ".*Other") - a fresh
+# BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
+# null. Real HQ name confirmed from resources/'s committed CCZ filename
+# "qateam - Other - v42.ccz" (HQ's own Content-Disposition download
+# filename) - XFormErrorTests.kt's own APP_NAME constant ("Other Test") is
+# that instrumentation test's own label, not necessarily the exact HQ
+# display name.
+#
+# Verified against commcare-android source (read-only reference, not modified):
+#   The CCZ's own default/app_strings.txt (extracted read-only from
+#     resources/qateam - Other - v42.ccz, never committed/modified):
+#     modules.m1="XForm Error Tests" containing forms.m1f0="Immediate Fail",
+#     m1f1="Delayed Fail", m1f2="Relevancy Fail", m1f3="Repeat Error" - the
+#     sheet's own "Xform Immediate Fail"/"Delayed Fail"/"Relevancy Fail"/
+#     "Repeat Error" wording matches these real names closely (dropping the
+#     module-name-implied "Xform" prefix except on the first).
+#   XFormErrorTests.kt: credentials test1/123 (matches this tab's own
+#     Setup 2 step); openForm(1,0) confirms module index 1 = "XForm Error
+#     Tests" and its first form ("Immediate Fail") triggers the calculation
+#     error immediately on entry, no question interaction needed; the exact
+#     error substrings ("Error in calculation for /data/immediate_fail" etc.)
+#     and the dismiss-back-to-"XForm Error Tests" pattern reused below.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_OTHER}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: "test1"
+      PASSWORD: "123"
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+- tapOn: "Start"
+- tapOn: "XForm Error Tests"
+
+# --- XForm Error 1: Immediate Fail. ---
+- tapOn: "Immediate Fail"
+- assertVisible:
+    text: "(?i).*Error in calculation for /data/immediate_fail.*"
+- tapOn: "OK"
+- assertVisible: "XForm Error Tests"
+
+# --- XForm Error 2: Delayed Fail. ---
+- tapOn: "Delayed Fail"
+- tapOn: "Item 1"
+- assertVisible:
+    text: "(?i).*Error in calculation for /data/calculated_value.*"
+- tapOn: "OK"
+- assertVisible: "XForm Error Tests"
+
+# --- XForm Error 3: Relevancy Fail. ---
+- tapOn: "Relevancy Fail"
+- assertVisible:
+    text: "(?i).*Error in calculation for /data/bad_relevancy.*"
+- tapOn: "OK"
+- assertVisible: "XForm Error Tests"
+
+# --- XForm Error 4: Repeat Error. ---
+- tapOn: "Repeat Error"
+- assertVisible:
+    text: "(?i).*Error in calculation for /data/hidden_value.*"
+- tapOn: "OK"
+- assertVisible: "XForm Error Tests"

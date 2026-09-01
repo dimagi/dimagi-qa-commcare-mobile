@@ -1,0 +1,43 @@
+appId: org.commcare.dalvik
+tags:
+  - login
+  - automatable
+---
+# Master Mobile Plan (2026) > Login > "CommCare ODK 3" - Logout: select
+# "Logout of CommCare", verify redirected to the login page.
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: ".*Basic Tests$") - a fresh
+# BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
+# null.
+#
+# Reuses flows/common/logout.yaml verbatim - see that file's header for the
+# "Log out of CommCare" selector citation (InstrumentationUtility.kt
+# logout(), swipes the home NestedScrollView into view first).
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_BASIC_TESTS}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+# UPDATE (2026-08-26): hardened from a bare assertVisible (Maestro's
+# default, short-timeout form) to an extendedWaitUntil, same "tolerant wait
+# over zero-margin assertion" pattern already used elsewhere in this repo
+# (e.g. flows/common/login.yaml's own dialog_cancel_button wait) - real CI
+# evidence (runs 32882267873, 32927129337, 32942818928) showed this
+# specific assertion intermittently failing right after login, with the
+# device sometimes stuck on the plain Android home screen (matching a
+# systemic BrowserStack device-provisioning issue seen across many
+# unrelated flows in the same build, not a bug in this flow itself). A
+# longer wait can't fix a genuinely crashed session, but it does remove
+# this flow's own contribution to flakiness for the more common case of a
+# real but slow render.
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+- runFlow: ../common/logout.yaml
+- assertVisible:
+    id: "org.commcare.dalvik:id/edit_username"

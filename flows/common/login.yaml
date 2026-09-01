@@ -1,0 +1,298 @@
+appId: org.commcare.dalvik
+---
+# Reusable login subflow. Params: USERNAME, PASSWORD.
+# Selectors verified against commcare-android source (read-only reference, not modified):
+#   app/instrumentation-tests/src/org/commcare/utils/InstrumentationUtility.kt -> login()
+#   app/src/org/commcare/activities/LoginActivity.java (R.id.edit_username / edit_password / login_button)
+# Confirmed (2026-08-08, user report + video, on install_07/08's identical
+# fields): tapping into a text field for the first time can trigger
+# Gboard's one-time "Get Smart content directly in the keyboard" system
+# consent dialog - a full-screen OS-level overlay unrelated to this app.
+# It's NOT reliably tied to just the very first keyboard tap of the whole
+# session, so both fields below guard against it, not just this one.
+#
+# UPDATE, UPDATE (2nd correction), and UPDATE (3rd correction) - three
+# progressively more careful timing-based fixes (re-tap the field after
+# dismissing "Skip"; then also waitForAnimationToEnd before the re-tap)
+# were each confirmed live to reduce but NOT eliminate the underlying bug:
+# dismissing Gboard's popup can reassign Android focus back to a
+# PREVIOUSLY-active field asynchronously, racing with whatever Maestro does
+# next regardless of how many waits/re-taps are inserted (confirmed via a
+# real re-run, build fb330cc0e184ee53e4ad5351b6f1f846cf986b38, still
+# producing e.g. "qateam123" in the domain field with password left empty
+# even with the wait+re-tap fix in place). Rather than keep guessing at
+# timing, this now SELF-VERIFIES: each field is wrapped in a bounded
+# repeat-while loop keyed on the combined id+text selector (Maestro ANDs
+# multiple properties on one selector object - both must match the SAME
+# element), which only exits once that specific field visibly holds
+# exactly the intended value. If Gboard's popup (or its focus race)
+# corrupts a field, the loop's condition simply stays true and it retries
+# (re-tap, dismiss Skip if present, erase, retype) up to 3 times rather
+# than trusting a single attempt's timing to have been correct.
+#
+# UPDATE (4th correction), confirmed live (2026-08-08, real BrowserStack
+# failure + user-provided screen recording, install_08's identical pattern
+# with HQ_WEB_USER_EMAIL="kbordoloi+maestro@dimagi.com"): the self-verify
+# condition itself had a latent bug - `text: "^${VALUE}$"` feeds VALUE
+# straight into a Maestro/Java regex with NO escaping, so any value
+# containing regex metacharacters ("+" and "." in an email address, e.g.)
+# never actually matches itself. The condition was therefore ALWAYS false
+# for that field, so the loop kept blindly re-erasing and re-typing the
+# ALREADY-correct value on every run - and each unnecessary extra
+# tap/erase/type cycle was one more chance for the real Gboard focus race
+# to fire, which is exactly what produced a genuinely doubled value
+# ("...@dimagi.com@dim..."). Fixed by wrapping every interpolated value in
+# Java regex's literal-quote syntax, \Q...\E (everything between them is
+# matched as literal text, metacharacters included) - safe to apply here
+# even though USERNAME/PASSWORD happen to contain no metacharacters today,
+# since this subflow's params are caller-supplied and shouldn't assume that
+# stays true.
+- repeat:
+    times: 3
+    while:
+      notVisible:
+        id: "org.commcare.dalvik:id/edit_username"
+        text: "^\\Q${USERNAME}\\E$"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/edit_username"
+      - tapOn:
+          text: "Skip"
+          optional: true
+      - tapOn:
+          id: "org.commcare.dalvik:id/edit_username"
+      # Confirmed (2026-08-08, user report + video): CommCare's username
+      # field keeps its last-used value even after logout, so a bare
+      # inputText here would concatenate onto whatever's already there
+      # (e.g. "test1" + "test1" -> "test1test1"). eraseText is a no-op on
+      # an already-empty field, so this is safe on a fresh install too.
+      - eraseText
+      - inputText: "${USERNAME}"
+- repeat:
+    times: 3
+    while:
+      notVisible:
+        id: "org.commcare.dalvik:id/edit_password"
+        text: "^\\Q${PASSWORD}\\E$"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/edit_password"
+      - tapOn:
+          text: "Skip"
+          optional: true
+      - tapOn:
+          id: "org.commcare.dalvik:id/edit_password"
+      - eraseText
+      - inputText: "${PASSWORD}"
+- hideKeyboard
+- tapOn:
+    id: "org.commcare.dalvik:id/login_button"
+# UPDATE (2026-08-27), confirmed live (4 real BrowserStack failures in a
+# row, builds 3bda833b.../aa69e2de.../f2b9c12830...,
+# update_app_02_forced_two_to_three.yaml on a freshly-registered app): a
+# real, on-screen "Empty Password" error (in red, right under LOG IN)
+# appeared even though the password self-verify loop above genuinely
+# reported the field non-empty every time - a real discrepancy between
+# Maestro's own accessibility-tree read of the masked field (unreliable,
+# per this file's own earlier-tried-and-abandoned .+ non-empty check) and
+# the app's real internal EditText value at the moment LOG IN is tapped.
+# Verified against commcare-android source (read-only reference, not
+# modified): LoginActivity.doLogin() checks `"".equals(passwordOrPin)`
+# (the field's REAL committed text, read fresh at tap time) and calls
+# raiseLoginMessage(StockMessages.Auth_EmptyPassword, false) then returns
+# immediately - no network call, login_button stays enabled/tappable
+# afterward, same as the Bad Server Response/Server Error/Couldn't Reach
+# Server cases below. Real string confirmed in android_translatable_
+# strings.txt: login.attempt.fail.empty.pw.title=Empty Password. Unlike
+# the pre-tap field check (which can't reliably tell real content from
+# whatever Maestro's own accessibility read happens to show), this checks
+# the app's OWN post-tap verdict directly - a signal proven reliable by
+# this real evidence - and retypes+retaps if it fires.
+- repeat:
+    times: 3
+    while:
+      visible:
+        text: "Empty Password"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/edit_password"
+      - eraseText
+      - inputText: "${PASSWORD}"
+      - hideKeyboard
+      - tapOn:
+          id: "org.commcare.dalvik:id/login_button"
+# UPDATE, confirmed live (2026-08-08, real BrowserStack failure on BOTH the
+# main attempt and its --retry-failed re-run, build
+# af73a71fe00d14a20fc6d59a0b3a2da22c1211a0, on
+# flows/form_submissions/geoservice_02_auto_capture_location_submit.yaml
+# and flows/update/update_target_developer_options_flow.yaml, both of which
+# call this subflow): the maestroScreenshot showed the device never left
+# LoginActivity - username filled in correctly, but red "Bad Server
+# Response" text below LOG IN. This is a real server-side response failure
+# on the very first post-login network call, not a selector bug. Root
+# cause verified against commcare-android source (read-only reference, not
+# modified): "Bad Server Response" is notification.restore.baddata.title
+# (android_translatable_strings.txt:595), wired up in
+# LoginActivity.onLoginError() mapping LoginError.BadResponse/BadData to
+# this title. LoginError.BadResponse traces to
+# HttpCalloutOutcomes.BadResponse, set in ManageKeyRecordTask.java's
+# doResponseOther() for any non-2xx/401/403 HTTP status on the key-exchange
+# callout - the FIRST server request after tapping LOG IN, before any
+# restore/sync screen ever appears. LoginActivityUIController.setErrorMessageUI()
+# shows this error text WITHOUT disabling login_button - tapping LOG IN
+# again is a genuine, source-backed retry, not a workaround. Architecturally
+# a transient server-side hiccup (plausibly from many CI sessions
+# authenticating against the same test accounts around the same point in a
+# run), fixed centrally here (not duplicated per-caller) since every flow
+# that logs in shares this same exposure.
+#
+# UPDATE, confirmed live (2026-08-08, real CI run 31272376559): 3 immediate
+# back-to-back retries weren't enough - this recurred on
+# update_target_developer_options_flow.yaml (twice) and
+# login/commcare_odk_01_login.yaml, persisting through all 3 attempts each
+# time. If the server is genuinely under sustained load (many parallel CI
+# sessions hitting the same key-exchange endpoint around the same time, as
+# the original theory suggested), hammering it with immediate retries gives
+# it no time to recover. Raised to 5 attempts and inserted a real pause
+# between each (waitForAnimationToEnd's timeout used as a settling delay,
+# since Maestro has no standalone "wait N ms" command) rather than retrying
+# instantly.
+- repeat:
+    times: 5
+    while:
+      visible:
+        text: "Bad Server Response"
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - tapOn:
+          id: "org.commcare.dalvik:id/login_button"
+# UPDATE (2026-08-19), confirmed live (Android 16, builds
+# batch2-regressions-fix-v5/v6, both otherwise-unrelated flows failing at
+# this exact same point): a DIFFERENT error text - "Server Error" with a
+# "See Error Details" link, not "Bad Server Response" above - appeared
+# twice in a row on the login screen, same transient-server-hiccup class
+# of failure (still on LoginActivity, login_button still present/tappable)
+# but a different string this repo hadn't handled yet. Same bounded-retry
+# treatment as the "Bad Server Response" case above, for the same reason:
+# a real, source-backed retry rather than a workaround, fixed centrally
+# here since every flow that logs in shares this same exposure.
+- repeat:
+    times: 5
+    while:
+      visible:
+        text: "Server Error"
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - tapOn:
+          id: "org.commcare.dalvik:id/login_button"
+# UPDATE (2026-08-19, 2nd correction), confirmed live (build
+# batch2-regressions-fix-v11, during the same real HQ outage/recovery
+# window as the "Server Error" case above): a THIRD distinct string -
+# "Couldn't Reach Server. Please check your network connection" - a
+# device-side connectivity failure rather than a server-side error
+# response, but still landing on this same login screen with login_button
+# still present/tappable. Same bounded-retry treatment, for the same
+# reason: a real retry rather than a workaround, fixed centrally here.
+- repeat:
+    times: 5
+    while:
+      visible:
+        text: "Couldn't Reach Server"
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - tapOn:
+          id: "org.commcare.dalvik:id/login_button"
+# A first (or post-reinstall) login triggers a data restore/sync that shows
+# "Processing Data from Server" with a live progress counter (e.g.
+# "Completed: 4613/5807") - confirmed via a real BrowserStack failure whose
+# view-hierarchy dump showed exactly this screen still on-screen when the
+# CALLER's very next assertion fired. Every flow using this shared subflow
+# asserts on whatever screen comes AFTER login, so the wait belongs here
+# rather than being duplicated in each caller. notVisible succeeds
+# immediately if this screen never appears (e.g. a login with nothing to
+# restore), so this is safe to run unconditionally.
+#
+# UPDATE, confirmed live (real BrowserStack failure + full-suite retry on
+# the SAME build - NOT flaky - build fcff4c622a197b5e216b810db331791689b8573e,
+# session 6defec6b6237a77c4ce1df53f77ad8f77b9829facc660bd0, on
+# flows/form_submissions/multiple_submissions_10x_background_sync.yaml):
+# "Processing Data from Server" is only the FINAL phase of this same
+# restore/sync dialog, not the only one. Verified against
+# LoginActivity.java's generateProgressDialog() (DataPullTask.DATA_PULL_TASK_ID
+# case): the dialog starts as sync.communicating.title="Communicating with
+# Server" / sync.progress.starting="Requesting Data..." and its title and
+# message get swapped in place as the pull progresses through
+# sync.progress.authing="Contacting server for sync...",
+# sync.progress.downloading="Server contacted, downloading data.",
+# sync.downloading.title="Downloading Data from Server", and only THEN
+# sync.processing.title="Processing Data from Server" (all titles/messages
+# at android_translatable_strings.txt:149-161). It is the SAME
+# DialogFragment/button throughout - CustomProgressDialog.java's
+# setupCancelButton() always binds R.id.dialog_cancel_button, the one
+# literal "STOP" button defined once in
+# res/layout/progress_dialog_cancel_button.xml and reused by every phase -
+# not a new screen per phase. The old wait here only ever looked for the
+# LAST phase's text, so if the pull is slow/stuck in an EARLIER phase (as
+# it live was: the failing build's own screenshot at the caller's timeout
+# showed the device still on "Communicating with Server" / "Contacting
+# server for sync..." with the STOP button visible), "Processing Data from
+# Server" had simply never appeared YET - this wait's notVisible check
+# reported success in under a second, as if no sync dialog existed at all,
+# and the caller's own next assertion then failed against a screen that was
+# actually still covered by this dialog.
+#
+# Fix: wait on the id shared by every phase of this one continuing dialog
+# (dialog_cancel_button) instead of one specific phase's text, so a slow
+# pull is correctly waited out regardless of which phase it's stuck in.
+- extendedWaitUntil:
+    notVisible:
+      id: "org.commcare.dalvik:id/dialog_cancel_button"
+    timeout: 120000
+# UPDATE (2026-08-21), confirmed live in CI (run 32475178875, group-a,
+# multimedia/lazy_video_05_no_references_media_not_found.yaml, build
+# 368045de2cd1b2eaedaf63dae8500a3a5df58a78): the "Bad Server Response"
+# retry loop above checked TOO EARLY - at that check, the error hadn't
+# rendered yet (the loop reported SKIPPED, i.e. not visible), and the
+# dialog_cancel_button wait above also fell through immediately since no
+# sync dialog had appeared either. The real key-exchange response arrived
+# late enough that "Bad Server Response" only showed up ~17s AFTER this
+# subflow had already reported COMPLETED - confirmed via the caller's own
+# failure screenshot at that later point, still sitting on LoginActivity
+# with "Bad Server Response" now visible. Same transient server-hiccup
+# class already documented above, just arriving after this subflow's own
+# checks had already passed - so re-check for all three known error texts
+# one more time here, late, and retry the login tap if any of them showed
+# up after all.
+#
+# UPDATE (2026-08-27), confirmed live in CI (run 33078641030, single-tag
+# prompted_updates dispatch, prompted_updates/varying_prompt_01_update_
+# frequency.yaml): recurred a THIRD time, past even this late re-check -
+# the failure screenshot showed the device still on LoginActivity with
+# "Bad Server Response" visible, but this repeat's own immediate (zero-
+# wait) check had already sampled and found nothing visible, same
+# SKIPPED-then-arrives-later race as the 2026-08-21 UPDATE above, just a
+# beat slower still. Every fix here so far has been "check at one more
+# point in time", each eventually beaten by a later-still response - adds
+# a real settling pause immediately before sampling, giving an in-flight
+# response actual time to render before this check reads the screen,
+# instead of relying on catching it via yet another single instantaneous
+# sample.
+- waitForAnimationToEnd:
+    timeout: 5000
+- repeat:
+    times: 5
+    while:
+      visible:
+        text: "(?i)Bad Server Response|Server Error|Couldn.t Reach Server"
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - tapOn:
+          id: "org.commcare.dalvik:id/login_button"
+      - extendedWaitUntil:
+          notVisible:
+            id: "org.commcare.dalvik:id/dialog_cancel_button"
+          timeout: 120000
