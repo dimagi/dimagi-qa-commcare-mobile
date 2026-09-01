@@ -1,8 +1,22 @@
 appId: org.commcare.dalvik
 tags:
   - multimedia
-  - partial
+  - superseded_by_appium
 ---
+# SUPERSEDED (2026-09-01): the real gap this file's own header describes
+# below (Maestro's addMedia can't place a file at an arbitrary filesystem
+# path) is now genuinely solved via Appium's push_file - see
+# scripts/appium_multimedia_scenarios.py's own module docstring for the
+# full citation, including the real on-device text this flow's own
+# "unverified against any source" citation got wrong (the form is titled
+# "Access file", lowercase f, not "Access File" - confirmed against the
+# app's real CCZ). Run via
+# `python scripts/run_appium_multimedia_suite.py --scenario external_file_in_forms`.
+# Kept on disk (not deleted) for reference; still runnable directly via
+# --flow or --tag superseded_by_appium, though it will still fail as
+# documented below since the underlying gap isn't fixable from the Maestro
+# side.
+
 - runFlow:
     file: ../common/install_app_by_code.yaml
     env:
