@@ -633,8 +633,56 @@ jobs:
           path: reports/
           retention-days: 30
 
+  # Master Mobile Plan (2026) > Update > "Make a change" (row 10) + "Check
+  # for new build" (row 13) - both previously Not automatable/N/A. Confirmed
+  # live 2026-09-01 (by reading commcare-hq source directly) that neither
+  # actually needs a device at all: "make a change" is just HQClient.
+  # edit_module_attr() saving the app's draft content, and "check for new
+  # build" is CommCareHQ's own autogenerate_build() mechanism, which fires
+  # for ANY client (not specifically a phone) that fetches the app's live
+  # ODK profile while its draft version is ahead of the latest saved build's
+  # version - see scripts/hq_client.py's check_for_phone_triggered_build()
+  # and scripts/run_update_content_change_check.py for the full citations.
+  # A standalone job (not part of the BrowserStack device matrix above)
+  # since it has zero BrowserStack/device cost - two authenticated HQ calls
+  # plus real verification of HQ's response. Uploads its own reports/ as
+  # maestro-report-update-content-check, matching merge-reports' existing
+  # "maestro-report-*" download glob, so no change needed there beyond
+  # adding this job to its `needs:` list.
+  update-content-check:
+    if: github.event.inputs.tag == '' || github.event.inputs.tag == 'All' || github.event.inputs.tag == 'update'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check for phone-triggered build (Update - Make a change / Check for new build)
+        env:
+          HQ_API_USERNAME: ${{ secrets.HQ_API_USERNAME }}
+          HQ_API_PASSWORD: ${{ secrets.HQ_API_PASSWORD }}
+          HQ_SESSION_COOKIE: ${{ secrets.HQ_SESSION_COOKIE }}
+          HQ_DOMAIN: qateam
+          CC_TEST_USERNAME: ${{ secrets.CC_TEST_USERNAME }}
+          HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
+          HQ_WEB_USER_PASSWORD: ${{ secrets.HQ_WEB_USER_PASSWORD }}
+        run: python scripts/run_update_content_change_check.py
+
+      - name: Upload HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maestro-report-update-content-check
+          path: reports/
+          retention-days: 30
+
   merge-reports:
-    needs: [prepare, maestro-tests]
+    needs: [prepare, maestro-tests, update-content-check]
     if: always()
     runs-on: ubuntu-latest
     steps:
