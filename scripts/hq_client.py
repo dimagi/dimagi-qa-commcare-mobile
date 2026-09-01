@@ -177,7 +177,14 @@ class HQClient:
         """
         List an app's builds, newest first, each as a dict including at least
         `_id` (the build's own doc id, usable as saved_app_id/DownloadCCZ's
-        app_id - confirmed live 2026-08-20 the real key is `_id`, not `id`),
+        app_id) and a duplicate `id` key with the identical value - confirmed
+        live 2026-08-20 that `_id` is the one to rely on by convention (it's
+        the raw Couch doc id every other HQ API in this file keys builds by),
+        but confirmed AGAIN live 2026-08-31 (PR #1 review) that a plain `id`
+        key is also present with the same value, so code reading either one
+        (e.g. get_app_install_code/download_latest_ccz's own `chosen["id"]`)
+        is not a bug - just document which key is the "canonical" one to key
+        off of if a future caller needs a single convention to follow.
         `version`, and `is_released`.
         GET /a/<domain>/apps/view/<app_id>/releases/json/?limit=&only_show_released=&page=1
         Source: corehq/apps/app_manager/views/releases.py:paginate_releases()
@@ -656,9 +663,14 @@ class HQClient:
     def get_form_metadata(self, form_id):
         """
         Return the Form Metadata tab's key/value pairs (timeStart, timeEnd,
-        appVersion, deviceID, received_on, server_modified_on, etc.) for one
-        submitted form, plus `has_multimedia` (whether the form's own
-        multimedia block on this page lists any attachments).
+        appVersion, deviceID, received_on, server_modified_on, location,
+        etc.) for one submitted form, plus `has_multimedia` (whether the
+        form's own multimedia block on this page lists any attachments).
+        `location` is always present as a key (confirmed live 2026-08-31,
+        PR #1 review) - HQ renders it as the literal string "---" when no
+        geopoint was captured, not by omitting the <dt> pair entirely, which
+        is what scripts/verify_submission.py's --require-location flag
+        checks for.
 
         Source: corehq/apps/reports/views.py:_get_form_metadata_context()
         (called directly inside FormDataView's own GET, not a separate
