@@ -1,16 +1,23 @@
 appId: org.commcare.dalvik
 tags:
   - session_expiration
-  - partial
+  - automatable
 ---
 # Master Mobile Plan (2026) > Session Expiration > "Setup 1" - Install
 # Application.
 #
-# PARTIAL: needs a valid HQ web-user email/password (same dependency as
-# flows/install/install_08_install_as_web_user.yaml). Installs "Session
-# Expiration Test" specifically (not the default Basic Tests app every other
-# workflow's flows assume) via ../common/install_app_as_web_user.yaml -
-# see that file's header for why targeting the app by name is safe.
+# RECLASSIFIED Automatable (2026-09-01), correcting a stale PARTIAL: this
+# flow was never actually blocked on a live HQ web-user credential the way
+# its old header (and install_08_install_as_web_user.yaml's own genuinely
+# different, still-Partial mechanism) implied - it uses
+# install_app_by_code.yaml, whose APP_CODE_SESSION_EXPIRATION is resolved
+# server-side ONCE per run via resolve_app_codes() (the same
+# HQ_WEB_USER_EMAIL/PASSWORD every other app-code flow in this suite already
+# depends on), not a live on-device email/password entry. Confirmed passing
+# live 2026-09-01. Installs "Session Expiration Test" specifically (not the
+# default Basic Tests app every other workflow's flows assume) - see
+# SessionExpirationTest.kt/SessionExpirationTests.kt's own APP_NAME
+# citation below for why targeting this app is correct.
 #
 # Verified against commcare-android source (read-only reference, not modified):
 #   app/instrumentation-tests/src/org/commcare/androidTests/SessionExpirationTest.kt
