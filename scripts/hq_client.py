@@ -816,6 +816,122 @@ class HQClient:
         metadata["has_multimedia"] = has_multimedia
         return metadata
 
+    def get_form_answers(self, form_id):
+        """
+        Return {question_label: answer_text} for every question on a
+        submitted form's Form Data page - added for Master Mobile Plan
+        (2026) > Multimedia > "Photo Verification", whose real check is "the
+        question appears unanswered" (not a metadata field - the actual
+        submitted answer value/response text).
+
+        CAVEAT, confirmed live 2026-09-07: an EARLIER version of this method
+        parsed the page's `question_response_map` JSON blob (embedded in
+        `initial-page-data`) instead - that map is populated for text/
+        select/numeric-style questions, but comes back as a bare `{}` for a
+        form whose questions are media widgets (Image/Audio/Video capture-or-
+        choose), which is exactly the question TYPE "Take a photo"/"Choose
+        Image" are. Confirmed against a real Photo 2 submission
+        (form_id 529c2e38-be89-43a4-859a-3540b5b0f5d4): question_response_map
+        was `{}` even though the form genuinely has those 2 questions.
+
+        Source instead: the page's own `<table class="table table-bordered
+        form-data-table">` (the same human-readable Question/Response table
+        a manual tester reads) - confirmed live to render EVERY question
+        type generically, including unanswered media questions (an empty
+        `<div class="form-data-readable form-data-raw">` for the response
+        cell). Each question is one `<td title="/data/<path>">` containing a
+        `form-data-readable` label span, immediately followed by its sibling
+        response `<td>`.  Keyed by the human-readable label (e.g. "Take a
+        photo"), matching what test cases reference, not the raw XPath.
+        """
+        url = self._reports_url(f"form_data/{form_id}/")
+        resp = self.session.get(url)
+        resp.raise_for_status()
+        page_html = resp.text
+
+        table_match = re.search(
+            r'<table class="table table-bordered form-data-table">(.*?)</table>',
+            page_html, re.DOTALL,
+        )
+        if not table_match:
+            return {}
+        table = table_match.group(1)
+
+        cells = re.findall(r"<td\b[^>]*>(.*?)</td>", table, re.DOTALL)
+        answers = {}
+        # Cells alternate (label_cell, response_cell) pairs per row, skipping
+        # the header <tr> (which uses <th>, not <td>, so it never enters this
+        # list at all).
+        for label_cell, response_cell in zip(cells[0::2], cells[1::2]):
+            label_match = re.search(
+                r'form-data-readable">\s*(.*?)\s*</span>', label_cell, re.DOTALL,
+            )
+            if not label_match:
+                continue
+            label = html.unescape(label_match.group(1)).strip()
+            response_match = re.search(
+                r'form-data-raw">\s*(.*?)\s*</div>', response_cell, re.DOTALL,
+            )
+            answers[label] = html.unescape(response_match.group(1)).strip() if response_match else ""
+        return answers
+
+    def get_form_attachments(self, form_id):
+        """
+        Return a list of {question_label, filename, url, size_bytes} for
+        every real file attachment on a submitted form - added for Master
+        Mobile Plan (2026) > Multimedia > "Image Resize 27/28" and "Capture
+        8", whose real checks are "verify you can download the attachments"
+        and "verify [attachments] are not corrupted" (i.e. non-empty,
+        present, real files) rather than eyeballing rendered image quality.
+
+        Source: FormDataView's own `#form-attachments` tab-pane (confirmed
+        live 2026-09-07 against a real submission with audio/image/signature
+        attachments) - each row is a `<tr>` with the question's `title`
+        attribute (`/data/<question>`), its `form-data-readable` label span,
+        and a real download link/img `src` of the form
+        `/a/<domain>/api/form_attachment/v1/<form_id>/<filename>` - the same
+        authenticated-session-servable URL a human clicking "Download" on
+        that tab would hit. `size_bytes` is fetched via a HEAD request's
+        real Content-Length (confirmed live: 200, real byte count) - an
+        objective presence/non-corruption signal, not a rendered-quality
+        judgment.
+        """
+        url = self._reports_url(f"form_data/{form_id}/")
+        resp = self.session.get(url)
+        resp.raise_for_status()
+        page_html = resp.text
+
+        attachments_section = page_html.split('id="form-attachments"', 1)
+        if len(attachments_section) < 2:
+            return []
+        section = attachments_section[1].split('id="form-xml"', 1)[0]
+
+        rows = re.findall(r"<tr><td>(.*?)</td></tr>", section, re.DOTALL)
+        results = []
+        for row in rows:
+            label_match = re.search(
+                r'form-data-readable">\s*(.*?)\s*</span>', row, re.DOTALL,
+            )
+            url_match = re.search(r'(?:href|src)="([^"]*/api/form_attachment/v1/[^"]+)"', row)
+            if not label_match or not url_match:
+                continue
+            attachment_url = url_match.group(1)
+            if not attachment_url.startswith("http"):
+                attachment_url = self.base_url + attachment_url
+            filename = attachment_url.rsplit("/", 1)[-1]
+            size_bytes = None
+            head_resp = self.session.head(attachment_url)
+            if head_resp.ok:
+                content_length = head_resp.headers.get("Content-Length")
+                size_bytes = int(content_length) if content_length is not None else None
+            results.append({
+                "question_label": html.unescape(label_match.group(1)).strip(),
+                "filename": filename,
+                "url": attachment_url,
+                "size_bytes": size_bytes,
+            })
+        return results
+
 
 def _parse_hq_display_time(time_str):
     """Parses SubmitHistory's "Aug 08, 2026 19:46:10 IST" display format.

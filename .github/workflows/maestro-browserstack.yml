@@ -578,6 +578,25 @@ jobs:
           fi
           python scripts/run_appium_offline_ccz_suite.py "${ARGS[@]}"
 
+      # Master Mobile Plan (2026) > Form Submissions > "Markdown" (row 21) +
+      # "Incomplete Forms 4" (row 30) - HQ-only Submit-History post-checks on
+      # top of the already-automated on-device submit flows (both tagged
+      # form_submissions/group-c). Built 2026-09-01 but never actually wired
+      # into CI until now (caught while building a full workflow-status
+      # export) - see scripts/run_form_submission_history_check.py's own
+      # module docstring for the full citation.
+      - name: Verify Form Submissions Submit-History checks (Markdown, Incomplete Forms 4)
+        if: always() && (matrix.name == 'group-c' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'form_submissions')))
+        env:
+          HQ_DOMAIN: qateam
+          HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
+          HQ_WEB_USER_PASSWORD: ${{ secrets.HQ_WEB_USER_PASSWORD }}
+        run: |
+          python scripts/run_form_submission_history_check.py \
+            --test-name markdown --username test1 --form-path-contains Markdown
+          python scripts/run_form_submission_history_check.py \
+            --test-name incomplete_forms_4 --username test1 --form-path-contains "Question Types"
+
       # Runs Multimedia's "External File in Forms" - the one Multimedia row
       # blocked by the same class of gap the Recovery Measures CCZ-picker
       # step above already solves (Maestro can't place a file at an
@@ -619,6 +638,45 @@ jobs:
             ARGS+=(--release-tag "${{ github.event.inputs.release_tag }}")
           fi
           python scripts/run_appium_multimedia_suite.py "${ARGS[@]}"
+
+      # Master Mobile Plan (2026) > Multimedia > "Photo Verification" (row
+      # 47) + "Image Resize 27/28" (rows 41-42) - HQ-only Submit-History
+      # post-checks on top of the already-automated on-device submit flows
+      # above (photo_02_can_remove_chosen_photo.yaml,
+      # image_resize_25/26_*.yaml, both tagged multimedia/group-a). Zero
+      # extra BrowserStack device cost - see
+      # scripts/run_multimedia_form_data_check.py's own module docstring for
+      # the full citation, including why Image Resize 27/28 only asserts
+      # attachment presence/downloadability, not resize-size correctness.
+      - name: Verify Multimedia Submit-History checks (Photo Verification, Image Resize 27/28)
+        if: always() && (matrix.name == 'group-a' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'multimedia')))
+        env:
+          HQ_DOMAIN: qateam
+          HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
+          HQ_WEB_USER_PASSWORD: ${{ secrets.HQ_WEB_USER_PASSWORD }}
+        run: |
+          python scripts/run_multimedia_form_data_check.py --check-type unanswered \
+            --test-name photo_verification --username test1 \
+            --form-path-contains "Gif/Remove Image" \
+            --expect-unanswered "Take a photo" --expect-unanswered "Choose Image"
+          python scripts/run_multimedia_form_data_check.py --check-type attachments \
+            --test-name image_resize_27_28 --username test1 \
+            --form-path-contains "Image Resize" --min-attachments 3
+
+      # Master Mobile Plan (2026) > Support Menus > "Menu 2" (Force Log
+      # Submission) - HQ-only precondition verification on top of the
+      # already-automated on-device flow (support_menus/group-a). Built
+      # 2026-09-01 but never actually wired into CI until now (same gap as
+      # the Form Submissions checks above) - see
+      # scripts/run_support_menus_log_property_check.py's own module
+      # docstring for the full citation.
+      - name: Verify Support Menus 2 precondition (logenabled)
+        if: always() && (matrix.name == 'group-a' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'support_menus')))
+        env:
+          HQ_DOMAIN: qateam
+          HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
+          HQ_WEB_USER_PASSWORD: ${{ secrets.HQ_WEB_USER_PASSWORD }}
+        run: python scripts/run_support_menus_log_property_check.py
 
       # No report-history cache restore/save here on purpose: each matrix
       # job's own reports/history.json only reflects ITS slice of tags, not
