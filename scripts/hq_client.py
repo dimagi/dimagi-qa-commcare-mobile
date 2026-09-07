@@ -468,6 +468,58 @@ class HQClient:
                     f.write(chunk)
         return dest_path
 
+    def download_multimedia_zip(self, app_id, dest_path, poll_seconds=3, timeout_seconds=180):
+        """
+        Download the app's CURRENT DRAFT multimedia zip (all real media files
+        the top build's own multimedia_map references) - added for Master
+        Mobile Plan (2026) > Multimedia > "MM2", which needs a real, exactly-
+        one-file-missing repair zip built locally (see
+        scripts/appium_mm2_scenario.py's own module docstring).
+
+        Same async soil-job/poll shape as download_ccz() (GET triggers a
+        Celery task and returns {"download_id", "download_url", ...}; poll
+        download_url's HTML fragment for a "Download File Now" link) -
+        CommCareHQ's DownloadMultimediaZip view (corehq/apps/hqmedia/views.py)
+        uses the exact same DownloadBase/soil framework, just a different
+        trigger URL: GET /a/<domain>/apps/download/<app_id>/multimedia/commcare.zip
+        Source: corehq/apps/hqmedia/urls.py (mounted under app_manager/urls.py's
+        `download/<app_id>/multimedia/` prefix) + views.py:DownloadMultimediaZip.
+
+        IMPORTANT, confirmed live 2026-09-07: this zip can contain files the
+        CURRENT top build no longer actually references (orphaned assets
+        from old builds/tests) - it is NOT the same as "exactly what a
+        fresh no-media install's missing-media prompt will ask for". Cross-
+        check against a real no-media install's own prompt text before
+        assuming every file in this zip is still required (see
+        appium_mm2_scenario.py's own citation of this exact gap).
+        """
+        trigger_url = self._apps_url(f"download/{app_id}/multimedia/commcare.zip")
+        resp = self.session.get(trigger_url)
+        resp.raise_for_status()
+        poll_url = self.base_url + resp.json()["download_url"]
+
+        deadline = time.monotonic() + timeout_seconds
+        file_url = None
+        while True:
+            poll_resp = self.session.get(poll_url)
+            poll_resp.raise_for_status()
+            match = re.search(r'href="([^"]*\?get_file[^"]*)"', poll_resp.text)
+            if match:
+                file_url = match.group(1)
+                break
+            if time.monotonic() > deadline:
+                raise TimeoutError(f"Multimedia zip for app {app_id} not ready after {timeout_seconds}s")
+            time.sleep(poll_seconds)
+
+        if not file_url.startswith("http"):
+            file_url = self.base_url + file_url
+        with self.session.get(file_url, stream=True) as file_resp:
+            file_resp.raise_for_status()
+            with open(dest_path, "wb") as f:
+                for chunk in file_resp.iter_content(chunk_size=1 << 20):
+                    f.write(chunk)
+        return dest_path
+
     def download_latest_ccz(self, app_id, dest_path, released_only=True):
         """Convenience wrapper: list_releases() + download_ccz() for whatever
         is currently the newest (optionally released-only) build."""

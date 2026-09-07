@@ -29,9 +29,13 @@ same credentials, different product API).
 import base64
 import os
 import sys
+import time
 
 from appium import webdriver
 from appium.options.android import UiAutomator2Options
+from appium.webdriver.common.appiumby import AppiumBy
+from selenium.common.exceptions import WebDriverException
+from urllib3.exceptions import MaxRetryError as URLLibMaxRetryError
 
 sys.path.insert(0, os.path.dirname(__file__))
 from browserstack_client import _request_with_retry
@@ -60,8 +64,29 @@ class AppiumBrowserStackClient:
         return resp.json()  # {"app_url": "bs://...", ...}
 
     def start_session(self, app_url, device, os_version, project="QA COMMCARE MOBILE TESTS",
-                       build_name=None, session_name=None, mid_session_apps=None, network_profile=None):
+                       build_name=None, session_name=None, mid_session_apps=None, network_profile=None,
+                       interactive_debugging=None):
         """Starts a live Appium session and returns the connected driver.
+
+        `interactive_debugging` (default: on - read from the
+        APPIUM_INTERACTIVE_DEBUG env var, "false"/"0" -> off; per direct
+        user request 2026-09-07, default flipped from opt-in to opt-out)
+        sets BrowserStack's own `interactiveDebugging`
+        bstack:options capability - ported from dimagi-qa-sureadhere's own
+        Android driver setup (testPages/android/android.py), per direct user
+        request 2026-09-07. This does NOT add any local screenshot-polling or
+        a printed URL - it's a flag BrowserStack itself reads at session
+        start that keeps that session's live device-screen mirror active on
+        the BrowserStack App Automate dashboard (app-automate.browserstack.com
+        -> the running build -> the active session) for the session's whole
+        duration, so a human can watch the phone's actual current screen
+        while a test is still running, not just review a video/screenshot
+        after the fact. Defaulted ON per direct user request - if this repo's
+        CI ever needs to dial it back for concurrent-session overhead/cost
+        at scale (unverified either way so far), pass
+        interactive_debugging=False explicitly or set
+        APPIUM_INTERACTIVE_DEBUG=false for that call site rather than
+        flipping the shared default back.
 
         `mid_session_apps` (list of app_url strings, e.g. [new_app_url]) must
         be declared up front here - BrowserStack only allows installing an
@@ -97,6 +122,10 @@ class AppiumBrowserStackClient:
             bstack_options["midSessionInstallApps"] = mid_session_apps
         if network_profile:
             bstack_options["networkProfile"] = network_profile
+        if interactive_debugging is None:
+            interactive_debugging = os.environ.get("APPIUM_INTERACTIVE_DEBUG", "true").strip().lower() not in ("0", "false")
+        if interactive_debugging:
+            bstack_options["interactiveDebugging"] = True
         # UPDATE (2026-08-19, 3rd correction), per direct user observation
         # (confirmed independently via every saved hierarchy dump's own
         # explicit width/height attributes, width > height throughout -
@@ -143,6 +172,9 @@ class AppiumBrowserStackClient:
         options.set_capability("bstack:options", bstack_options)
 
         driver = webdriver.Remote(command_executor=APPIUM_HUB_URL, options=options)
+        if interactive_debugging:
+            print(f"[appium_browserstack_client] Live device view: "
+                  f"https://app-automate.browserstack.com/dashboard/v2/sessions/{driver.session_id}")
         # UPDATE (2026-08-19, 2nd correction): the orientation CAPABILITY
         # above only sets the STARTING orientation at session launch - it
         # doesn't stop the device's own auto-rotate sensor from firing a
@@ -220,9 +252,61 @@ class AppiumBrowserStackClient:
         not an Appium-version-specific one), then invokes it with the same
         {"path", "data"} payload shape 5.2.4's fallback used - independent
         of whatever Appium-Python-Client version requirements.txt happens
-        to resolve to in the future."""
+        to resolve to in the future.
+
+        UPDATE (2026-09-07), confirmed live: pushing a real ~38MB file
+        (Multimedia MM2's repair zip - see appium_mm2_scenario.py) hit a
+        real `SSLEOFError`/`MaxRetryError` mid-transfer on one attempt, and
+        on a DIFFERENT attempt the POST itself apparently succeeded but the
+        very next unrelated driver command (a plain find_elements) came
+        back with a malformed result (a raw string instead of element
+        objects) - both point at this single giant base64-encoded POST
+        (the whole file loaded into memory and sent as one HTTP request,
+        no chunking) being fragile at this size over BrowserStack's Appium
+        hub, not a logic bug in any particular caller. Every other
+        push_file call site in this repo so far has pushed small fixtures
+        (a 12KB test video, a handful of file-size test assets), where this
+        never surfaced - MM2 is the first caller pushing tens of MB.
+        Retries the POST itself (a fresh request each attempt, not a
+        recreated session) a bounded number of times on exactly the
+        exception classes seen live, rather than retrying indefinitely or
+        catching every exception (which would mask a real, non-transient
+        failure like a bad device_path or an actually-dead session)."""
         with open(local_file_path, "rb") as f:
             payload = base64.b64encode(f.read()).decode()
         driver.command_executor.add_command(
             "pushFile", "POST", "/session/$sessionId/appium/device/push_file")
-        driver.execute("pushFile", {"path": device_path, "data": payload})
+        last_exc = None
+        for attempt in range(3):
+            try:
+                driver.execute("pushFile", {"path": device_path, "data": payload})
+                # Sanity round-trip: the "succeeded but the NEXT command came
+                # back malformed" failure mode above means a clean return
+                # from execute() alone isn't proof the connection survived
+                # intact. UPDATE, confirmed live: an earlier version of this
+                # check called driver.page_source (a plain GET) and did NOT
+                # reproduce/catch the corruption - the real failure is
+                # specific to find_elements' own POST response getting
+                # misparsed (returning raw strings instead of element refs,
+                # the exact 'str' object has no attribute 'get_attribute'
+                # error every caller downstream of this hit), so the sanity
+                # check must exercise that SAME call shape, not just any
+                # request, to actually flush out a poisoned connection here
+                # (inside the retry loop, so it gets a fresh one on the next
+                # attempt) rather than letting a caller's own next real
+                # find_elements call be the one that discovers it.
+                sanity_els = driver.find_elements(AppiumBy.XPATH, "//*")
+                if sanity_els and not hasattr(sanity_els[0], "get_attribute"):
+                    raise RuntimeError(
+                        f"find_elements returned malformed results after push_file "
+                        f"(got {type(sanity_els[0])!r} instead of a WebElement) - "
+                        f"connection likely poisoned by the large push."
+                    )
+                return
+            except (WebDriverException, URLLibMaxRetryError, ConnectionError, AttributeError, RuntimeError) as exc:
+                last_exc = exc
+                time.sleep(3)
+        raise RuntimeError(
+            f"push_file to {device_path!r} failed after 3 attempts (payload "
+            f"{len(payload)} bytes base64) - last error: {last_exc!r}"
+        ) from last_exc

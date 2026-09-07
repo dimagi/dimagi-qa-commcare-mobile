@@ -22,8 +22,15 @@ tags:
 # native DatePicker (spinner mode - see DateWidget below) that defaults to
 # TODAY. There is no Maestro-native "set date" action for a spinner
 # DatePicker (unlike a plain text field); the swipe gesture below is a
-# best-effort, UNVERIFIED-against-a-live-run attempt to decrement the day
-# column by one - flag for correction once actually run on a real device.
+# best-effort attempt to decrement the day column by one.
+# UPDATE (2026-09-07), confirmed live (real BrowserStack dispatch, build
+# 1238bc320e7cfe912230812759586400c0bfb383, session
+# b3610dcf57d082dfdf82ac35f67ed984c370a7fa): this whole flow, swipe
+# included, ran end-to-end and passed - the downstream computed-property
+# assertions (which depend on Test Two's date genuinely landing on
+# yesterday, not today) succeeded, so the swipe is no longer an unverified
+# guess. Left as "Partial" only for the SECOND PARTIAL CAVEAT below (an
+# unrelated, still-real environmental issue), not for this DatePicker step.
 # "Test One" needs no date interaction at all (the widget already defaults
 # to today), so that half is fully Automatable.
 #
