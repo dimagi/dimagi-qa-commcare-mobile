@@ -268,6 +268,28 @@ class HQClient:
         resp.raise_for_status()
         return resp.text
 
+    def get_custom_properties(self, app_id):
+        """
+        Read-only counterpart to set_custom_properties() - returns the app's
+        DRAFT `profile.custom_properties` dict as HQ currently has it saved,
+        without touching anything. Added for Master Mobile Plan (2026) >
+        Support Menus > "Menu 2", whose own sheet pre-requisite ("verify the
+        app does NOT have logenabled=on_demand set") was previously only
+        ASSUMED true by the on-device flow (no on-device way to introspect an
+        app-builder setting) - this lets a pre-step actively VERIFY it
+        instead, without the risk of set_custom_properties's own
+        REPLACE-not-merge behavior accidentally wiping the app's other
+        existing custom properties just to check one value.
+
+        GET /a/<domain>/apps/source/<app_id>/ (app_source() view, same
+        endpoint edit_module_attr()'s own live verification already used to
+        read back a module's `comment` field - see that method's docstring).
+        Source: corehq/apps/app_manager/views/apps.py:app_source().
+        """
+        resp = self.session.get(self._apps_url(f"source/{app_id}/"))
+        resp.raise_for_status()
+        return resp.json().get("profile", {}).get("custom_properties", {})
+
     def list_releases(self, app_id, only_show_released=True, limit=5):
         """
         List an app's builds, newest first, each as a dict including at least

@@ -1,0 +1,39 @@
+appId: org.commcare.dalvik
+tags:
+  - install
+  - partial
+---
+# Master Mobile Plan (2026) > Install > "Install 1" - Scan Barcode Install.
+# Previously marked Not automatable: steps 4-6 require scanning a QR
+# barcode rendered on a live HQ desktop-browser page with the device's own
+# camera - a cross-surface (webpage <-> device camera) interaction
+# BrowserStack's Maestro sessions have no camera-image-injection hook for
+# (confirmed dead end this session for the identical class of interaction -
+# Mobile Pins' own "Claim Privileges" QR-claim step).
+#
+# The row's REAL intent - publish the most recent build with multimedia
+# included, install it via the code HQ's own barcode encodes, land on the
+# login screen - is fully testable another way: the barcode is just a
+# visual encoding of the SAME short alphanumeric code HQ's "Enter app code
+# on installation screen" panel shows right next to it on that same
+# Releases-page dialog (confirmed via HQClient.get_app_install_code's own
+# docstring/citation - both are generated from the identical
+# odk/<build_id>/short_odk_media_url endpoint). scripts/hq_client.py's
+# resolve_app_codes() already resolves APP_CODE_BASIC_TESTS this exact way
+# (get_app_install_code(app_id, include_media=True) - True is the default,
+# matching this row's own "Include Multimedia" checkbox) before every run,
+# and flows/common/install_app_by_code.yaml already drives the resulting
+# "Enter Code" install path start-to-finish (see that file's own extensive
+# citations), landing on edit_username - the exact outcome this row's own
+# step 8 describes ("verify you are brought to the login page").
+#
+# What stays untested: the literal camera-pointed-at-a-screen gesture
+# itself (steps 4-6). Everything downstream of that gesture - the publish/
+# include-media/install/reach-login-page outcome the row actually cares
+# about - is real, verified coverage, not a stand-in.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_BASIC_TESTS}
+- assertVisible:
+    id: "org.commcare.dalvik:id/edit_username"

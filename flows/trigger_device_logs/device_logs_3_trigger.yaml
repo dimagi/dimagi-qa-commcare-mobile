@@ -1,0 +1,49 @@
+appId: org.commcare.dalvik
+tags:
+  - trigger_device_logs
+  - partial
+---
+# Master Mobile Plan (2026) > Trigger device logs > "Device Logs 3" - "log
+# back into the app, sync, and wait ~10 minutes to ensure connection w/Sumo
+# Logic". Previously marked Not automatable, but that verdict actually
+# belongs to the SEPARATE "Device Logs 4" row (Sumo Logic dashboard
+# validation - an external, non-HQ, non-device system this repo has no API
+# access to, correctly stays Not automatable). Device Logs 3's own pass
+# criteria is just the on-device trigger action itself (login + sync) - it
+# makes no claim about confirming Sumo receipt, that's Device Logs 4's job.
+#
+# The sheet's own "wait 10 minutes" only exists to give the async log
+# upload time to reach Sumo before Device Logs 4 checks for it there -
+# since THIS flow doesn't check Sumo at all (that's out of scope, see
+# above), there's nothing on-device to observe after the sync completes.
+# Deliberately does NOT sleep 10 real minutes for no on-device reason -
+# ends once "Sync Successful" is confirmed, the actual trigger action.
+#
+# Reuses device_logs_1_submit_form.yaml's own login pattern (same "Basic
+# Tests" app, NOT flows/common/submit_only_form.yaml - see that file's
+# header for why the generic subflow doesn't fit this 21-module app) and
+# multimedia/media_02_capture_and_select.yaml's confirmed-live "Sync with
+# Server" / "Sync Successful" strings (see that file's own citation).
+#
+# Prepends install_app_as_web_user.yaml (APP_NAME: ".*Basic Tests$") - a
+# fresh BrowserStack session has no app installed until this runs; see
+# DispatchActivity.java's CommCareSetupActivity routing when currentApp ==
+# null.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_BASIC_TESTS}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+- tapOn: "Sync with Server"
+- extendedWaitUntil:
+    visible:
+      text: "(?i).*Sync Successful.*"
+    timeout: 30000
+- assertVisible: "Sync with Server"
