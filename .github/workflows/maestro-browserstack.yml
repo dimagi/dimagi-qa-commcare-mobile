@@ -708,7 +708,23 @@ jobs:
   # "maestro-report-*" download glob, so no change needed there beyond
   # adding this job to its `needs:` list.
   update-content-check:
-    if: github.event.inputs.tag == '' || github.event.inputs.tag == 'All' || github.event.inputs.tag == 'update'
+    # UPDATE (2026-09-08), confirmed live (CI run 34214747124): this job ran
+    # concurrently with maestro-tests (no `needs:` ordering between them),
+    # and flows/update/update_target_developer_options_flow.yaml (part of
+    # the "update" tag, in maestro-tests' group-b) references
+    # ${APP_CODE_UPDATE_TEST_ALTERNATE} - resolved via
+    # scripts/hq_client.py:resolve_app_codes(), whose get_app_install_code()
+    # call defaults release_first=True, marking the SAME shared "Update Test
+    # Alternate" app's current top build Released. This job's own check
+    # asserts its freshly-created build stays UNRELEASED (matching the
+    # sheet's own "Do NOT star this build" step) - a real race let that
+    # other job's release call land on this job's own build, failing the
+    # assertion for a reason that has nothing to do with this job's own
+    # correctness. `needs: maestro-tests` orders this job strictly after the
+    # whole matrix (can't depend on just one matrix leg), removing the race
+    # - a small latency cost for a fast, cheap check.
+    needs: maestro-tests
+    if: always() && (github.event.inputs.tag == '' || github.event.inputs.tag == 'All' || github.event.inputs.tag == 'update')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
