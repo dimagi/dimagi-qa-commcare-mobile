@@ -188,21 +188,44 @@ def build_flows_zip(flow_files, out_dir):
     return zip_path
 
 
-def chunk_flows_by_execute_length(non_common_files, flows_dir, limit=900):
+def chunk_flows_by_execute_length(non_common_files, flows_dir, limit=850):
     """BrowserStack rejects a build whose `execute` array serializes past
     1000 characters - discovered via a real 422 running the full suite in
     one build: BROWSERSTACK_INVALID_SYNTAX, "'[execute]' length must be less
     than 1000 characters." Undocumented anywhere, so chunk conservatively
     (limit defaults well under the real 1000 cutoff) rather than assume the
-    exact boundary never shifts."""
-    chunks, current, current_len = [], [], 0
+    exact boundary never shifts.
+
+    UPDATE (2026-09-08), confirmed live (real CI run 34133638348, group-a
+    job): the ORIGINAL version of this function estimated each entry's cost
+    as `len(relpath) + 1` (a bare comma) - ignoring the pair of double-quote
+    characters json.dumps wraps every string in, the enclosing `[`/`]`
+    brackets, and json.dumps' own default `", "` (comma-SPACE) separator
+    between entries. `browserstack_client.trigger_build` sends `execute` via
+    `requests.request(..., json=payload)`, which serializes it with exactly
+    those defaults - the real wire length BrowserStack measures. The old
+    formula's under-count was large enough that a chunk it judged "830 chars,
+    safely under limit=900" was ACTUALLY 921 real characters - over even the
+    old limit's own budget, let alone the true 1000 cutoff on some chunks.
+    Confirmed live: re-dispatching that exact 19-file chunk through the real
+    run_build() path immediately failed as a testsuite parse error and fell
+    back to the (correctly-working, but ~19x slower) per-file fallback -
+    exactly matching the production symptom of group-a's job spending its
+    entire 3h45m runtime on repeated chunk-then-per-file-fallback cycles
+    and completing only 1 of its ~56 flows. Fixed by measuring the ACTUAL
+    json.dumps() length of each candidate chunk directly (matching exactly
+    what gets sent over the wire) instead of a hand-derived estimate, and
+    lowering the safety margin to 850 (from 900) for extra headroom given
+    how wrong the old estimate turned out to be."""
+    chunks, current = [], []
     for f in non_common_files:
-        rel_len = len(f.relative_to(flows_dir).as_posix()) + 1  # +1 for the joining comma
-        if current and current_len + rel_len > limit:
+        candidate = current + [f]
+        execute = [x.relative_to(flows_dir).as_posix() for x in candidate]
+        if current and len(json.dumps(execute)) > limit:
             chunks.append(current)
-            current, current_len = [], 0
-        current.append(f)
-        current_len += rel_len
+            current = [f]
+        else:
+            current = candidate
     if current:
         chunks.append(current)
     return chunks
