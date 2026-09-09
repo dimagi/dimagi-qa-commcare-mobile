@@ -139,10 +139,36 @@ class BrowserStackClient:
         array's serialized length, not by flow count/runtime) executing
         sequentially on one real device - confirmed live when a 33-flow
         mobile_pins build was still genuinely 'running' (not stuck) after the
-        previous 1800s default elapsed."""
+        previous 1800s default elapsed.
+
+        UPDATE (2026-09-09), confirmed live (CI run 34344170467, group-a
+        job): a real BrowserStack-side outage mid-poll raised
+        `requests.exceptions.HTTPError: 503 Server Error (retryable)` out of
+        get_build() - uncaught here, it crashed the ENTIRE run_suite.py
+        process before any report was ever written, losing every other
+        chunk's results too (the exact same class of bug already fixed for
+        a build stuck 'running' past its timeout - see the TimeoutError
+        handling this exact call site's own caller already has). The gap:
+        _request_with_retry()'s own internal retry budget (a few attempts,
+        short backoff) is much shorter than this loop's own 90-minute
+        patience - a BrowserStack outage lasting longer than that short
+        internal window still propagates. Treats an HTTPError the same way
+        a "still running" status already is: log it, sleep, and let the
+        NEXT poll (with the full remaining deadline) try again, instead of
+        giving up the instant the internal retry budget is exhausted."""
         deadline = time.monotonic() + timeout_seconds
         while True:
-            build = self.get_build(build_id)
+            try:
+                build = self.get_build(build_id)
+            except requests.exceptions.HTTPError as exc:
+                if time.monotonic() > deadline:
+                    raise TimeoutError(
+                        f"BrowserStack build {build_id}: still getting HTTP errors polling "
+                        f"for status after {timeout_seconds}s ({exc})"
+                    ) from exc
+                print(f"  (transient error polling build {build_id}, retrying in {poll_seconds}s: {exc})")
+                time.sleep(poll_seconds)
+                continue
             status = build.get("status")
             if status not in ("running", "queued"):
                 return build
