@@ -840,6 +840,21 @@ def _dispatch_and_report(args, apk_path, apk_commcare_version, prior_build_by_ap
         # pattern - see that file's own citation for the full reasoning,
         # including why entries are replaced-by-name rather than blindly
         # concatenated (a stale local rerun otherwise lingers forever).
+        # UPDATE (2026-09-09), confirmed live (CI run 34226264408, group-c
+        # job): this step's exit code must reflect only what THIS invocation
+        # itself just ran, not the merged/cumulative test_results below (kept
+        # merged for the ARTIFACT/report's sake, per the 2026-08-25 fix
+        # above) - a real failure showed `offline_08`/`offline_06`/
+        # `offline_reinstall_update`/`reinstall_05_06` all printed "passed"
+        # moments earlier, yet this step still exited 1, because an EARLIER
+        # step in the same job (scenario_02_forced_ccz_update) had genuinely
+        # failed and its "failed" TestResult was still sitting in
+        # reports/latest_results.json, carried forward by the merge below.
+        # Every later step in a multi-step job was cascading a false
+        # "failed" CI status off of one real earlier failure. Snapshot the
+        # exit-code-relevant set BEFORE merging in old entries.
+        this_run_results = list(test_results)
+
         existing_results_path = REPO_ROOT / "reports" / "latest_results.json"
         if existing_results_path.exists():
             existing = json.loads(existing_results_path.read_text(encoding="utf-8"))
@@ -850,7 +865,7 @@ def _dispatch_and_report(args, apk_path, apk_commcare_version, prior_build_by_ap
         report_path = report_generator.generate_report(build_ids[0], test_results)
         print(f"HTML report: {report_path}")
 
-        if any(r.status == "failed" for r in test_results):
+        if any(r.status == "failed" for r in this_run_results):
             sys.exit(1)
 
 

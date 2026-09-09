@@ -418,6 +418,14 @@ def main():
     # (keeping the newest outcome) instead of blindly concatenating, which
     # fixes the local case without needing a separate report/exit code
     # scheme for standalone runs.
+    # UPDATE (2026-09-09), confirmed live elsewhere (run_suite.py's own
+    # citation of CI run 34226264408): the exit code must reflect only THIS
+    # invocation's own results, not the merged/cumulative list below (kept
+    # merged for the artifact/report's sake) - otherwise an earlier failed
+    # step in the same multi-step job cascades a false "failed" exit onto
+    # every later step whose own tests actually passed.
+    this_run_results = list(results)
+
     existing_results_path = REPO_ROOT / "reports" / "latest_results.json"
     if existing_results_path.exists():
         import json
@@ -430,7 +438,7 @@ def main():
     report_path = report_generator.generate_report(build_id, results, enrich=False)
     print(f"Report written to {report_path}")
 
-    if any(r.status == "failed" for r in results):
+    if any(r.status == "failed" for r in this_run_results):
         sys.exit(1)
 
 

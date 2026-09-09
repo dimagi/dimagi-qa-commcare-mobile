@@ -367,6 +367,13 @@ def main():
     # including the 2026-08-21 fix (replace-by-name instead of blind
     # concatenation) that stops a stale local rerun's FAILED entry from
     # lingering next to the current run's own PASSED result.
+    # Exit code reflects only THIS invocation's own results, not the
+    # merged/cumulative list below - see run_suite.py's own citation
+    # (CI run 34226264408) for why: merging in an earlier step's carried-
+    # forward "failed" entry here would cascade a false failed exit onto
+    # this step even when its own tests all passed.
+    this_run_results = list(results)
+
     existing_results_path = REPO_ROOT / "reports" / "latest_results.json"
     if existing_results_path.exists():
         existing = json.loads(existing_results_path.read_text(encoding="utf-8"))
@@ -378,7 +385,7 @@ def main():
     report_path = report_generator.generate_report(build_id, results, enrich=False)
     print(f"Report written to {report_path}")
 
-    if any(r.status == "failed" for r in results):
+    if any(r.status == "failed" for r in this_run_results):
         sys.exit(1)
 
 
