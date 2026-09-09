@@ -20,6 +20,7 @@ reduced-show-frequency, regular-show-frequency) just to check one field.
 
 Usage: python scripts/run_support_menus_log_property_check.py
 """
+import json
 import os
 import pathlib
 import sys
@@ -80,8 +81,26 @@ def main():
     if not apk_version_path.exists():
         apk_version_path.write_text("N/A (HQ API only, no device)", encoding="utf-8")
 
+    # UPDATE (2026-09-09), confirmed live (CI run 34321669459, group-a job):
+    # this script previously called generate_report() with ONLY its own
+    # single result, never reading reports/latest_results.json first - since
+    # this step runs LAST in group-a's job (right before "Upload HTML
+    # report"), it silently OVERWROTE every earlier step's results down to
+    # this one entry, losing ~37 real flow results for the whole job (only
+    # this script's own "support_menus" entry survived to the uploaded
+    # artifact). Same merge-preserve pattern as run_suite.py/run_appium_*.py
+    # (see the 2026-08-25 fix cited there) - merge with whatever's already
+    # on disk instead of blindly replacing it.
+    existing_results_path = REPO_ROOT / "reports" / "latest_results.json"
+    results = [result]
+    if existing_results_path.exists():
+        existing = json.loads(existing_results_path.read_text(encoding="utf-8"))
+        new_names = {r.name for r in results}
+        results = [report_generator.TestResult(**item) for item in existing
+                   if item["name"] not in new_names] + results
+
     build_id = f"support-menus-log-property-check-{int(time.time())}"
-    report_path = report_generator.generate_report(build_id, [result], enrich=False)
+    report_path = report_generator.generate_report(build_id, results, enrich=False)
     print(f"Report written to {report_path}")
 
     if result.status == "failed":

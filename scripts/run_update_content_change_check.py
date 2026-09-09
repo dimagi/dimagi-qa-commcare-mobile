@@ -28,6 +28,7 @@ into run_suite.py's device-oriented flow runner.
 
 Usage: python scripts/run_update_content_change_check.py
 """
+import json
 import os
 import pathlib
 import sys
@@ -133,8 +134,23 @@ def main():
     if not apk_version_path.exists():
         apk_version_path.write_text("N/A (HQ API only, no device)", encoding="utf-8")
 
+    # Merge with whatever's already on disk instead of blindly replacing it -
+    # this job currently runs this script as its only step, but see
+    # scripts/run_support_menus_log_property_check.py's own citation (CI run
+    # 34321669459) for why a single-result script must never skip this: if
+    # this ever runs alongside other steps in the same job, overwriting
+    # reports/latest_results.json with only this one result would silently
+    # destroy every earlier step's results.
+    existing_results_path = REPO_ROOT / "reports" / "latest_results.json"
+    results = [result]
+    if existing_results_path.exists():
+        existing = json.loads(existing_results_path.read_text(encoding="utf-8"))
+        new_names = {r.name for r in results}
+        results = [report_generator.TestResult(**item) for item in existing
+                   if item["name"] not in new_names] + results
+
     build_id = f"update-content-check-{int(time.time())}"
-    report_path = report_generator.generate_report(build_id, [result], enrich=False)
+    report_path = report_generator.generate_report(build_id, results, enrich=False)
     print(f"Report written to {report_path}")
 
     if result.status == "failed":
