@@ -780,7 +780,7 @@ class HQClient:
         print(f"[hq_client] resolved apk_version {label_substring!r} -> {value!r} ({label!r})")
         return value
 
-    def find_recent_submission(self, username, form_path_contains=None, after=None, limit=20):
+    def find_recent_submission(self, username, form_path_contains=None, after=None, limit=500):
         """
         Search the Submit History report (what a human would use at
         /a/<domain>/reports/submit_history/) for the most recent form
@@ -802,7 +802,31 @@ class HQClient:
         rendering (`json/<report_slug>/` path prefix, confirmed against
         corehq/apps/reports/const.py) - same datatables-style
         iDisplayStart/iDisplayLength/aaData shape used by many other HQ
-        reports, not something specific to this one.
+        reports, not something specific to this one. `sSearch` (DataTables'
+        usual server-side search param) does NOT filter this endpoint -
+        confirmed live 2026-09-10: passing sSearch="Markdown" still returned
+        iTotalDisplayRecords == iTotalRecords (34981) and unfiltered rows -
+        so a wide `limit` is genuinely the only lever available here, not a
+        missed shortcut.
+
+        UPDATE (2026-09-10), confirmed live (CI run 34448685828, group-c
+        job): this call's own default of 50 (the two hardcoded call sites
+        in run_form_submission_history_check.py/run_multimedia_form_data_
+        check.py) missed a real, successful "Markdown" submission entirely
+        - find_recent_submission(..., limit=50) returned None hours after
+        the submission happened, while a manual re-check against the SAME
+        domain (qateam has 34981 total submissions) with limit=1000 found
+        it immediately (submitted_by='test1 "test one"', time='Sep 10, 2026
+        13:40:06 IST', well within the run's own window). Root cause: this
+        domain's Submit History is shared, high-traffic (3 parallel
+        maestro-tests groups all submitting as the same `test1` CC_TEST_
+        USERNAME for hours), and this check runs as one of the LAST steps
+        in its job - by the time it runs, 50+ *other* submissions (any
+        flow, any group) have landed after the target one, pushing it past
+        a 50-row page. Confirmed live limit=200 already finds it in <1s;
+        limit=2000 gets a 400 Bad Request (HQ caps iDisplayLength somewhere
+        between 1000-2000) - 500 is comfortable headroom under that cap
+        while staying fast (~1-1.5s measured).
         """
         url = self._reports_url("json/submit_history/")
         resp = self.session.get(url, params={"iDisplayStart": 0, "iDisplayLength": limit})

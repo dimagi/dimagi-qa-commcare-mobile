@@ -52,7 +52,11 @@ def run(hq, username, form_path_contains, after_minutes_ago=None):
     if after_minutes_ago is not None:
         after = datetime.datetime.utcnow() - datetime.timedelta(minutes=after_minutes_ago)
 
-    submission = hq.find_recent_submission(username, form_path_contains=form_path_contains, after=after, limit=50)
+    # limit=500, not 50: confirmed live (CI run 34448685828) a real Markdown
+    # submission fell off a 50-row Submit History page by the time this
+    # check ran - see find_recent_submission()'s own docstring for the full
+    # citation.
+    submission = hq.find_recent_submission(username, form_path_contains=form_path_contains, after=after, limit=500)
     if submission is None:
         raise AssertionError(
             f"No Submit History entry found for username={username!r} with "

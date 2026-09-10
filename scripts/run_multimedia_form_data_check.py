@@ -49,7 +49,10 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 
 def run_unanswered(hq, username, form_path_contains, expect_unanswered):
-    submission = hq.find_recent_submission(username, form_path_contains=form_path_contains, limit=50)
+    # limit=500, not 50: see find_recent_submission()'s own docstring
+    # (CI run 34448685828) - a 50-row Submit History page can miss a real
+    # submission under this domain's parallel-CI submission volume.
+    submission = hq.find_recent_submission(username, form_path_contains=form_path_contains, limit=500)
     if submission is None:
         raise AssertionError(
             f"No Submit History entry found for username={username!r} with "
@@ -74,7 +77,8 @@ def run_unanswered(hq, username, form_path_contains, expect_unanswered):
 
 
 def run_attachments(hq, username, form_path_contains, min_attachments):
-    submission = hq.find_recent_submission(username, form_path_contains=form_path_contains, limit=50)
+    # limit=500, not 50: see run_unanswered()'s own citation above.
+    submission = hq.find_recent_submission(username, form_path_contains=form_path_contains, limit=500)
     if submission is None:
         raise AssertionError(
             f"No Submit History entry found for username={username!r} with "
