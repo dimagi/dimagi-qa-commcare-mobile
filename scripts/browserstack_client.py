@@ -34,7 +34,22 @@ API_BASE = "https://api-cloud.browserstack.com/app-automate/maestro/v2"
 # server-side hiccup, worth absorbing centrally" reasoning already applied
 # to flows/common/login.yaml's Bad Server Response retries, just at the
 # HTTP-client layer instead of the on-device UI layer.
-_RETRYABLE_STATUS_CODES = {500, 502, 503, 504}
+#
+# UPDATE (2026-09-09), confirmed live (CI run 34365865901): trigger_build
+# raised an uncaught 422 for a freshly-uploaded app_url/test_suite_url pair
+# (a small, correctly-chunked 17-file execute array, well under the real
+# length limit - not the INVALID_SYNTAX/length class of 422 already known
+# about) - crashing run_suite.py before any report was written. Immediately
+# re-running the EXACT same request (same app, fresh test-suite upload,
+# same execute list) succeeded on the very next attempt with no changes at
+# all, pointing at eventual-consistency lag on BrowserStack's side (the
+# just-uploaded app/test-suite artifact not fully indexed yet when
+# trigger_build is called right after) rather than a malformed request.
+# 422 added here so the SAME retry-with-backoff machinery already proven
+# for 5xx responses covers this too - a genuinely permanent 422 (e.g. a
+# real execute-length violation) still fails after these few attempts, just
+# a few seconds later than before.
+_RETRYABLE_STATUS_CODES = {422, 500, 502, 503, 504}
 
 
 def _request_with_retry(method, url, attempts=4, backoff_seconds=5, file_path=None, file_field="file", **kwargs):
