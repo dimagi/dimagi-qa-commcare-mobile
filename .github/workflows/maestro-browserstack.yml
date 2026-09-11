@@ -96,19 +96,40 @@ jobs:
             # login(3) + date_widgets(3) + case_filters(1) +
             # conditional_enum_in_case_list(1) = 57 files vs group-c's 17),
             # which is exactly why group-a was still running 2+ hours after
-            # group-b had already finished in a real run. Rebalanced here by
-            # greedily bin-packing each tag's actual file count (computed via
-            # `doc.get("tags")` the same way scripts/run_suite.py's own
-            # select_flow_files() resolves them - every flow file carries
-            # exactly one of these 20 module tags, no overlaps) into 3 groups
-            # of the most equal total size possible: 41/41/40 flow files
-            # (not counting flows/common/*.yaml's 19 files, which
-            # select_flow_files() always adds to every group's run
-            # regardless of tags).
+            # group-b had already finished in a real run. Rebalanced by
+            # file count into 3 groups of 41/41/40 flow files.
+            #
+            # UPDATE (2026-09-11), confirmed live (CI run 34477790541, the
+            # first fully-clean dispatch): file-count balance still isn't
+            # RUNTIME balance - the 3 groups' real wall-clock came in at
+            # group-a 3h36m, group-b 3h44m, group-c 3h18m (a 27min spread),
+            # because individual flows vary hugely in real duration (e.g.
+            # multimedia's 26 flows alone took 105 real minutes, while
+            # trigger_device_logs' 2 flows took under 6). Rebalanced here
+            # using each tag's REAL measured total duration_ms from that
+            # run's own per-group reports/latest_results.json (not file
+            # count) - greedily bin-packed (largest-first, always into the
+            # currently-lightest group) into 3 groups of ~160-167 real
+            # minutes each (down from a 35min spread to under 8min),
+            # treating multimedia+updates_2_49 as one inseparable unit (they
+            # share the same HQ app_id - see the "Run Maestro suite (Updates
+            # tab..." steps' own citation below for why splitting them across
+            # groups would reopen a real race) and keeping prompted_updates's
+            # scenario_01/02 Appium steps pinned to their existing groups
+            # (group-b/group-c respectively, per the explicit instruction
+            # cited on those steps below) rather than moving them, since
+            # moving either would add a 4th/3rd extra non-chunk BrowserStack
+            # build to an already build-heavy group for a <6min gain - not
+            # worth the extra per-build overhead (confirmed live: each
+            # group's OWN summed flow duration_ms undercounts its real
+            # wall-clock by 40-70 real minutes, almost entirely per-build
+            # upload/trigger/poll overhead multiplied by how many separate
+            # BrowserStack builds - main chunks plus every dedicated step
+            # below - that group's job triggers).
             MATRIX='{"include":[
-              {"name":"group-a","tags":"multimedia install updates_2_49 other_error_tests support_menus trigger_device_logs"},
-              {"name":"group-b","tags":"mobile_pins prompted_updates externalapp_tests updates_partial_failed login case_filters conditional_enum_in_case_list update"},
-              {"name":"group-c","tags":"form_submissions recovery_measures right_to_left_text date_widgets session_expiration menu_badges"}
+              {"name":"group-a","tags":"multimedia updates_2_49 externalapp_tests install login update session_expiration"},
+              {"name":"group-b","tags":"form_submissions updates_partial_failed case_filters right_to_left_text conditional_enum_in_case_list support_menus menu_badges"},
+              {"name":"group-c","tags":"recovery_measures mobile_pins prompted_updates date_widgets other_error_tests trigger_device_logs"}
             ]}'
           else
             MATRIX="{\"include\":[{\"name\":\"single\",\"tags\":\"$TAG\"}]}"
@@ -581,12 +602,14 @@ jobs:
       # Master Mobile Plan (2026) > Form Submissions > "Markdown" (row 21) +
       # "Incomplete Forms 4" (row 30) - HQ-only Submit-History post-checks on
       # top of the already-automated on-device submit flows (both tagged
-      # form_submissions/group-c). Built 2026-09-01 but never actually wired
-      # into CI until now (caught while building a full workflow-status
-      # export) - see scripts/run_form_submission_history_check.py's own
-      # module docstring for the full citation.
+      # form_submissions - moved to group-b in the 2026-09-11 runtime
+      # rebalance above, was group-c). Built 2026-09-01 but never actually
+      # wired into CI until now (caught while building a full
+      # workflow-status export) - see
+      # scripts/run_form_submission_history_check.py's own module docstring
+      # for the full citation.
       - name: Verify Form Submissions Submit-History checks (Markdown, Incomplete Forms 4)
-        if: always() && (matrix.name == 'group-c' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'form_submissions')))
+        if: always() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'form_submissions')))
         env:
           HQ_DOMAIN: qateam
           HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
@@ -665,13 +688,14 @@ jobs:
 
       # Master Mobile Plan (2026) > Support Menus > "Menu 2" (Force Log
       # Submission) - HQ-only precondition verification on top of the
-      # already-automated on-device flow (support_menus/group-a). Built
+      # already-automated on-device flow (support_menus - moved to group-b
+      # in the 2026-09-11 runtime rebalance above, was group-a). Built
       # 2026-09-01 but never actually wired into CI until now (same gap as
       # the Form Submissions checks above) - see
       # scripts/run_support_menus_log_property_check.py's own module
       # docstring for the full citation.
       - name: Verify Support Menus 2 precondition (logenabled)
-        if: always() && (matrix.name == 'group-a' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'support_menus')))
+        if: always() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'support_menus')))
         env:
           HQ_DOMAIN: qateam
           HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
