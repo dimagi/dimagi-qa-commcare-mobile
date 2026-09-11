@@ -126,10 +126,35 @@ jobs:
             # upload/trigger/poll overhead multiplied by how many separate
             # BrowserStack builds - main chunks plus every dedicated step
             # below - that group's job triggers).
+            #
+            # UPDATE (2026-09-11, 2nd correction), confirmed live (CI run
+            # 34588845997): group-a hit a genuine BROWSERSTACK_TESTSUITE_
+            # PARSE_ERROR on one of its chunks (real execute-array length
+            # only 525 chars, well under the 850 limit above - not the
+            # already-fixed length bug), forcing the slow per-file fallback
+            # and leaving group-a still on its main dispatch step after 3
+            # hours while group-b/group-c had already moved well past
+            # theirs. Root cause traced to externalapp_tests living in
+            # group-a: the workflow's own `--other-app` flag below (gated on
+            # `contains(matrix.tags, 'externalapp_tests')`) applies to
+            # EVERY chunk in that group's single run_suite.py invocation,
+            # not just chunks that actually contain externalapp_tests
+            # flows - so every other chunk in group-a (this failing one
+            # included) was uploading an unneeded companion APK as a side
+            # effect of the tag placement. Swapped externalapp_tests
+            # (14.28 real min) out of group-a into group-c, trading back
+            # trigger_device_logs (5.85) + other_error_tests (6.20) - a
+            # near-even swap that keeps all 3 groups within ~1 real minute
+            # of each other by the same duration data above, while moving
+            # the --other-app side effect to group-c instead (whose own
+            # chunks may still pay it unnecessarily - this only relocates
+            # the side effect, doesn't eliminate it; making --other-app
+            # chunk-aware in run_suite.py itself would be the real fix, not
+            # attempted here).
             MATRIX='{"include":[
-              {"name":"group-a","tags":"multimedia updates_2_49 externalapp_tests install login update session_expiration"},
+              {"name":"group-a","tags":"multimedia updates_2_49 install login update session_expiration trigger_device_logs other_error_tests"},
               {"name":"group-b","tags":"form_submissions updates_partial_failed case_filters right_to_left_text conditional_enum_in_case_list support_menus menu_badges"},
-              {"name":"group-c","tags":"recovery_measures mobile_pins prompted_updates date_widgets other_error_tests trigger_device_logs"}
+              {"name":"group-c","tags":"recovery_measures mobile_pins prompted_updates date_widgets externalapp_tests"}
             ]}'
           else
             MATRIX="{\"include\":[{\"name\":\"single\",\"tags\":\"$TAG\"}]}"
