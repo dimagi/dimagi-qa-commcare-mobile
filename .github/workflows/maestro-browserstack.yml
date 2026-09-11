@@ -608,7 +608,23 @@ jobs:
       # workflow-status export) - see
       # scripts/run_form_submission_history_check.py's own module docstring
       # for the full citation.
-      - name: Verify Form Submissions Submit-History checks (Markdown, Incomplete Forms 4)
+      #
+      # UPDATE (2026-09-11): added Repeat Groups 5 + upload_test_2's own
+      # scripts/verify_submission.py checks here too - confirmed live that
+      # script was cited as these 2 rows' automation but never actually
+      # invoked anywhere in this workflow (only mentioned in comments), a
+      # genuinely orphaned check same as this step's own Markdown/Incomplete
+      # Forms 4 checks were before 2026-09-01. verify_submission.py itself
+      # didn't write to reports/latest_results.json at all until this same
+      # update (see its own module docstring) - fixed to match every other
+      # check script's read-merge-write pattern first, then wired in here.
+      # Geoservice 2 (the script's 3rd cited row) is deliberately NOT wired
+      # in yet - confirmed live locally that its own submission genuinely
+      # has no captured location (metadata.location == "---"), a real,
+      # currently-unresolved app/feature gap, not a broken check - per
+      # direct user instruction, holding off until that's investigated
+      # separately rather than immediately turning this step red.
+      - name: Verify Form Submissions Submit-History checks (Markdown, Incomplete Forms 4, Repeat Groups 5, upload_test_2)
         if: always() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'form_submissions')))
         env:
           HQ_DOMAIN: qateam
@@ -619,6 +635,10 @@ jobs:
             --test-name markdown --username test1 --form-path-contains Markdown
           python scripts/run_form_submission_history_check.py \
             --test-name incomplete_forms_4 --username test1 --form-path-contains "Question Types"
+          python scripts/verify_submission.py \
+            --test-name repeat_groups_5 --username test1 --form-path Repeats
+          python scripts/verify_submission.py \
+            --test-name upload_test_2 --username test1 --form-path "Upload Tests for specific" --require-multimedia
 
       # Runs Multimedia's "External File in Forms" - the one Multimedia row
       # blocked by the same class of gap the Recovery Measures CCZ-picker
