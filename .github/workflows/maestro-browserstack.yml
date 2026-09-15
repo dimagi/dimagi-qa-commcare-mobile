@@ -754,7 +754,7 @@ jobs:
       # before being wired in here. Same fold-into-the-matrix-job pattern as
       # every other Appium step in this job, gated on group-b
       # (right_to_left_text's own group) or a scoped tag dispatch.
-      - name: Run Appium suite on BrowserStack (Right to Left Text - Home Screen 8, Case list 4)
+      - name: Run Appium suite on BrowserStack (Right to Left Text - Home Screen 1, Home Screen 8, Case list 4)
         if: always() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'right_to_left_text')))
         env:
           BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}

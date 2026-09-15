@@ -52,6 +52,34 @@ Arabic-text-matching selector, at all:
          asserted here, same as every other intra-widget-alignment gap
          already documented elsewhere in this tab (Question Types 1/3/7,
          Case list 2/3).
+
+"Home Screen 1" (row 16) - same device-locale mechanism, a different
+element-position claim: the toolbar's own nav-drawer icon, title, and
+overflow icon. Confirmed live (2026-09-15, reports/appium_failures/
+rtl_home_english.xml vs. device_locale_ar_home2.xml) these mirror exactly
+like Home Screen 8's tiles do - nav-drawer icon x:[0,168] (left) under LTR
+-> x:[912,1080] (right) under RTL; overflow icon x:[960,1080] (right) ->
+x:[0,120] (left, confirmed again on the login screen too, reports/
+appium_failures/rtl_login_screen_device_ar.xml); title x:[216,724]
+(left-of-center) -> x:[356,864] (right-of-center) - and critically, the
+GAP between the title's edge and the nav-drawer icon's adjacent edge is
+identically ~48px in both directions (216-168=48 under LTR, 912-864=48
+under RTL), confirming genuine mirrored anchoring, not just an incidental
+shift. All identified by class name scoped to the toolbar's own stable
+resource-id (org.commcare.dalvik:id/toolbar) - never by content-desc text,
+which itself changes under a real device-locale change (confirmed live:
+"More options" becomes "مزيد من الخيارات") the same way CommCare's own
+strings don't.
+
+NOT implemented here: "Login 1" (row 12) makes the same toolbar-position
+claim but with the overflow icon's expected side reversed ("right corner")
+- confirmed live this contradicts the real, correct RTL behavior (the
+login screen's own toolbar mirrors identically to the home screen's,
+overflow icon on the LEFT under RTL, not the right). This reads as an
+error in the sheet's own wording rather than a genuine product
+inconsistency, since both screens behave identically and only Login 1's
+literal text disagrees - flagged for the user rather than encoded as a
+wrong assertion.
 """
 import re
 import sys
@@ -156,5 +184,72 @@ def run_case_list_4(driver, app_code, username, password):
         ("Navigate to the case list (Start -> 2nd menu row)", lambda: _navigate_to_case_list(driver)),
         ("Verify the action button has Arabic text and an RTL-mirrored arrow",
          lambda: _assert_case_list_action_button(driver)),
+    ]
+    return _run_steps(steps)
+
+
+def _toolbar_children_by_class(driver, class_name):
+    toolbar = driver.find_elements(AppiumBy.ID, f"{APP_ID}:id/toolbar")
+    if not toolbar:
+        raise AssertionError("No toolbar (id=toolbar) found")
+    return toolbar[0].find_elements(AppiumBy.CLASS_NAME, class_name)
+
+
+def _assert_home_toolbar_mirrored(driver):
+    drawer_icons = _toolbar_children_by_class(driver, "android.widget.ImageButton")
+    if not drawer_icons:
+        raise AssertionError("No navigation-drawer ImageButton found in the toolbar")
+    title_views = _toolbar_children_by_class(driver, "android.widget.TextView")
+    if not title_views:
+        raise AssertionError("No title TextView found in the toolbar")
+    overflow_containers = _toolbar_children_by_class(driver, "androidx.appcompat.widget.LinearLayoutCompat")
+    if not overflow_containers:
+        raise AssertionError("No overflow-menu container found in the toolbar")
+
+    drawer_x1, drawer_x2 = _bounds_x_range(drawer_icons[0])
+    title_x1, title_x2 = _bounds_x_range(title_views[0])
+    overflow_x1, overflow_x2 = _bounds_x_range(overflow_containers[0])
+    screen_width = driver.get_window_size()["width"]
+    mid = screen_width / 2
+
+    if not (drawer_x1 > mid):
+        raise AssertionError(
+            f"Expected the nav-drawer icon to be mirrored to the RIGHT half under RTL "
+            f"(bounds x:[{drawer_x1},{drawer_x2}], screen width {screen_width})."
+        )
+    if not (overflow_x2 < mid):
+        raise AssertionError(
+            f"Expected the overflow-menu icon to be mirrored to the LEFT half under RTL "
+            f"(bounds x:[{overflow_x1},{overflow_x2}], screen width {screen_width})."
+        )
+    # UPDATE (2026-09-15), confirmed live: a first attempt asserted the
+    # title's own LEFT edge sat right-of-center - failed live for THIS app's
+    # longer title ("Right to Left Tests!", bounds x:[356,864]) even though
+    # the mirroring was genuinely correct, because a longer title naturally
+    # extends further left from a fixed anchor point. Confirmed via a
+    # second real screen (the login screen's shorter "CommCare" title,
+    # bounds x:[563,864]) that the title's RIGHT edge - not its left, and
+    # not "right of center" - is the real invariant: both screens' titles
+    # share the identical right edge (864) and the identical ~48px gap to
+    # the drawer icon's own left edge (912-864=48, matching the home
+    # screen's un-mirrored 216-168=48 gap exactly) - the title is anchored
+    # adjacent to the drawer icon, wherever that icon currently sits, not
+    # pinned to an absolute "right half" threshold that only holds for
+    # short strings.
+    gap = drawer_x1 - title_x2
+    if not (0 <= gap <= 100):
+        raise AssertionError(
+            f"Expected the app title's right edge to sit close to the (RTL-mirrored) nav-drawer "
+            f"icon's left edge (title x2={title_x2}, drawer x1={drawer_x1}, gap={gap})."
+        )
+
+
+def run_home_screen_1(driver, app_code, username, password):
+    steps = [
+        ("Install [Right to Left Tests!] app", lambda: _install_app_by_code(driver, app_code)),
+        ("Log in", lambda: _login(driver, username, password)),
+        ("Verify the home screen", lambda: h.wait_visible_id(driver, f"{APP_ID}:id/home_gridview_buttons", timeout=20)),
+        ("Verify the toolbar is RTL-mirrored (title right, options button left)",
+         lambda: _assert_home_toolbar_mirrored(driver)),
     ]
     return _run_steps(steps)

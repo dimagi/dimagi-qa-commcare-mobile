@@ -169,6 +169,15 @@ def main():
     print(f"  case_list_4: {case_list_4_result.status}"
           + (f" - {case_list_4_result.failed_step}" if case_list_4_result.status == "failed" else ""))
 
+    print("Running Home Screen 1 ...")
+    home_screen_1_result = _run_scenario(
+        bs, app_url, device, os_version, args.build_name, "home_screen_1",
+        "right_to_left_text/home_screen_1",
+        lambda driver: rtl.run_home_screen_1(driver, app_code, cc_username, cc_password),
+    )
+    print(f"  home_screen_1: {home_screen_1_result.status}"
+          + (f" - {home_screen_1_result.failed_step}" if home_screen_1_result.status == "failed" else ""))
+
     (REPO_ROOT / "reports").mkdir(exist_ok=True)
     apk_version_path = REPO_ROOT / "reports" / "apk_version.txt"
     if not apk_version_path.exists():
@@ -181,7 +190,7 @@ def main():
     # (CI run 34226264408) for why: merging in an earlier step's carried-
     # forward "failed" entry here would cascade a false failed exit onto
     # this step even when its own results passed.
-    this_run_results = [home_screen_8_result, case_list_4_result]
+    this_run_results = [home_screen_8_result, case_list_4_result, home_screen_1_result]
 
     existing_results_path = REPO_ROOT / "reports" / "latest_results.json"
     results = list(this_run_results)
