@@ -1,7 +1,19 @@
 """
-CLI runner for Multimedia > "MM2" (Master Mobile Plan 2026) - see
-scripts/appium_mm2_scenario.py's own module docstring for the full
+CLI runner for Multimedia > "MM1"/"MM2"/"MM3" (Master Mobile Plan 2026) -
+see scripts/appium_mm2_scenario.py's own module docstring for the full
 citation of why this needs Appium's push_file rather than Maestro.
+
+MM1 is a standalone install cycle (its own fresh Appium session). MM2/MM3
+share ONE session - MM3 is a direct continuation of MM2's own broken state
+(see appium_mm2_scenario.run_mm3's own docstring), so splitting them across
+separate sessions would lose that state and MM3 would have nothing to
+repair.
+
+UPDATE (2026-09-15), confirmed live: extended from MM2-only after finding
+MM1/MM3 reuse the exact same infrastructure (push a locally-built zip,
+drive CommCareVerificationActivity's own Install Multimedia menu) - no new
+capability needed, just two more scenario functions. Verified passing live
+before being wired into CI.
 
 Usage:
     python scripts/run_appium_mm2_suite.py
@@ -68,6 +80,50 @@ def _set_browserstack_session_status(driver, result):
         pass
 
 
+def _run_mm1(bs, app_url, device, os_version, build_name, app_code_no_media, local_full_zip_path):
+    driver = None
+    result = None
+    start = time.monotonic()
+    try:
+        driver = bs.start_session(app_url, device, os_version, build_name=build_name, session_name="mm1")
+        mm2_scenario.run_mm1(driver, bs, app_code_no_media, local_full_zip_path)
+        result = report_generator.TestResult(
+            name="multimedia/mm1",
+            workflow="multimedia",
+            status="passed",
+            duration_ms=int((time.monotonic() - start) * 1000),
+            device=f"{device}-{os_version}",
+        )
+    except appium_scenarios.ScenarioFailure as exc:
+        _save_failure_evidence(driver, "mm1")
+        result = report_generator.TestResult(
+            name="multimedia/mm1",
+            workflow="multimedia",
+            status="failed",
+            duration_ms=int((time.monotonic() - start) * 1000),
+            device=f"{device}-{os_version}",
+            error=str(exc.original),
+            failed_step=f"mm1 (Appium) - {exc.step_name}: {exc.original}",
+        )
+    except Exception as exc:  # noqa: BLE001
+        _save_failure_evidence(driver, "mm1")
+        result = report_generator.TestResult(
+            name="multimedia/mm1",
+            workflow="multimedia",
+            status="failed",
+            duration_ms=int((time.monotonic() - start) * 1000),
+            device=f"{device}-{os_version}",
+            error=str(exc),
+            failed_step=f"mm1 (Appium) - session/infra error: {exc}",
+        )
+    finally:
+        if driver is not None:
+            if result is not None:
+                _set_browserstack_session_status(driver, result)
+            driver.quit()
+    return result
+
+
 def _run_mm2(bs, app_url, device, os_version, build_name, app_code_no_media, local_repair_zip_path):
     driver = None
     result = None
@@ -112,6 +168,108 @@ def _run_mm2(bs, app_url, device, os_version, build_name, app_code_no_media, loc
     return result
 
 
+def _run_mm2_and_mm3(bs, app_url, device, os_version, build_name, app_code_no_media,
+                      local_repair_zip_path, local_full_zip_path, username, password):
+    # MM3 is a direct continuation of MM2's own broken state (see
+    # appium_mm2_scenario.run_mm3's own docstring) - they share ONE Appium
+    # session so MM3 has the missing-media state MM2 left behind to repair.
+    driver = None
+    mm2_result = None
+    mm3_result = None
+    start_mm2 = time.monotonic()
+    try:
+        driver = bs.start_session(app_url, device, os_version, build_name=build_name, session_name="mm2_mm3")
+        mm2_scenario.run_mm2(driver, bs, app_code_no_media, local_repair_zip_path)
+        mm2_result = report_generator.TestResult(
+            name="multimedia/mm2",
+            workflow="multimedia",
+            status="passed",
+            duration_ms=int((time.monotonic() - start_mm2) * 1000),
+            device=f"{device}-{os_version}",
+        )
+    except appium_scenarios.ScenarioFailure as exc:
+        _save_failure_evidence(driver, "mm2")
+        mm2_result = report_generator.TestResult(
+            name="multimedia/mm2",
+            workflow="multimedia",
+            status="failed",
+            duration_ms=int((time.monotonic() - start_mm2) * 1000),
+            device=f"{device}-{os_version}",
+            error=str(exc.original),
+            failed_step=f"mm2 (Appium) - {exc.step_name}: {exc.original}",
+        )
+    except Exception as exc:  # noqa: BLE001
+        _save_failure_evidence(driver, "mm2")
+        mm2_result = report_generator.TestResult(
+            name="multimedia/mm2",
+            workflow="multimedia",
+            status="failed",
+            duration_ms=int((time.monotonic() - start_mm2) * 1000),
+            device=f"{device}-{os_version}",
+            error=str(exc),
+            failed_step=f"mm2 (Appium) - session/infra error: {exc}",
+        )
+
+    start_mm3 = time.monotonic()
+    if mm2_result.status != "passed":
+        mm3_result = report_generator.TestResult(
+            name="multimedia/mm3",
+            workflow="multimedia",
+            status="failed",
+            duration_ms=0,
+            device=f"{device}-{os_version}",
+            error="Skipped: mm2 (same session) did not complete cleanly",
+            failed_step="mm3 (Appium) - skipped, mm2 didn't leave the expected broken state to repair",
+        )
+    else:
+        try:
+            mm2_scenario.run_mm3(driver, bs, local_full_zip_path, username, password)
+            mm3_result = report_generator.TestResult(
+                name="multimedia/mm3",
+                workflow="multimedia",
+                status="passed",
+                duration_ms=int((time.monotonic() - start_mm3) * 1000),
+                device=f"{device}-{os_version}",
+            )
+        except appium_scenarios.ScenarioFailure as exc:
+            _save_failure_evidence(driver, "mm3")
+            mm3_result = report_generator.TestResult(
+                name="multimedia/mm3",
+                workflow="multimedia",
+                status="failed",
+                duration_ms=int((time.monotonic() - start_mm3) * 1000),
+                device=f"{device}-{os_version}",
+                error=str(exc.original),
+                failed_step=f"mm3 (Appium) - {exc.step_name}: {exc.original}",
+            )
+        except Exception as exc:  # noqa: BLE001
+            _save_failure_evidence(driver, "mm3")
+            mm3_result = report_generator.TestResult(
+                name="multimedia/mm3",
+                workflow="multimedia",
+                status="failed",
+                duration_ms=int((time.monotonic() - start_mm3) * 1000),
+                device=f"{device}-{os_version}",
+                error=str(exc),
+                failed_step=f"mm3 (Appium) - session/infra error: {exc}",
+            )
+
+    if driver is not None:
+        combined_status = "passed" if mm2_result.status == "passed" and mm3_result.status == "passed" else "failed"
+        combined = report_generator.TestResult(
+            name="multimedia/mm2_mm3",
+            workflow="multimedia",
+            status=combined_status,
+            duration_ms=0,
+            device=f"{device}-{os_version}",
+            failed_step=mm3_result.failed_step or mm2_result.failed_step or "",
+        )
+        _set_browserstack_session_status(driver, combined)
+        driver.quit()
+
+    return mm2_result, mm3_result
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--apk", help="Path to an already-downloaded APK (must be the current release build).")
@@ -143,13 +301,15 @@ def main():
     )
     app_code_no_media = hq.get_app_install_code(app_id, include_media=False)
 
+    (REPO_ROOT / "reports").mkdir(exist_ok=True)
+    raw_zip_path = str(REPO_ROOT / "reports" / "mm2_multimedia_raw.zip")
+    if not os.path.exists(raw_zip_path):
+        print(f"Downloading current multimedia zip for {app_id} (needed by mm1/mm3 too) ...")
+        hq.download_multimedia_zip(app_id, raw_zip_path)
+
     repair_zip_path = args.repair_zip
     if not repair_zip_path:
-        (REPO_ROOT / "reports").mkdir(exist_ok=True)
-        raw_zip_path = str(REPO_ROOT / "reports" / "mm2_multimedia_raw.zip")
         repair_zip_path = str(REPO_ROOT / "reports" / "mm2_repair.zip")
-        print(f"Downloading current multimedia zip for {app_id} ...")
-        hq.download_multimedia_zip(app_id, raw_zip_path)
         print(f"Building repair zip (excluding {mm2_scenario.TARGET_ENTRY} + "
               f"{len(mm2_scenario.KNOWN_ORPHANED_ENTRIES)} known-orphaned 3gp video(s)) ...")
         mm2_scenario.build_repair_zip(
@@ -158,13 +318,24 @@ def main():
             also_exclude=mm2_scenario.KNOWN_ORPHANED_ENTRIES,
         )
 
+    cc_username = os.environ["CC_TEST_USERNAME"]
+    cc_password = os.environ["CC_TEST_PASSWORD"]
+
     bs = AppiumBrowserStackClient()
     print(f"Uploading APK ({apk_path}) to BrowserStack ...")
     app_url = bs.upload_app(apk_path)["app_url"]
 
-    print("Running mm2 (Appium) ...")
-    result = _run_mm2(bs, app_url, device, os_version, args.build_name, app_code_no_media, repair_zip_path)
-    print(f"  mm2: {result.status}" + (f" - {result.failed_step}" if result.status == "failed" else ""))
+    print("Running mm1 (Appium) ...")
+    mm1_result = _run_mm1(bs, app_url, device, os_version, args.build_name, app_code_no_media, raw_zip_path)
+    print(f"  mm1: {mm1_result.status}" + (f" - {mm1_result.failed_step}" if mm1_result.status == "failed" else ""))
+
+    print("Running mm2 + mm3 (Appium, same session) ...")
+    mm2_result, mm3_result = _run_mm2_and_mm3(
+        bs, app_url, device, os_version, args.build_name, app_code_no_media,
+        repair_zip_path, raw_zip_path, cc_username, cc_password,
+    )
+    print(f"  mm2: {mm2_result.status}" + (f" - {mm2_result.failed_step}" if mm2_result.status == "failed" else ""))
+    print(f"  mm3: {mm3_result.status}" + (f" - {mm3_result.failed_step}" if mm3_result.status == "failed" else ""))
 
     (REPO_ROOT / "reports").mkdir(exist_ok=True)
     apk_version_path = REPO_ROOT / "reports" / "apk_version.txt"
@@ -173,15 +344,15 @@ def main():
             apk_commcare_version or f"{pathlib.Path(apk_path).name} (custom)", encoding="utf-8",
         )
 
-    # Exit code reflects only THIS invocation's own result, not the
+    # Exit code reflects only THIS invocation's own results, not the
     # merged/cumulative list below - see run_suite.py's own citation
     # (CI run 34226264408) for why: merging in an earlier step's carried-
     # forward "failed" entry here would cascade a false failed exit onto
-    # this step even when its own result passed.
-    this_run_results = [result]
+    # this step even when its own results passed.
+    this_run_results = [mm1_result, mm2_result, mm3_result]
 
     existing_results_path = REPO_ROOT / "reports" / "latest_results.json"
-    results = [result]
+    results = list(this_run_results)
     if existing_results_path.exists():
         existing = json.loads(existing_results_path.read_text(encoding="utf-8"))
         new_names = {r.name for r in results}

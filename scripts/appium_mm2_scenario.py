@@ -90,7 +90,7 @@ import zipfile
 sys.path.insert(0, os.path.dirname(__file__))
 import appium_helpers as h
 from appium.webdriver.common.appiumby import AppiumBy
-from appium_scenarios import APP_ID, ScenarioFailure, _run_steps, _relaunch_app
+from appium_scenarios import APP_ID, ScenarioFailure, _run_steps, _relaunch_app, _login
 
 TARGET_ENTRY = "commcare/image/data/five.png"
 TARGET_FILENAME = "five.png"
@@ -278,5 +278,87 @@ def run_mm2(driver, appium_client, app_code_no_media, local_repair_zip_path):
         ("Open overflow menu > Install Multimedia", lambda: _open_install_multimedia_menu(driver)),
         ("Complete multimedia install from auto-discovered zip", lambda: _complete_multimedia_install(driver)),
         ("Verify only the target file is still reported missing", lambda: _verify_only_target_file_missing(driver)),
+    ]
+    return _run_steps(steps)
+
+
+def _verify_no_missing_media(driver):
+    """The success-path counterpart to _verify_only_target_file_missing:
+    after installing a COMPLETE multimedia zip (nothing excluded),
+    CommCareVerificationActivity should auto-advance straight to the login
+    screen instead of showing MissingMediaPrompt at all. Polls the same way
+    _verify_only_target_file_missing does, since the same
+    onPostResume->newMediaToValidate re-verify race applies here too."""
+    deadline = time.monotonic() + 60
+    prompt = None
+    while time.monotonic() < deadline:
+        if h.wait_visible_id(driver, f"{APP_ID}:id/edit_username", timeout=1, optional=True):
+            return
+        prompt = _get_text_by_id(driver, f"{APP_ID}:id/MissingMediaPrompt")
+        if prompt:
+            raise AssertionError(
+                f"Expected a clean install (straight to the login screen) after pushing the "
+                f"COMPLETE multimedia zip, but MissingMediaPrompt still reads {prompt!r}."
+            )
+        time.sleep(2)
+    raise AssertionError(
+        f"Never reached the login screen (edit_username) within 60s after installing the "
+        f"complete multimedia zip - last MissingMediaPrompt text seen: {prompt!r}"
+    )
+
+
+def _enter_practice_mode(driver):
+    """Port of flows/multimedia/logo_03_demo_logo.yaml's own already-proven
+    Enter Practice Mode sequence (see that file's own header for the full
+    LoginActivity/loginDemoUser()/showDemoModeWarning() citation) - reused
+    verbatim here rather than re-deriving it."""
+    h.tap_by_text(driver, "More options", timeout=10)
+    h.tap_by_text(driver, "Enter Practice Mode", timeout=10)
+    h.assert_visible_text(driver, "Starting Practice Mode")
+    h.tap_by_text(driver, "OK", timeout=10)
+    h.assert_visible_text(driver, "Explore CommCare Practice Mode")
+
+
+def run_mm1(driver, appium_client, app_code_no_media, local_full_zip_path):
+    """Master Mobile Plan (2026) > Multimedia > "MM1" - install without
+    multimedia, repair with the COMPLETE zip (nothing excluded, unlike
+    MM2/MM3's deliberately-incomplete one), verify a clean install with no
+    missing-file report, then Enter Practice Mode and confirm the home
+    screen - the row's own real steps 10-13. A separate, standalone
+    install cycle from MM2/MM3's own broken-then-fixed narrative (MM1's
+    own steps re-install/re-publish from scratch, not a continuation of
+    MM2's state)."""
+    steps = [
+        ("Install app with an include_media=False code", lambda: _install_no_media_once(driver, app_code_no_media)),
+        ("Push the COMPLETE multimedia zip to Downloads",
+         lambda: _push_repair_zip(appium_client, driver, local_full_zip_path)),
+        ("Open overflow menu > Install Multimedia", lambda: _open_install_multimedia_menu(driver)),
+        ("Complete multimedia install from auto-discovered zip", lambda: _complete_multimedia_install(driver)),
+        ("Verify no missing media (reaches login screen)", lambda: _verify_no_missing_media(driver)),
+        ("Enter Practice Mode and confirm the home screen", lambda: _enter_practice_mode(driver)),
+    ]
+    return _run_steps(steps)
+
+
+def run_mm3(driver, appium_client, local_full_zip_path, username, password):
+    """Master Mobile Plan (2026) > Multimedia > "MM3" - continues MM2's own
+    scenario (call this immediately after run_mm2, in the SAME session):
+    with TARGET_FILENAME still reported missing, push the now-COMPLETE
+    zip, re-run Install Multimedia, verify the missing-file report clears
+    entirely, then log in and confirm the home screen - the row's own real
+    steps 3-7. Reuses appium_scenarios._login (the same hardened Bad
+    Server Response/progress-dialog handling every other Appium scenario
+    in this repo already relies on) for the final login step, since
+    run_mm2's own end-state deliberately stops short of it (see run_mm2's
+    own docstring for why login isn't reachable until every required file
+    is present)."""
+    steps = [
+        ("Push the COMPLETE multimedia zip to Downloads (repairs the remaining missing file)",
+         lambda: _push_repair_zip(appium_client, driver, local_full_zip_path)),
+        ("Re-open overflow menu > Install Multimedia", lambda: _open_install_multimedia_menu(driver)),
+        ("Complete multimedia install from auto-discovered zip", lambda: _complete_multimedia_install(driver)),
+        ("Verify no missing media remains (reaches login screen)", lambda: _verify_no_missing_media(driver)),
+        ("Log in", lambda: _login(driver, username, password)),
+        ("Verify the home screen", lambda: h.wait_visible_id(driver, f"{APP_ID}:id/nsv_home_screen", timeout=20)),
     ]
     return _run_steps(steps)
