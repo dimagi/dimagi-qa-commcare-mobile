@@ -65,15 +65,22 @@ currently-required files. Separately, a full 167MB push_file call was timed
 (confirmed live: 515.9s, ~8.6 minutes - base64-encodes the entire file into
 one HTTP POST, see AppiumBrowserStackClient.push_file's own docstring) -
 impractical for routine CI use regardless of correctness. The repair zip
-built here additionally excludes the historical zip's 2 giant `.3gp` video
-files (129MB of its 167MB total, KNOWN_ORPHANED_ENTRIES below) on the
-working hypothesis that they're in the same orphaned-asset category as
-two.png (neither appeared in the first-10-truncated missing-media list
-either) - verified by this scenario's own run: `_verify_only_target_file_missing`
-below checks for every file in OTHER_REQUIRED_FILES, including both .3gp
-names, so if they're actually still required this scenario fails loudly
-rather than silently passing on a wrong assumption. Shrinks the real
-necessary push to ~38MB if the hypothesis holds.
+built here also excludes ONE of the historical zip's 2 giant, identically-
+sized (64,553,407 bytes each) `.3gp` video files, KNOWN_ORPHANED_ENTRIES
+below.
+
+UPDATE (2026-09-15), confirmed/CORRECTED live: the original "working
+hypothesis" that BOTH .3gp files were orphaned like two.png was wrong for
+one of them - a real run's own `_verify_only_target_file_missing` self-check
+(exactly the safety net this was designed for) caught
+`commcare/video/data/undefined-3q6iti.3gp` still showing up in the real
+missing-media prompt after the repair-zip install, meaning it IS still
+required by the current top build. Only `commcare/video-inline/data/
+undefined-sy7j2g.3gp` is confirmed genuinely orphaned (never appears in the
+missing-media prompt either before or after the repair). The repair zip now
+includes the required 3gp (pushing it to ~100MB instead of ~38MB, still
+well under the already-proven-working 167MB/8.6min full push) and only
+excludes the one confirmed-orphaned file.
 """
 import os
 import sys
@@ -89,10 +96,11 @@ TARGET_ENTRY = "commcare/image/data/five.png"
 TARGET_FILENAME = "five.png"
 REPAIR_ZIP_DEVICE_PATH = "/sdcard/Download/commcare_mm2_repair.zip"
 
-# The 2 giant .3gp video files from the app's historical multimedia zip -
-# see module docstring's "working hypothesis" citation.
+# Only ONE of the original 2 giant .3gp video files is actually orphaned -
+# see module docstring's 2026-09-15 UPDATE for the live confirmation that
+# the other one (undefined-3q6iti.3gp) is still required and must stay IN
+# the repair zip.
 KNOWN_ORPHANED_ENTRIES = [
-    "commcare/video/data/undefined-3q6iti.3gp",
     "commcare/video-inline/data/undefined-sy7j2g.3gp",
 ]
 
@@ -183,11 +191,29 @@ def _complete_multimedia_install(driver):
     # instead of depending on the flaky auto-discovery shortcut.
     h.tap_by_id(driver, f"{APP_ID}:id/screen_multimedia_inflater_filefetch", timeout=15)
     h.tap_by_text(driver, "(?i).*commcare_mm2_repair.*", regex=True, timeout=15)
-    location = _get_text_by_id(driver, f"{APP_ID}:id/screen_multimedia_inflater_location")
-    if not location or "commcare_mm2_repair" not in location:
+    # UPDATE (2026-09-15), confirmed live (real failure screenshot +
+    # hierarchy dump, BrowserStack session 8b29c5b124a4a569d145b9660f06f44bfe22e23b):
+    # on this device/Android version, the SAF picker resolves the tapped
+    # filename to an opaque content:// URI
+    # ("content://com.android.providers.downloads.documents/document/msf%3A255")
+    # in the location field, NOT a path containing the literal filename -
+    # asserting the location field's own text was the wrong check for this
+    # platform's picker behavior, not a sign anything actually went wrong.
+    # The screenshot shows the app itself already treats this URI as fully
+    # valid: screen_multimedia_install_messages reads "Multimedia inflater
+    # ready, press install to begin" and screen_multimedia_inflater_install
+    # is enabled - that resource-id-backed status message is CommCare's own
+    # real readiness signal (it only ever shows once MultimediaInflater has
+    # successfully resolved a real zip via the URI), so assert on THAT
+    # instead of the location field's literal text.
+    ready = h.wait_visible_id(driver, f"{APP_ID}:id/screen_multimedia_install_messages", timeout=15, optional=True)
+    message = _get_text_by_id(driver, f"{APP_ID}:id/screen_multimedia_install_messages")
+    if not ready or not message or "ready" not in message.lower():
+        location = _get_text_by_id(driver, f"{APP_ID}:id/screen_multimedia_inflater_location")
         raise AssertionError(
-            f"MultimediaInflaterActivity's location field reads {location!r} after picking "
-            f"the file via the SAF picker - expected it to contain 'commcare_mm2_repair'."
+            f"MultimediaInflaterActivity never showed a 'ready' status message after picking "
+            f"the file via the SAF picker (location field reads {location!r}, status message "
+            f"reads {message!r}) - the picked file may not have resolved to a valid zip."
         )
     h.wait_visible_id(driver, f"{APP_ID}:id/screen_multimedia_inflater_install", timeout=15)
     h.tap_by_id(driver, f"{APP_ID}:id/screen_multimedia_inflater_install")

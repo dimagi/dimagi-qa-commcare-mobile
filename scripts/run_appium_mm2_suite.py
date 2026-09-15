@@ -150,8 +150,8 @@ def main():
         repair_zip_path = str(REPO_ROOT / "reports" / "mm2_repair.zip")
         print(f"Downloading current multimedia zip for {app_id} ...")
         hq.download_multimedia_zip(app_id, raw_zip_path)
-        print(f"Building repair zip (excluding {mm2_scenario.TARGET_ENTRY} + the 2 known-orphaned "
-              f"3gp videos) ...")
+        print(f"Building repair zip (excluding {mm2_scenario.TARGET_ENTRY} + "
+              f"{len(mm2_scenario.KNOWN_ORPHANED_ENTRIES)} known-orphaned 3gp video(s)) ...")
         mm2_scenario.build_repair_zip(
             raw_zip_path, repair_zip_path,
             missing_entry=mm2_scenario.TARGET_ENTRY,

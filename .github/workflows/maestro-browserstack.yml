@@ -707,6 +707,57 @@ jobs:
           fi
           python scripts/run_appium_multimedia_suite.py "${ARGS[@]}"
 
+      # Master Mobile Plan (2026) > Multimedia > "MM2" (row 9) - previously
+      # Not automatable because step 1 as literally written requires moving
+      # a file the app already has out of its own external-files directory
+      # via the device's own file manager before the rest of the scenario
+      # runs. Reinterprets what the row actually needs to prove (a no-media
+      # install reports exactly one specific missing file, then a targeted
+      # repair zip resolves it) by building that missing-one-file zip
+      # LOCALLY (download the app's real multimedia zip via HQClient, strip
+      # one file out with Python's stdlib zipfile) and pushing it directly
+      # to /sdcard/Download/ via the same push_file mechanism already
+      # proven for CCZs - no on-device file relocation needed at all. See
+      # scripts/appium_mm2_scenario.py's own module docstring for the full
+      # citation, including why `mobile: shell` (the other candidate for a
+      # literal on-device move) is confirmed blocked on BrowserStack's
+      # managed Appium server (adb_shell insecure feature disabled).
+      # Verified passing live 2026-09-15 before being wired in here. Same
+      # fold-into-the-matrix-job pattern as every other Appium step in this
+      # job, gated on group-a (multimedia's own group) or a scoped
+      # multimedia tag dispatch.
+      - name: Run Appium suite on BrowserStack (Multimedia - MM2 targeted repair install)
+        if: always() && (matrix.name == 'group-a' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'multimedia')))
+        env:
+          BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
+          BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
+          HQ_DOMAIN: qateam
+          HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
+          HQ_WEB_USER_PASSWORD: ${{ secrets.HQ_WEB_USER_PASSWORD }}
+        run: |
+          declare -A ANDROID_DEVICE_MAP=(
+            ["16.0"]="Samsung Galaxy S26"
+            ["15.0"]="Samsung Galaxy S25"
+            ["14.0"]="Samsung Galaxy S24"
+            ["13.0"]="Samsung Galaxy S23"
+            ["12.0"]="Samsung Galaxy S22"
+            ["11.0"]="Samsung Galaxy S21"
+            ["10.0"]="Samsung Galaxy S20"
+          )
+          ANDROID_VERSION="${{ github.event.inputs.android_version || '16.0' }}"
+          DEVICES="${{ github.event.inputs.devices }}"
+          if [ -z "$DEVICES" ]; then
+            DEVICES="${ANDROID_DEVICE_MAP[$ANDROID_VERSION]}-$ANDROID_VERSION"
+          fi
+          ARGS=(--devices "$DEVICES" --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-appium-mm2")
+          APK_SOURCE="${{ github.event.inputs.apk_source || 'GitHub Releases' }}"
+          if [ "$APK_SOURCE" != "GitHub Releases" ]; then
+            ARGS+=(--apk "$APK_SOURCE")
+          elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
+            ARGS+=(--release-tag "${{ github.event.inputs.release_tag }}")
+          fi
+          python scripts/run_appium_mm2_suite.py "${ARGS[@]}"
+
       # Master Mobile Plan (2026) > Multimedia > "Photo Verification" (row
       # 47) + "Image Resize 27/28" (rows 41-42) - HQ-only Submit-History
       # post-checks on top of the already-automated on-device submit flows
