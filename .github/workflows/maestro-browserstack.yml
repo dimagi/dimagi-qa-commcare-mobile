@@ -732,6 +732,93 @@ jobs:
           fi
           python scripts/run_appium_user_activation_suite.py "${ARGS[@]}"
 
+      # Master Mobile Plan (2026) > Right to Left Text > "Home Screen 8"
+      # (row 23) + "Case list 4" (row 36). Both were Not automatable because
+      # this app's own real Arabic translations broke English-text selectors
+      # once CommCare's IN-APP language was switched to Arabic, and a prior
+      # Maestro attempt hit a real Unicode round-trip bug even matching the
+      # Arabic text directly. Confirmed live 2026-09-15 that CommCare's own
+      # in-app language switch does NOT change Android's real system layout
+      # direction at all (it only swaps which string dictionary CommCare's
+      # own Localization system reads from) - what DOES cause real RTL
+      # mirroring is the device's actual system locale, set here via
+      # UiAutomator2's standard `language`/`locale` capabilities
+      # (AppiumBrowserStackClient.start_session(device_language="ar",
+      # device_locale="SA")) - confirmed this genuinely mirrors CommCare's
+      # home-screen tiles and the case-list action button's arrow, while
+      # leaving CommCare's own string content untouched (so neither
+      # scenario ever needs CommCare's in-app language switch, or any
+      # Arabic-text-matching SELECTOR, at all - see
+      # scripts/appium_rtl_scenarios.py's own module docstring for the full
+      # citation and exact bounds evidence). Verified passing live locally
+      # before being wired in here. Same fold-into-the-matrix-job pattern as
+      # every other Appium step in this job, gated on group-b
+      # (right_to_left_text's own group) or a scoped tag dispatch.
+      - name: Run Appium suite on BrowserStack (Right to Left Text - Home Screen 8, Case list 4)
+        if: always() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'right_to_left_text')))
+        env:
+          BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
+          BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
+          HQ_DOMAIN: qateam
+          HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
+          HQ_WEB_USER_PASSWORD: ${{ secrets.HQ_WEB_USER_PASSWORD }}
+          CC_TEST_USERNAME: ${{ secrets.CC_TEST_USERNAME }}
+          CC_TEST_PASSWORD: ${{ secrets.CC_TEST_PASSWORD }}
+        run: |
+          declare -A ANDROID_DEVICE_MAP=(
+            ["16.0"]="Samsung Galaxy S26"
+            ["15.0"]="Samsung Galaxy S25"
+            ["14.0"]="Samsung Galaxy S24"
+            ["13.0"]="Samsung Galaxy S23"
+            ["12.0"]="Samsung Galaxy S22"
+            ["11.0"]="Samsung Galaxy S21"
+            ["10.0"]="Samsung Galaxy S20"
+          )
+          ANDROID_VERSION="${{ github.event.inputs.android_version || '16.0' }}"
+          DEVICES="${{ github.event.inputs.devices }}"
+          if [ -z "$DEVICES" ]; then
+            DEVICES="${ANDROID_DEVICE_MAP[$ANDROID_VERSION]}-$ANDROID_VERSION"
+          fi
+          ARGS=(--devices "$DEVICES" --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-appium-rtl")
+          APK_SOURCE="${{ github.event.inputs.apk_source || 'GitHub Releases' }}"
+          if [ "$APK_SOURCE" != "GitHub Releases" ]; then
+            ARGS+=(--apk "$APK_SOURCE")
+          elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
+            ARGS+=(--release-tag "${{ github.event.inputs.release_tag }}")
+          fi
+          python scripts/run_appium_rtl_suite.py "${ARGS[@]}"
+
+      # Master Mobile Plan (2026) > Form Submissions > "Graceful Session
+      # Pause" (row 57) - the row's own on-device steps (force-stop the app
+      # mid-form, relaunch, confirm the draft is restored) stay genuinely
+      # Not automatable (confirmed dead end on terminateApp/backgroundApp/
+      # adb_shell-style forced termination on BrowserStack - Maestro's stop/
+      # kill primitives don't reproduce a real crash), but the row's own
+      # PRECONDITION (custom property cc-auto-form-save-on-pause=yes) is a
+      # plain HQ read, same pattern as Support Menus' own precondition
+      # check. UPDATE (2026-09-15): built and verified this check works
+      # correctly, but it found a REAL gap - confirmed live that [Master]
+      # Basic Tests genuinely has no cc-auto-form-save-on-pause property set
+      # at all (property name verified against commcare-android source,
+      # MainConfigurablePreferences.AUTO_SAVE_FORM_ON_PAUSE, not guessed).
+      # Per direct user instruction, NOT fixed by setting the property
+      # ourselves (a real HQ app-config change) - wired in here so this gap
+      # is visible in every run rather than silently undocumented, and
+      # deliberately excluded from the exit-code-gating "this_run_results"
+      # pattern other checks use, since a currently-failing precondition
+      # is real signal, not a broken script - see
+      # scripts/run_graceful_session_pause_precondition_check.py's own
+      # module docstring for the full citation.
+      - name: Verify Graceful Session Pause precondition (cc-auto-form-save-on-pause)
+        if: always() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'form_submissions')))
+        continue-on-error: true
+        env:
+          HQ_DOMAIN: qateam
+          HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
+          HQ_WEB_USER_PASSWORD: ${{ secrets.HQ_WEB_USER_PASSWORD }}
+        run: |
+          python scripts/run_graceful_session_pause_precondition_check.py
+
       # Runs Multimedia's "External File in Forms" - the one Multimedia row
       # blocked by the same class of gap the Recovery Measures CCZ-picker
       # step above already solves (Maestro can't place a file at an

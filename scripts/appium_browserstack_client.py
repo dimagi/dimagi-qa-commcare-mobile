@@ -65,8 +65,35 @@ class AppiumBrowserStackClient:
 
     def start_session(self, app_url, device, os_version, project="QA COMMCARE MOBILE TESTS",
                        build_name=None, session_name=None, mid_session_apps=None, network_profile=None,
-                       interactive_debugging=None):
+                       interactive_debugging=None, device_language=None, device_locale=None):
         """Starts a live Appium session and returns the connected driver.
+
+        `device_language`/`device_locale` (e.g. "ar"/"SA") set the device's
+        REAL system locale via UiAutomator2's own standard `language`/
+        `locale` capabilities - confirmed live (2026-09-15) these must be
+        set as TOP-LEVEL Appium capabilities (`options.language`/
+        `options.locale`), NOT nested inside `bstack:options` - a first
+        attempt nesting them there was rejected outright by the Appium
+        product's own W3C schema validation ("contains additional
+        properties [\"language\", \"locale\"] outside of the schema"),
+        unlike Maestro's build-trigger REST API where `language`/`locale`
+        ARE top-level BODY params (see
+        flows/right_to_left_text/setup_02_change_device_language_to_arabic.yaml's
+        own citation) - the two products expose the same underlying
+        BrowserStack device-provisioning capability through genuinely
+        different parameter shapes.
+
+        Confirmed live this changes REAL system-level layout direction
+        (View.LAYOUT_DIRECTION_LOCALE) - e.g. CommCare's own home-screen
+        RecyclerView tiles genuinely mirror left/right under
+        device_language="ar" - while leaving CommCare's OWN in-app string
+        translations untouched (those follow CommCare's separate in-app
+        "Change Language" selector, not the device's system locale) - see
+        scripts/appium_rtl_scenarios.py's own module docstring for the full
+        citation and why this means RTL layout-mirroring assertions never
+        need to match Arabic text at all (sidesteps a real Unicode
+        round-trip bug Maestro hit doing exactly that, see
+        flows/right_to_left_text/setup_03_change_language_to_arabic.yaml).
 
         `interactive_debugging` (default: on - read from the
         APPIUM_INTERACTIVE_DEBUG env var, "false"/"0" -> off; per direct
@@ -169,6 +196,10 @@ class AppiumBrowserStackClient:
         # stable landscape state. This app/test suite never accounts for
         # any orientation but portrait anywhere else in this repo.
         options.orientation = "PORTRAIT"
+        if device_language:
+            options.language = device_language
+        if device_locale:
+            options.locale = device_locale
         options.set_capability("bstack:options", bstack_options)
 
         driver = webdriver.Remote(command_executor=APPIUM_HUB_URL, options=options)
