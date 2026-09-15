@@ -51,7 +51,27 @@ import report_generator
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 
-def run(client, username, form_path, after, require_multimedia, require_location):
+def _looks_like_geopoint(value):
+    """True if `value` parses as a real "<lat> <long> <alt> <acc>"-style
+    geopoint answer (CommCare's own GeoPointWidget format, confirmed live
+    2026-09-15 against a real Register Case submission: "19.1081114
+    73.0238931 -9.9 15.05") - at least 2 whitespace-separated numeric
+    tokens, with the first two in valid latitude/longitude ranges. Doesn't
+    reject 0/0 on principle (a real point, not automatically a placeholder)
+    - only guards against a blank/missing/non-numeric answer."""
+    if not value:
+        return False
+    parts = value.split()
+    if len(parts) < 2:
+        return False
+    try:
+        lat, lon = float(parts[0]), float(parts[1])
+    except ValueError:
+        return False
+    return -90 <= lat <= 90 and -180 <= lon <= 180
+
+
+def run(client, username, form_path, after, require_multimedia, require_location, require_geopoint_answer):
     submission = client.find_recent_submission(username, form_path_contains=form_path, after=after)
     if submission is None:
         raise AssertionError(
@@ -70,6 +90,15 @@ def run(client, username, form_path, after, require_multimedia, require_location
 
     if require_location and metadata.get("location", "---") == "---":
         raise AssertionError("Expected a captured location on this form, but metadata.location is empty.")
+
+    if require_geopoint_answer:
+        answers = client.get_form_answers(submission["form_id"])
+        value = answers.get(require_geopoint_answer)
+        if not _looks_like_geopoint(value):
+            raise AssertionError(
+                f"Expected question {require_geopoint_answer!r} to hold a real captured geopoint "
+                f"(\"<lat> <long> ...\"), but its answer reads {value!r}. Real answers found: {answers!r}"
+            )
 
     return submission, metadata
 
@@ -91,9 +120,20 @@ def main():
                          help="Fail if the matched form has no multimedia attachment.")
     parser.add_argument("--require-location", action="store_true",
                          help='Fail if the matched form\'s metadata "location" field is empty '
-                              '(HQ renders an unset location as the literal string "---") - use for '
-                              'rows like Geoservice 2 ("Auto Capture Location") that need to confirm '
-                              'a geopoint was actually captured into the submission.')
+                              '(HQ renders an unset location as the literal string "---") - checks the '
+                              'OpenRosa <meta> block\'s own automatic location capture specifically, '
+                              'NOT a form question\'s own geopoint answer - see --require-geopoint-answer '
+                              'for that. Confirmed live 2026-09-15: this stays empty even on a form whose '
+                              'own geopoint QUESTION captured a real location, so this flag alone can\'t '
+                              'confirm rows like Geoservice 2 - only a genuine "all forms, no question '
+                              'needed" auto-capture feature would set this.')
+    parser.add_argument("--require-geopoint-answer", default=None, metavar="QUESTION_LABEL",
+                         help='Fail unless the named question (its human-readable label, e.g. "Capture the '
+                              'case location.") holds a real "<lat> <long> ..." geopoint answer - the '
+                              'right check for a row whose real bar is "some question on this form '
+                              'captured a real location", confirmed live 2026-09-15 (Master Mobile Plan '
+                              '2026 > Form Submissions > Geoservice 2, per direct user clarification: '
+                              '"any form that records a location works for this test").')
     parser.add_argument("--domain", default=os.environ.get("HQ_DOMAIN", "qateam"))
     args = parser.parse_args()
 
@@ -112,7 +152,7 @@ def main():
     start = time.monotonic()
     try:
         submission, metadata = run(client, args.username, args.form_path, after,
-                                    args.require_multimedia, args.require_location)
+                                    args.require_multimedia, args.require_location, args.require_geopoint_answer)
         result = report_generator.TestResult(
             name=f"form_submissions/{args.test_name}_submission_check",
             workflow="form_submissions",
