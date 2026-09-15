@@ -780,7 +780,15 @@ jobs:
       # scripts/run_multimedia_form_data_check.py's own module docstring for
       # the full citation, including why Image Resize 27/28 only asserts
       # attachment presence/downloadability, not resize-size correctness.
-      - name: Verify Multimedia Submit-History checks (Photo Verification, Image Resize 27/28)
+      # UPDATE (2026-09-15): added Media 4's own check here too - its own
+      # note already said this was "technically approachable via
+      # get_form_attachments(), already proven for Photo Verification/Image
+      # Resize 27-28, just never wired up". min-attachments=2 (not 3+)
+      # since Media 2's own flow (which produces this submission) has a
+      # best-effort, optional video-recording step - confirmed live via a
+      # real recent submission that 3 of its 4 questions (audio/image/sign)
+      # reliably attach, video does not.
+      - name: Verify Multimedia Submit-History checks (Photo Verification, Image Resize 27/28, Media 4)
         if: always() && (matrix.name == 'group-a' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'multimedia')))
         env:
           HQ_DOMAIN: qateam
@@ -794,6 +802,9 @@ jobs:
           python scripts/run_multimedia_form_data_check.py --check-type attachments \
             --test-name image_resize_27_28 --username test1 \
             --form-path-contains "Image Resize" --min-attachments 3
+          python scripts/run_multimedia_form_data_check.py --check-type attachments \
+            --test-name media_4 --username test1 \
+            --form-path-contains "Media Capture" --min-attachments 2
 
       # Master Mobile Plan (2026) > Support Menus > "Menu 2" (Force Log
       # Submission) - HQ-only precondition verification on top of the
