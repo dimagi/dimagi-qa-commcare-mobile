@@ -678,6 +678,60 @@ jobs:
           python scripts/verify_submission.py \
             --test-name geoservice_2 --username test1 --form-path "Register Case" --require-geopoint-answer "Capture the case location."
 
+      # Master Mobile Plan (2026) > Form Submissions > "Active users login"
+      # (row 60), "Inactive users login" (row 61), "Deactivated user login"
+      # (row 62) - whether HQ's own active/inactive mobile-worker state
+      # actually gates on-device login. No Maestro HQ-pre-step mechanism
+      # exists for toggling a user's activation state, so this uses Appium
+      # the same way every other HQ-action-plus-device-assertion scenario in
+      # this job does - the on-device steps themselves need nothing Maestro
+      # couldn't also do. Uses a dedicated mobile worker (maestro_inactive,
+      # password "123", same convention as this repo's other
+      # maestro-provisioned accounts) created idempotently via
+      # HQClient.create_mobile_worker() rather than reusing CC_TEST_USERNAME
+      # or HQ_MOBILE_WORKER_USERNAME, both load-bearing elsewhere in this
+      # suite. Confirmed live 2026-09-15 that a deactivated account's login
+      # attempt reaches the login screen but fails with a real, stable
+      # "Invalid Username or Password" message - see
+      # scripts/appium_user_activation_scenarios.py's own module docstring
+      # for the full citation. Verified passing live locally before being
+      # wired in here. Same fold-into-the-matrix-job pattern as every other
+      # Appium step in this job, gated on group-b (Form Submissions' own
+      # group) or a scoped form_submissions tag dispatch.
+      - name: Run Appium suite on BrowserStack (Form Submissions - active/inactive/deactivated user login)
+        if: always() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'form_submissions')))
+        env:
+          BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
+          BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
+          HQ_DOMAIN: qateam
+          HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
+          HQ_WEB_USER_PASSWORD: ${{ secrets.HQ_WEB_USER_PASSWORD }}
+          HQ_MOBILE_WORKER_USERNAME: ${{ secrets.HQ_MOBILE_WORKER_USERNAME }}
+          HQ_MOBILE_WORKER_PASSWORD: ${{ secrets.HQ_MOBILE_WORKER_PASSWORD }}
+        run: |
+          declare -A ANDROID_DEVICE_MAP=(
+            ["16.0"]="Samsung Galaxy S26"
+            ["15.0"]="Samsung Galaxy S25"
+            ["14.0"]="Samsung Galaxy S24"
+            ["13.0"]="Samsung Galaxy S23"
+            ["12.0"]="Samsung Galaxy S22"
+            ["11.0"]="Samsung Galaxy S21"
+            ["10.0"]="Samsung Galaxy S20"
+          )
+          ANDROID_VERSION="${{ github.event.inputs.android_version || '16.0' }}"
+          DEVICES="${{ github.event.inputs.devices }}"
+          if [ -z "$DEVICES" ]; then
+            DEVICES="${ANDROID_DEVICE_MAP[$ANDROID_VERSION]}-$ANDROID_VERSION"
+          fi
+          ARGS=(--devices "$DEVICES" --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-appium-user-activation")
+          APK_SOURCE="${{ github.event.inputs.apk_source || 'GitHub Releases' }}"
+          if [ "$APK_SOURCE" != "GitHub Releases" ]; then
+            ARGS+=(--apk "$APK_SOURCE")
+          elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
+            ARGS+=(--release-tag "${{ github.event.inputs.release_tag }}")
+          fi
+          python scripts/run_appium_user_activation_suite.py "${ARGS[@]}"
+
       # Runs Multimedia's "External File in Forms" - the one Multimedia row
       # blocked by the same class of gap the Recovery Measures CCZ-picker
       # step above already solves (Maestro can't place a file at an

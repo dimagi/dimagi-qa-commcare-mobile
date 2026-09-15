@@ -121,6 +121,9 @@ class HQClient:
     def _reports_url(self, path):
         return f"{self.base_url}/a/{self.domain}/reports/{path}"
 
+    def _settings_url(self, path):
+        return f"{self.base_url}/a/{self.domain}/settings/{path}"
+
     def mark_build_status(self, app_id, saved_app_id, is_released):
         """
         Release or un-release ("In Test") a specific saved build.
@@ -289,6 +292,95 @@ class HQClient:
         resp = self.session.get(self._apps_url(f"source/{app_id}/"))
         resp.raise_for_status()
         return resp.json().get("profile", {}).get("custom_properties", {})
+
+    def create_mobile_worker(self, username, password):
+        """
+        Master Mobile Plan (2026) > Form Submissions > "Active/Inactive/
+        Deactivated users login" (rows 60-62): these need a dedicated mobile
+        worker this program can safely toggle active/inactive without
+        touching CC_TEST_USERNAME/HQ_MOBILE_WORKER_USERNAME's own accounts
+        (both load-bearing for many other flows). Idempotent: if `username`
+        already exists (active or inactive), returns its existing user_id
+        instead of erroring, so re-running this is safe.
+
+        POST /a/<domain>/settings/users/commcare/ (MobileWorkerListView),
+        dispatched via its jQuery-RMI `create_mobile_worker` action -
+        requires the `Djng-Remote-Method` header (not a query param/body
+        field) plus `X-Requested-With: XMLHttpRequest` (JSONResponseMixin's
+        own is_ajax() gate), with a raw JSON body (not form-encoded) whose
+        top-level `user` key holds the new account's fields.
+        Source: corehq/apps/users/views/mobile/users.py:MobileWorkerListView.
+        create_mobile_worker() (self.request.POST reassigned from the raw
+        JSON body, then run through NewMobileWorkerForm - only `username`/
+        `new_password` are required, everything else optional).
+        """
+        existing = self.find_commcare_user(username, active=True) or self.find_commcare_user(username, active=False)
+        if existing:
+            return existing["user_id"]
+
+        url = self._settings_url("users/commcare/")
+        resp = self.session.post(
+            url,
+            data=json.dumps({"user": {"username": username, "password": password}}),
+            headers={
+                **self._csrf_headers(),
+                "Djng-Remote-Method": "create_mobile_worker",
+                "X-Requested-With": "XMLHttpRequest",
+                "Content-Type": "application/json",
+                "Referer": url,
+            },
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        if data.get("error"):
+            raise RuntimeError(f"create_mobile_worker({username!r}) failed: {data['error']}")
+        return data["user_id"]
+
+    def find_commcare_user(self, username, active=True):
+        """
+        Look up a mobile worker's user_id/is_active by username. Only
+        searches active-only or inactive-only per call (HQ's own
+        paginate_mobile_workers endpoint has no "search both" mode) - a
+        caller unsure of current state should try both, as create_mobile_worker()
+        above does.
+
+        GET /a/<domain>/settings/users/commcare/json/?query=&showDeactivatedUsers=
+        Source: corehq/apps/users/views/mobile/users.py:paginate_mobile_workers()
+        (query_string_query against base_username, so bare `username` -
+        without the @domain.commcarehq.org suffix - matches).
+        """
+        resp = self.session.get(self._settings_url("users/commcare/json/"), params={
+            "query": username,
+            "limit": 10,
+            "page": 1,
+            "showDeactivatedUsers": "false" if active else "true",
+        })
+        resp.raise_for_status()
+        for user in resp.json().get("users", []):
+            if user.get("username") == username:
+                return user
+        return None
+
+    def set_commcare_user_active(self, user_id, is_active):
+        """
+        Activate/deactivate a mobile worker by user_id (from
+        create_mobile_worker()/find_commcare_user() above).
+
+        POST /a/<domain>/settings/users/commcare/activate/<user_id>/
+        POST /a/<domain>/settings/users/commcare/deactivate/<user_id>/
+        Source: corehq/apps/users/views/mobile/users.py:activate_commcare_user()/
+        deactivate_commcare_user() (both just call _modify_user_status(),
+        which needs no POST body beyond CSRF - the desired state is baked
+        into which of the two URLs is hit).
+        """
+        action = "activate" if is_active else "deactivate"
+        url = self._settings_url(f"users/commcare/{action}/{user_id}/")
+        resp = self.session.post(url, headers=self._csrf_headers())
+        resp.raise_for_status()
+        data = resp.json()
+        if data.get("error"):
+            raise RuntimeError(f"set_commcare_user_active({user_id!r}, {is_active!r}) failed: {data['error']}")
+        return data
 
     def list_releases(self, app_id, only_show_released=True, limit=5):
         """
