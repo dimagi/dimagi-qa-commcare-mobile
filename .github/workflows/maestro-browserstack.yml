@@ -884,6 +884,80 @@ jobs:
           fi
           python scripts/run_casesearch_checkbox_suite.py "${ARGS[@]}"
 
+      # Master Mobile Plan (2026) > Case Filters > "Case Search & Claim 1"
+      # (row 19) - previously Not automatable per coverage_matrix.csv's own
+      # citation: "Different app ('Case Search and Claim') not present in
+      # resources/ and not independently confirmed - not guessed". RESOLVED
+      # (2026-09-16) per a direct user-supplied app link confirming the app
+      # genuinely exists (domain "casesearch", app_registry.py's
+      # CASE_SEARCH_AND_CLAIM - the same app Casesearch Checkbox 1/2 use,
+      # for an unrelated module/row). No HQ app-config change needed here.
+      # MODULE PIVOT, per direct user instruction after live investigation:
+      # the row's own steps reference "Songs (Search First)", which DOES
+      # have date_opened configured, but extensive live testing confirmed
+      # that module's own Case Search config genuinely returns ZERO results
+      # for the test1 account no matter what (not a scenario-code bug) -
+      # "Songs (See More)" (the same app, already used by Casesearch
+      # Checkbox 1/2 for an unrelated row) returns real results on a blank
+      # query instead, and already has date_opened configured as a
+      # daterange property too, so this scenario targets that module. A
+      # hardcoded search date can't be relied on to match real, changeable
+      # test data, so the scenario reads a real date_opened value directly
+      # off an actually-listed case first, then re-searches using that
+      # exact date. Confirmed live the Date Opened field's own calendar
+      # icon opens a real Material date-range picker with a "Switch to text
+      # input mode" toggle - setting both its start/end fields to the same
+      # date and tapping SAVE collapses the outer field to "<date> to
+      # <date>", the same observable outcome the row's own "end date
+      # autopopulated" language describes. Also confirmed live: Android's
+      # real back-button action is unsafe as a general-purpose "dismiss the
+      # keyboard" tool here - when no keyboard is actually open it performs
+      # a real navigation instead (twice found derailing this flow back to
+      # the case list), so the scenario uses Appium's dedicated
+      # hide_keyboard command there instead, which can't have that side
+      # effect. See scripts/appium_case_search_claim_scenarios.py's own
+      # module docstring for the full citation. Verified passing live
+      # locally (two clean consecutive runs, given this row's history of
+      # intermittent back()-navigation flakiness) before being wired in
+      # here. Gated on group-b (case_filters' own group) or a scoped tag
+      # dispatch, same as every other Appium step in this job.
+      - name: Run Appium suite on BrowserStack (Case Filters - Case Search & Claim 1)
+        if: always() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'case_filters')))
+        env:
+          BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
+          BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
+          HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
+          HQ_WEB_USER_PASSWORD: ${{ secrets.HQ_WEB_USER_PASSWORD }}
+          CC_TEST_USERNAME: ${{ secrets.CC_TEST_USERNAME }}
+          CC_TEST_PASSWORD: ${{ secrets.CC_TEST_PASSWORD }}
+        run: |
+          # NOTE: does NOT use HQ_DOMAIN - this suite's own domain
+          # ("casesearch", not qateam) comes from app_registry.py's
+          # CASE_SEARCH_AND_CLAIM entry, not the env var every other step
+          # here sets.
+          declare -A ANDROID_DEVICE_MAP=(
+            ["16.0"]="Samsung Galaxy S26"
+            ["15.0"]="Samsung Galaxy S25"
+            ["14.0"]="Samsung Galaxy S24"
+            ["13.0"]="Samsung Galaxy S23"
+            ["12.0"]="Samsung Galaxy S22"
+            ["11.0"]="Samsung Galaxy S21"
+            ["10.0"]="Samsung Galaxy S20"
+          )
+          ANDROID_VERSION="${{ github.event.inputs.android_version || '16.0' }}"
+          DEVICES="${{ github.event.inputs.devices }}"
+          if [ -z "$DEVICES" ]; then
+            DEVICES="${ANDROID_DEVICE_MAP[$ANDROID_VERSION]}-$ANDROID_VERSION"
+          fi
+          ARGS=(--devices "$DEVICES" --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-appium-case-search-claim")
+          APK_SOURCE="${{ github.event.inputs.apk_source || 'GitHub Releases' }}"
+          if [ "$APK_SOURCE" != "GitHub Releases" ]; then
+            ARGS+=(--apk "$APK_SOURCE")
+          elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
+            ARGS+=(--release-tag "${{ github.event.inputs.release_tag }}")
+          fi
+          python scripts/run_case_search_claim_suite.py "${ARGS[@]}"
+
       # Runs Multimedia's "External File in Forms" - the one Multimedia row
       # blocked by the same class of gap the Recovery Measures CCZ-picker
       # step above already solves (Maestro can't place a file at an
