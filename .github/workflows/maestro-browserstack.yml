@@ -751,10 +751,29 @@ jobs:
       # Arabic-text-matching SELECTOR, at all - see
       # scripts/appium_rtl_scenarios.py's own module docstring for the full
       # citation and exact bounds evidence). Verified passing live locally
-      # before being wired in here. Same fold-into-the-matrix-job pattern as
-      # every other Appium step in this job, gated on group-b
-      # (right_to_left_text's own group) or a scoped tag dispatch.
-      - name: Run Appium suite on BrowserStack (Right to Left Text - Home Screen 1, Home Screen 8, Case list 4)
+      # before being wired in here.
+      #
+      # UPDATE (2026-09-16): also covers "Question Types 1" (row 25) and
+      # "Question Types 3" (row 27), added as two more scenarios in the same
+      # run_appium_rtl_suite.py entry point (no separate CI step needed).
+      # Both rows have TWO original claims each, of which only one half of
+      # each is genuinely checkable - the other half (intra-widget text
+      # alignment for Question Types 1; progress-bar fill DIRECTION, an
+      # animation sampled over time, for Question Types 3) has no
+      # Maestro/Appium assertion primitive at all and stays a documented
+      # Not-automatable gap in the same cell's own note, same precedent as
+      # Case list 4 above. Question Types 1's checkable half (menu row
+      # icon-right-of-text element order) reuses the same RTL-locale
+      # mirroring mechanism. Question Types 3's checkable half (swipe
+      # direction genuinely advances/reverses the form) corrects a prior
+      # Maestro flow's false-negative conclusion that was checking a
+      # resource id that doesn't exist in this app. See
+      # scripts/appium_rtl_scenarios.py's own module docstring for the full
+      # citation. Verified passing live locally before being wired in here.
+      # Same fold-into-the-matrix-job pattern as every other Appium step in
+      # this job, gated on group-b (right_to_left_text's own group) or a
+      # scoped tag dispatch.
+      - name: Run Appium suite on BrowserStack (Right to Left Text - Home Screen 1, Home Screen 8, Case list 4, Question Types 1/3)
         if: always() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'right_to_left_text')))
         env:
           BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}

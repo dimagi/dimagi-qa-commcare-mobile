@@ -80,6 +80,51 @@ error in the sheet's own wording rather than a genuine product
 inconsistency, since both screens behave identically and only Login 1's
 literal text disagrees - flagged for the user rather than encoded as a
 wrong assertion.
+
+"Question Types 1" (row 25) / "Question Types 3" (row 27) - same partial-
+coverage precedent as Case list 4 above (2 of the row's own claims tractable,
+1 an already-conclusively-established intra-widget/animation-direction gap
+left as a documented note in the SAME cell, not re-investigated here):
+
+  - Question Types 1's "row_img/row_txt order" half: on the Start screen's
+    menu list (the SAME row_txt element case_list_01/question_types_02's own
+    Maestro flows already tap into, confirmed live 2026-09-16 this app's
+    real list under the "Survey"/"Case List" app-registry app has exactly 2
+    rows - "Survey" (a form, index 0) and "Case List" (a module, index 1)),
+    row_img sits at bounds x:[882,1056] and its paired row_txt at
+    x:[72,834] (screen width 1080) under device_language="ar" - icon
+    genuinely to the RIGHT of the text, matching this row's own claim and
+    the SAME element-to-element position category (not intra-widget) as
+    Case list 4's own arrow-container check. The sheet's other half ("text
+    right aligned within its box") stays the already-established Not
+    automatable intra-widget-gravity gap (E25's own citation, confirmed via
+    menu_list_item_modern.xml/MenuAdapter.java source) - not re-derived
+    here.
+  - Question Types 3's "swipe direction inversion" half: a PRIOR Maestro
+    attempt (see flows/right_to_left_text/question_types_02_open_first_form.yaml's
+    own header) concluded swiping had "NO observable effect" on this form,
+    checked via a resource id "nav_btn_back" - confirmed live here that id
+    does not exist in this app at all (the real id is nav_btn_prev), so that
+    "no effect" reading was a false negative from a wrong/nonexistent
+    selector, not real evidence against swipe navigation. Re-tested live
+    (2026-09-16) with a SAFE, non-edge-hugging swipe (30%-70% of screen
+    width, well clear of Android's own ~10% system-gesture edge zones - an
+    EARLIER edge-to-edge 85%-15% attempt instead triggered Android's own
+    system back gesture, landing on CommCare's "Exit Form?" dialog, a false
+    positive for a totally different reason) on the Survey form's first real
+    question ("This question should let you enter any form of text...",
+    reached via one nav_btn_next tap past the form's group-header intro
+    screen): a swipe with the finger moving RIGHT-TO-LEFT genuinely
+    navigates BACKWARD (the group-header screen reappears), and a swipe
+    with the finger moving LEFT-TO-RIGHT genuinely navigates FORWARD (the
+    question screen reappears) - a real, working, and objectively checkable
+    (via the visible question text changing) swipe-navigation gesture, and
+    its forward direction is exactly "left to right", matching this row's
+    own literal wording ("swiping between question is invervsed (left to
+    right)"). The row's OTHER half (progress-bar fill direction, an
+    animation/rendering direction sampled over time) stays the already-
+    established Not automatable gap (E27's own citation) - not
+    re-investigated here.
 """
 import re
 import sys
@@ -251,5 +296,129 @@ def run_home_screen_1(driver, app_code, username, password):
         ("Verify the home screen", lambda: h.wait_visible_id(driver, f"{APP_ID}:id/home_gridview_buttons", timeout=20)),
         ("Verify the toolbar is RTL-mirrored (title right, options button left)",
          lambda: _assert_home_toolbar_mirrored(driver)),
+    ]
+    return _run_steps(steps)
+
+
+def _open_start_menu(driver):
+    cards = driver.find_elements(AppiumBy.ID, f"{APP_ID}:id/card")
+    if not cards:
+        raise AssertionError("No home_card 'card' elements found to tap into Start")
+    cards[0].click()
+    h.wait_visible_id(driver, f"{APP_ID}:id/row_txt", timeout=15)
+
+
+def _assert_menu_rows_icon_right_of_text(driver):
+    row_txts = driver.find_elements(AppiumBy.ID, f"{APP_ID}:id/row_txt")
+    row_imgs = driver.find_elements(AppiumBy.ID, f"{APP_ID}:id/row_img")
+    if not row_txts or not row_imgs:
+        raise AssertionError(f"Expected row_txt/row_img menu rows, found {len(row_txts)}/{len(row_imgs)}")
+    if len(row_txts) != len(row_imgs):
+        raise AssertionError(f"row_txt count ({len(row_txts)}) != row_img count ({len(row_imgs)})")
+    for i, (txt_el, img_el) in enumerate(zip(row_txts, row_imgs)):
+        txt_x1, txt_x2 = _bounds_x_range(txt_el)
+        img_x1, img_x2 = _bounds_x_range(img_el)
+        if not (img_x1 >= txt_x2):
+            raise AssertionError(
+                f"Expected row {i}'s icon (row_img, bounds x:[{img_x1},{img_x2}]) to sit to the RIGHT of "
+                f"its text (row_txt, bounds x:[{txt_x1},{txt_x2}]) under RTL - i.e. the reverse of the "
+                f"normal LTR icon-then-text order."
+            )
+
+
+def run_question_types_1(driver, app_code, username, password):
+    steps = [
+        ("Install [Right to Left Tests!] app", lambda: _install_app_by_code(driver, app_code)),
+        ("Log in", lambda: _login(driver, username, password)),
+        ("Verify the home screen", lambda: h.wait_visible_id(driver, f"{APP_ID}:id/home_gridview_buttons", timeout=20)),
+        ("Tap the green Start button", lambda: _open_start_menu(driver)),
+        ("Verify each form/menu row's icon sits to the right of its text (RTL-mirrored order)",
+         lambda: _assert_menu_rows_icon_right_of_text(driver)),
+    ]
+    return _run_steps(steps)
+
+
+def _open_first_form_question(driver):
+    """Opens the Start screen's first row (a form, "Survey" - same row
+    question_types_02_open_first_form.yaml's own Maestro flow opens), then
+    taps nav_btn_next once to move past the form's group-header intro
+    screen onto its first REAL (answerable) question - the group-header
+    screen has no distinguishing question text of its own to swipe
+    between, only the form's static instructions."""
+    row_txts = driver.find_elements(AppiumBy.ID, f"{APP_ID}:id/row_txt")
+    if not row_txts:
+        raise AssertionError("No row_txt menu rows found to open the first form")
+    row_txts[0].click()
+    h.wait_visible_id(driver, f"{APP_ID}:id/nav_btn_next", timeout=15)
+    next_btns = driver.find_elements(AppiumBy.ID, f"{APP_ID}:id/nav_btn_next")
+    if not next_btns:
+        raise AssertionError("nav_btn_next not found on the form's group-header screen")
+    next_btns[0].click()
+    # UPDATE (2026-09-16), confirmed live: wait_visible_text/is_text_visible
+    # default to an EXACT string match (regex=False -> text == pattern), not
+    # a substring/contains check - a first attempt passing a prefix of the
+    # real on-screen sentence ("This question should let you enter any form
+    # of text" vs the real, longer "...text or special characters. Try
+    # different values.") silently never matched even though the real text
+    # WAS on screen the whole time (confirmed via the failure XML dump) -
+    # regex=True (re.search, not re.fullmatch) makes a prefix substring
+    # match correctly.
+    h.wait_visible_text(driver, "This question should let you enter any form of text", timeout=10, regex=True)
+
+
+# A swipe kept well clear of Android's own ~10% system-gesture edge zones -
+# an earlier edge-to-edge (85%-15% of screen width) attempt instead
+# triggered Android's OWN system back gesture (landed on CommCare's "Exit
+# Form?" dialog, a false positive unrelated to CommCare's in-app swipe
+# handling), confirmed live 2026-09-16. See this module's own docstring
+# UPDATE for the full citation.
+def _swipe_form(driver, direction):
+    size = driver.get_window_size()
+    w, height = size["width"], size["height"]
+    mid_y = int(height * 0.45)
+    x_from, x_to = (int(w * 0.70), int(w * 0.30)) if direction == "left" else (int(w * 0.30), int(w * 0.70))
+    driver.swipe(x_from, mid_y, x_to, mid_y, 500)
+
+
+def _assert_swipe_navigates_question(driver):
+    # Starting on the first real question ("This question should let you
+    # enter any form of text...", reached by _open_first_form_question).
+    # A RIGHT-TO-LEFT finger swipe ("left" direction) is expected to
+    # navigate BACKWARD to the form's group-header screen - confirmed live
+    # this is the real behavior on this form.
+    _swipe_form(driver, "left")
+    if not h.wait_visible_text(
+        driver, "The following questions will go over basic question types", timeout=10, regex=True, optional=True
+    ):
+        raise AssertionError(
+            "Expected a right-to-left swipe to navigate BACKWARD to the form's group-header screen - "
+            "it didn't reappear within 10s."
+        )
+
+    # A LEFT-TO-RIGHT finger swipe ("right" direction) is expected to
+    # navigate FORWARD again, back onto the question screen - this is the
+    # row's own literal claim: the form's forward-swipe direction is
+    # "left to right" (the RTL-inverted direction vs. a normal LTR form's
+    # usual right-to-left "swipe to advance" convention).
+    _swipe_form(driver, "right")
+    if not h.wait_visible_text(
+        driver, "This question should let you enter any form of text", timeout=10, regex=True, optional=True
+    ):
+        raise AssertionError(
+            "Expected a left-to-right swipe to navigate FORWARD back onto the question screen - "
+            "it didn't reappear within 10s."
+        )
+
+
+def run_question_types_3(driver, app_code, username, password):
+    steps = [
+        ("Install [Right to Left Tests!] app", lambda: _install_app_by_code(driver, app_code)),
+        ("Log in", lambda: _login(driver, username, password)),
+        ("Verify the home screen", lambda: h.wait_visible_id(driver, f"{APP_ID}:id/home_gridview_buttons", timeout=20)),
+        ("Tap the green Start button", lambda: _open_start_menu(driver)),
+        ("Open the first form, advance past its group-header screen",
+         lambda: _open_first_form_question(driver)),
+        ("Verify swipe direction is RTL-inverted (left-to-right swipe advances forward)",
+         lambda: _assert_swipe_navigates_question(driver)),
     ]
     return _run_steps(steps)

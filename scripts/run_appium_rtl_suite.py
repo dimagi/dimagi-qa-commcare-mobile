@@ -1,10 +1,10 @@
 """
 CLI runner for Master Mobile Plan (2026) > Right to Left Text > "Home
-Screen 8" (row 23) / "Case list 4" (row 36) - see
-scripts/appium_rtl_scenarios.py's own module docstring for the full
-citation on the device-level Arabic locale mechanism and why neither row
-needs CommCare's own in-app language switch or any Arabic-text-matching
-selector.
+Screen 8" (row 23) / "Case list 4" (row 36) / "Question Types 1" (row 25) /
+"Question Types 3" (row 27) - see scripts/appium_rtl_scenarios.py's own
+module docstring for the full citation on the device-level Arabic locale
+mechanism and why none of these rows need CommCare's own in-app language
+switch or any Arabic-text-matching selector.
 
 Usage:
     python scripts/run_appium_rtl_suite.py
@@ -178,6 +178,24 @@ def main():
     print(f"  home_screen_1: {home_screen_1_result.status}"
           + (f" - {home_screen_1_result.failed_step}" if home_screen_1_result.status == "failed" else ""))
 
+    print("Running Question Types 1 ...")
+    question_types_1_result = _run_scenario(
+        bs, app_url, device, os_version, args.build_name, "question_types_1",
+        "right_to_left_text/question_types_1",
+        lambda driver: rtl.run_question_types_1(driver, app_code, cc_username, cc_password),
+    )
+    print(f"  question_types_1: {question_types_1_result.status}"
+          + (f" - {question_types_1_result.failed_step}" if question_types_1_result.status == "failed" else ""))
+
+    print("Running Question Types 3 ...")
+    question_types_3_result = _run_scenario(
+        bs, app_url, device, os_version, args.build_name, "question_types_3",
+        "right_to_left_text/question_types_3",
+        lambda driver: rtl.run_question_types_3(driver, app_code, cc_username, cc_password),
+    )
+    print(f"  question_types_3: {question_types_3_result.status}"
+          + (f" - {question_types_3_result.failed_step}" if question_types_3_result.status == "failed" else ""))
+
     (REPO_ROOT / "reports").mkdir(exist_ok=True)
     apk_version_path = REPO_ROOT / "reports" / "apk_version.txt"
     if not apk_version_path.exists():
@@ -190,7 +208,8 @@ def main():
     # (CI run 34226264408) for why: merging in an earlier step's carried-
     # forward "failed" entry here would cascade a false failed exit onto
     # this step even when its own results passed.
-    this_run_results = [home_screen_8_result, case_list_4_result, home_screen_1_result]
+    this_run_results = [home_screen_8_result, case_list_4_result, home_screen_1_result,
+                         question_types_1_result, question_types_3_result]
 
     existing_results_path = REPO_ROOT / "reports" / "latest_results.json"
     results = list(this_run_results)
