@@ -157,6 +157,140 @@ class HQClient:
             raise RuntimeError(f"create_new_build failed: {data['error_html']}")
         return data
 
+    def get_module_search_config(self, app_id, module_unique_id):
+        """
+        Read-only: a module's current Case Search config (search_config),
+        in the STORED shape - the same shape GET /a/<domain>/apps/source/
+        <app_id>/ already returns (get_custom_properties's own endpoint,
+        reused here). Raises ValueError if the module isn't found.
+
+        Master Mobile Plan (2026) > Form Submissions > "Casesearch Checkbox
+        1/2" (rows 55-56): added to safely read the CURRENT state of a
+        module's search properties before mutating it - critical because
+        this repo isn't the only editor of these apps (confirmed live,
+        2026-09-16: a colleague's own manual App Builder edits landed
+        real version-history entries on this exact app/module around the
+        same time this was built), so a hardcoded snapshot from whenever
+        this method was written would risk clobbering someone else's real,
+        concurrent change on revert.
+        """
+        resp = self.session.get(self._apps_url(f"source/{app_id}/"))
+        resp.raise_for_status()
+        data = resp.json()
+        for m in data.get("modules", []):
+            if m.get("unique_id") == module_unique_id:
+                return m.get("search_config") or {}
+        raise ValueError(f"Module {module_unique_id!r} not found in app {app_id!r}")
+
+    @staticmethod
+    def _search_property_stored_to_input(prop, lang="en"):
+        """
+        Convert one CaseSearchProperty from its STORED shape (as returned by
+        get_module_search_config/get_app source) into the INPUT shape
+        set_module_search_properties()/edit_module_detail_screens expects -
+        see that method's own citation for the full source reference on
+        which 'appearance' value produces which stored shape.
+        """
+        ret = {
+            "name": prop["name"],
+            "label": (prop.get("label") or {}).get(lang, ""),
+            "hint": (prop.get("hint") or {}).get(lang, ""),
+        }
+        input_ = prop.get("input_")
+        itemset = prop.get("itemset") or {}
+        appearance = prop.get("appearance")
+        if input_ in ("checkbox", "select", "select1") and itemset.get("nodeset"):
+            fixture = json.dumps({
+                "instance_id": itemset.get("instance_id"),
+                "nodeset": itemset.get("nodeset"),
+                "label": itemset.get("label"),
+                "value": itemset.get("value"),
+                "sort": itemset.get("sort"),
+            })
+            if input_ == "checkbox":
+                ret["appearance"] = "checkbox"
+            else:
+                ret["appearance"] = "fixture"
+                ret["is_multiselect"] = (input_ == "select")
+            ret["fixture"] = fixture
+        elif appearance in ("barcode_scan", "address"):
+            ret["appearance"] = appearance
+        elif input_ in ("date", "daterange"):
+            ret["appearance"] = input_
+        if prop.get("default_value"):
+            ret["default_value"] = prop["default_value"]
+        if prop.get("hidden"):
+            ret["hidden"] = prop["hidden"]
+        if prop.get("exclude"):
+            ret["exclude"] = prop["exclude"]
+        return ret
+
+    def set_module_search_properties(self, app_id, module_unique_id, properties, current_search_config=None):
+        """
+        Overwrite a module's Case Search properties list. REPLACES the
+        whole list (properties not included are dropped), same
+        replace-not-merge caveat as set_custom_properties - always read the
+        module's current search_config first (get_module_search_config) and
+        pass every property you want to KEEP, converted via
+        _search_property_stored_to_input, plus whatever you're adding/
+        changing.
+
+        `properties` must already be in the INPUT shape (plain string
+        label/hint, appearance-based fixture encoding) -
+        _search_property_stored_to_input() converts a property from the
+        STORED shape if you're round-tripping an existing one unchanged.
+
+        `current_search_config` (the STORED dict from
+        get_module_search_config) supplies the other top-level search
+        config fields (auto_launch, default_search, default_properties,
+        etc.) unchanged - omit to use this method's own safe defaults
+        (matching a module with no non-default search settings).
+
+        POST /a/<domain>/apps/edit_module_detail_screens/<app_id>/<module_unique_id>/
+        Body is FORM-encoded (not raw JSON) with each top-level param a
+        separate form field, and the 'search_properties' field itself a
+        JSON-encoded STRING (confirmed live 2026-09-16 - a first attempt
+        posting one raw JSON blob got "Unknown detail type 'None'", because
+        the view reads params via dimagi.utils.web.json_request(request.POST),
+        which json.loads() the STRING VALUE of each individual form field,
+        not the request body as a whole).
+        Source: corehq/apps/app_manager/views/modules.py:
+        edit_module_detail_screens() -> _gather_and_update_search_properties()
+        -> _update_search_properties() (docstring there gives the exact
+        per-property shape mapping used above).
+        """
+        csc = current_search_config or {}
+        search_properties = {
+            "title_label": (csc.get("title_label") or {}).get("en", ""),
+            "description": (csc.get("description") or {}).get("en", ""),
+            "properties": properties,
+            "auto_launch": csc.get("auto_launch", False),
+            "default_search": csc.get("default_search", False),
+            "search_button_display_condition": csc.get("search_button_display_condition", ""),
+            "blacklisted_owner_ids_expression": csc.get("blacklisted_owner_ids_expression", ""),
+            "default_properties": [
+                {"property": p["property"], "defaultValue": p["defaultValue"]}
+                for p in csc.get("default_properties", [])
+            ],
+            "custom_sort_properties": csc.get("custom_sort_properties", []),
+            "data_registry": csc.get("data_registry", ""),
+            "data_registry_workflow": csc.get("data_registry_workflow", ""),
+            "additional_registry_cases": csc.get("additional_registry_cases", []),
+            "custom_related_case_property": csc.get("custom_related_case_property", ""),
+            "inline_search": csc.get("inline_search", False),
+            "instance_name": csc.get("instance_name", ""),
+            "include_all_related_cases": csc.get("include_all_related_cases", False),
+            "search_on_clear": csc.get("search_on_clear", False),
+        }
+        url = self._apps_url(f"edit_module_detail_screens/{app_id}/{module_unique_id}/")
+        fields = {"type": "case", "search_properties": json.dumps(search_properties)}
+        resp = self.session.post(url, data=fields, headers=self._csrf_headers())
+        resp.raise_for_status()
+        data = resp.json()
+        if data.get("error"):
+            raise RuntimeError(f"set_module_search_properties failed: {data['error']}")
+        return data
+
     def set_custom_properties(self, app_id, properties: dict):
         """
         Set the app's Advanced Settings > Custom Properties (e.g. the

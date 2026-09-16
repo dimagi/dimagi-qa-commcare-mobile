@@ -819,6 +819,71 @@ jobs:
         run: |
           python scripts/run_graceful_session_pause_precondition_check.py
 
+      # Master Mobile Plan (2026) > Form Submissions > "Casesearch Checkbox
+      # 1" (row 55) / "Casesearch Checkbox 2" (row 56) - adding a Case
+      # Search property in checkbox/multi-select format against a lookup
+      # table lives in HQ's App Builder Case List UI, backed by module
+      # search_config structure - a materially more complex write than the
+      # simple custom_properties toggles hq_client.py already wrapped.
+      # RESOLVED (2026-09-16), per direct user instruction with exact App
+      # Builder steps: HQClient.set_module_search_properties() (real
+      # edit_module_detail_screens endpoint, found by reading commcare-hq
+      # source) adds a real Genre checkbox property to "Songs (See More)"
+      # on the "casesearch" domain's "[Mobile_Tests] Case Search and Claim"
+      # app, builds a real app version from it, verifies on-device that the
+      # Genre field renders as independently-clickable checkboxes and a
+      # multi-genre query returns real results, then REVERTS the property -
+      # per direct user instruction, wired as a REPEATABLE CI step (not
+      # left as a one-time manual verification), since this app is also
+      # edited manually by a colleague. Every run reads the module's
+      # CURRENT search_config fresh (never a hardcoded snapshot) so a
+      # concurrent manual edit is preserved rather than clobbered, and the
+      # revert step retries up to 3 times (confirmed live a first real run
+      # hit a transient network error on the revert alone, requiring manual
+      # cleanup) - a failed revert after all retries fails this step's own
+      # exit code, since leaving a temporary property on a SHARED app is a
+      # worse outcome than a normal test failure. See
+      # scripts/appium_casesearch_scenarios.py's own module docstring for
+      # the full citation. Verified passing live locally before being wired
+      # in here. Gated on group-b (form_submissions' own group) or a scoped
+      # tag dispatch, same as every other Appium step in this job.
+      - name: Run Appium suite on BrowserStack (Form Submissions - Casesearch Checkbox 1/2)
+        if: always() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'form_submissions')))
+        env:
+          BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
+          BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
+          HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
+          HQ_WEB_USER_PASSWORD: ${{ secrets.HQ_WEB_USER_PASSWORD }}
+          CC_TEST_USERNAME: ${{ secrets.CC_TEST_USERNAME }}
+          CC_TEST_PASSWORD: ${{ secrets.CC_TEST_PASSWORD }}
+        run: |
+          # NOTE: does NOT use HQ_DOMAIN - this suite's own domain
+          # ("casesearch", not qateam) comes from app_registry.py's
+          # CASE_SEARCH_AND_CLAIM entry, not the env var every other step
+          # here sets.
+          declare -A ANDROID_DEVICE_MAP=(
+            ["16.0"]="Samsung Galaxy S26"
+            ["15.0"]="Samsung Galaxy S25"
+            ["14.0"]="Samsung Galaxy S24"
+            ["13.0"]="Samsung Galaxy S23"
+            ["12.0"]="Samsung Galaxy S22"
+            ["11.0"]="Samsung Galaxy S21"
+            ["10.0"]="Samsung Galaxy S20"
+          )
+          ANDROID_VERSION="${{ github.event.inputs.android_version || '16.0' }}"
+          DEVICES="${{ github.event.inputs.devices }}"
+          if [ -z "$DEVICES" ]; then
+            DEVICES="${ANDROID_DEVICE_MAP[$ANDROID_VERSION]}-$ANDROID_VERSION"
+          fi
+          ARGS=(--devices "$DEVICES" --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-appium-casesearch-checkbox")
+          APK_SOURCE="${{ github.event.inputs.apk_source || 'GitHub Releases' }}"
+          if [ "$APK_SOURCE" != "GitHub Releases" ]; then
+            ARGS+=(--apk "$APK_SOURCE")
+          elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
+            ARGS+=(--release-tag "${{ github.event.inputs.release_tag }}")
+          fi
+          python scripts/run_casesearch_checkbox_suite.py "${ARGS[@]}"
+
       # Runs Multimedia's "External File in Forms" - the one Multimedia row
       # blocked by the same class of gap the Recovery Measures CCZ-picker
       # step above already solves (Maestro can't place a file at an
