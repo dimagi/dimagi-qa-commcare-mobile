@@ -660,6 +660,15 @@ jobs:
       # scripts/verify_submission.py's own --require-location vs.
       # --require-geopoint-answer citations for the full distinction).
       # Verified passing live locally before being wired in here.
+      # UPDATE (2026-09-17), per code review: this step's 5 checks are
+      # independent (different test cases entirely), but the default
+      # `bash -e` shell for `run:` blocks meant the FIRST one to exit
+      # non-zero stopped the rest from ever running, hiding whether the
+      # other 4 would have passed or failed in that same CI run. Runs each
+      # with `|| FAILED=1` instead of letting `-e` short-circuit, so every
+      # check always runs and reports into the merged results.json
+      # regardless of an earlier one's outcome, then fails the step at the
+      # end if any of them did.
       - name: Verify Form Submissions Submit-History checks (Markdown, Incomplete Forms 4, Repeat Groups 5, upload_test_2, Geoservice 2)
         if: always() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'form_submissions')))
         env:
@@ -667,16 +676,18 @@ jobs:
           HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
           HQ_WEB_USER_PASSWORD: ${{ secrets.HQ_WEB_USER_PASSWORD }}
         run: |
+          FAILED=0
           python scripts/run_form_submission_history_check.py \
-            --test-name markdown --username test1 --form-path-contains Markdown
+            --test-name markdown --username test1 --form-path-contains Markdown || FAILED=1
           python scripts/run_form_submission_history_check.py \
-            --test-name incomplete_forms_4 --username test1 --form-path-contains "Question Types"
+            --test-name incomplete_forms_4 --username test1 --form-path-contains "Question Types" || FAILED=1
           python scripts/verify_submission.py \
-            --test-name repeat_groups_5 --username test1 --form-path Repeats
+            --test-name repeat_groups_5 --username test1 --form-path Repeats || FAILED=1
           python scripts/verify_submission.py \
-            --test-name upload_test_2 --username test1 --form-path "Upload Tests for specific" --require-multimedia
+            --test-name upload_test_2 --username test1 --form-path "Upload Tests for specific" --require-multimedia || FAILED=1
           python scripts/verify_submission.py \
-            --test-name geoservice_2 --username test1 --form-path "Register Case" --require-geopoint-answer "Capture the case location."
+            --test-name geoservice_2 --username test1 --form-path "Register Case" --require-geopoint-answer "Capture the case location." || FAILED=1
+          exit $FAILED
 
       # Master Mobile Plan (2026) > Form Submissions > "Active users login"
       # (row 60), "Inactive users login" (row 61), "Deactivated user login"
