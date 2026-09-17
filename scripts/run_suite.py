@@ -188,21 +188,44 @@ def build_flows_zip(flow_files, out_dir):
     return zip_path
 
 
-def chunk_flows_by_execute_length(non_common_files, flows_dir, limit=900):
+def chunk_flows_by_execute_length(non_common_files, flows_dir, limit=850):
     """BrowserStack rejects a build whose `execute` array serializes past
     1000 characters - discovered via a real 422 running the full suite in
     one build: BROWSERSTACK_INVALID_SYNTAX, "'[execute]' length must be less
     than 1000 characters." Undocumented anywhere, so chunk conservatively
     (limit defaults well under the real 1000 cutoff) rather than assume the
-    exact boundary never shifts."""
-    chunks, current, current_len = [], [], 0
+    exact boundary never shifts.
+
+    UPDATE (2026-09-08), confirmed live (real CI run 34133638348, group-a
+    job): the ORIGINAL version of this function estimated each entry's cost
+    as `len(relpath) + 1` (a bare comma) - ignoring the pair of double-quote
+    characters json.dumps wraps every string in, the enclosing `[`/`]`
+    brackets, and json.dumps' own default `", "` (comma-SPACE) separator
+    between entries. `browserstack_client.trigger_build` sends `execute` via
+    `requests.request(..., json=payload)`, which serializes it with exactly
+    those defaults - the real wire length BrowserStack measures. The old
+    formula's under-count was large enough that a chunk it judged "830 chars,
+    safely under limit=900" was ACTUALLY 921 real characters - over even the
+    old limit's own budget, let alone the true 1000 cutoff on some chunks.
+    Confirmed live: re-dispatching that exact 19-file chunk through the real
+    run_build() path immediately failed as a testsuite parse error and fell
+    back to the (correctly-working, but ~19x slower) per-file fallback -
+    exactly matching the production symptom of group-a's job spending its
+    entire 3h45m runtime on repeated chunk-then-per-file-fallback cycles
+    and completing only 1 of its ~56 flows. Fixed by measuring the ACTUAL
+    json.dumps() length of each candidate chunk directly (matching exactly
+    what gets sent over the wire) instead of a hand-derived estimate, and
+    lowering the safety margin to 850 (from 900) for extra headroom given
+    how wrong the old estimate turned out to be."""
+    chunks, current = [], []
     for f in non_common_files:
-        rel_len = len(f.relative_to(flows_dir).as_posix()) + 1  # +1 for the joining comma
-        if current and current_len + rel_len > limit:
+        candidate = current + [f]
+        execute = [x.relative_to(flows_dir).as_posix() for x in candidate]
+        if current and len(json.dumps(execute)) > limit:
             chunks.append(current)
-            current, current_len = [], 0
-        current.append(f)
-        current_len += rel_len
+            current = [f]
+        else:
+            current = candidate
     if current:
         chunks.append(current)
     return chunks
@@ -443,7 +466,7 @@ def _run_build_once(bs, flow_files, app_url, args, env_variables, other_app_urls
 
 
 def run_build(bs, flow_files, app_url, args, env_variables, other_app_urls, tmp_dir, build_name=None,
-              max_parse_retries=1, deadline=None):
+              max_parse_retries=2, deadline=None):
     """Zip the given flow files, upload as a test suite, trigger a build, and
     wait for it. Shared by the main run and the --retry-failed re-run so both
     go through the exact same upload/trigger/poll path. Returns a LIST of
@@ -454,19 +477,39 @@ def run_build(bs, flow_files, app_url, args, env_variables, other_app_urls, tmp_
     testsuite parse error (see _is_testsuite_parse_error's docstring) - this
     clears genuinely transient upload/parse hiccups.
 
-    If it's STILL a parse error after every retry, live investigation found
-    this can also be a deterministic property of a specific multi-flow
-    combination (confirmed: the exact same 2-3 flow set from one directory
-    failed identically on 6 separate attempts, including 3 fresh-upload
-    retries in a row, while single-flow uploads of the same content - and
-    even 5-14 flow combinations from OTHER directories - reliably parsed
-    fine; no zip-structure, line-ending, or content difference explains it).
-    Retrying identical content doesn't fix a deterministic failure, so as a
-    last resort this falls back to running each non-common flow file in the
-    batch as its OWN single-flow build and concatenating the results -
-    slower, but every single-flow upload attempted during that investigation
-    parsed successfully, so this guarantees forward progress instead of
-    losing the whole batch to an unexplained BrowserStack-side quirk.
+    UPDATE (2026-09-14), confirmed live (CI runs 34588845997 and
+    34606130473): raised from 1 retry (2 total attempts) to 2 (3 total)
+    after two more parse-error incidents, each on a different chunk, with no
+    reproducible content pattern - every individual flow in both failing
+    chunks parsed fine once the per-file fallback ran it alone, and a
+    same-run, near-identical-size chunk (37 total files, one more than the
+    36-file chunk that failed) parsed cleanly on its first attempt. That
+    points at transient BrowserStack-side upload/parse flakiness rather than
+    a deterministic bad combination this time, so an extra retry (~60-100s
+    cost per the "error" builds' own measured durations, confirmed live)
+    is worth trying before paying for the much slower per-file fallback
+    (30-40+ real minutes for a 17-file chunk, confirmed live). NOTE this is
+    NOT guaranteed to fix every case: see the next paragraph's own earlier,
+    separate investigation that found a genuinely deterministic bad
+    2-3-flow combination that stayed a parse error through 3 retries in a
+    row - extra retries only help the transient class of this bug, not that
+    one, which is exactly why the per-file fallback below still exists as
+    the last resort either way.
+
+    If it's STILL a parse error after every retry, earlier live
+    investigation found this can also be a deterministic property of a
+    specific multi-flow combination (confirmed: the exact same 2-3 flow set
+    from one directory failed identically on 6 separate attempts, including
+    3 fresh-upload retries in a row, while single-flow uploads of the same
+    content - and even 5-14 flow combinations from OTHER directories -
+    reliably parsed fine; no zip-structure, line-ending, or content
+    difference explains it). Retrying identical content doesn't fix a
+    deterministic failure, so as a last resort this falls back to running
+    each non-common flow file in the batch as its OWN single-flow build and
+    concatenating the results - slower, but every single-flow upload
+    attempted during that investigation parsed successfully, so this
+    guarantees forward progress instead of losing the whole batch to an
+    unexplained BrowserStack-side quirk.
 
     Each returned tuple's `result` may STILL be a total parse error (a
     single-flow build can rarely hit this too, confirmed live) - the caller
@@ -817,6 +860,21 @@ def _dispatch_and_report(args, apk_path, apk_commcare_version, prior_build_by_ap
         # pattern - see that file's own citation for the full reasoning,
         # including why entries are replaced-by-name rather than blindly
         # concatenated (a stale local rerun otherwise lingers forever).
+        # UPDATE (2026-09-09), confirmed live (CI run 34226264408, group-c
+        # job): this step's exit code must reflect only what THIS invocation
+        # itself just ran, not the merged/cumulative test_results below (kept
+        # merged for the ARTIFACT/report's sake, per the 2026-08-25 fix
+        # above) - a real failure showed `offline_08`/`offline_06`/
+        # `offline_reinstall_update`/`reinstall_05_06` all printed "passed"
+        # moments earlier, yet this step still exited 1, because an EARLIER
+        # step in the same job (scenario_02_forced_ccz_update) had genuinely
+        # failed and its "failed" TestResult was still sitting in
+        # reports/latest_results.json, carried forward by the merge below.
+        # Every later step in a multi-step job was cascading a false
+        # "failed" CI status off of one real earlier failure. Snapshot the
+        # exit-code-relevant set BEFORE merging in old entries.
+        this_run_results = list(test_results)
+
         existing_results_path = REPO_ROOT / "reports" / "latest_results.json"
         if existing_results_path.exists():
             existing = json.loads(existing_results_path.read_text(encoding="utf-8"))
@@ -827,7 +885,7 @@ def _dispatch_and_report(args, apk_path, apk_commcare_version, prior_build_by_ap
         report_path = report_generator.generate_report(build_ids[0], test_results)
         print(f"HTML report: {report_path}")
 
-        if any(r.status == "failed" for r in test_results):
+        if any(r.status == "failed" for r in this_run_results):
             sys.exit(1)
 
 

@@ -34,7 +34,22 @@ API_BASE = "https://api-cloud.browserstack.com/app-automate/maestro/v2"
 # server-side hiccup, worth absorbing centrally" reasoning already applied
 # to flows/common/login.yaml's Bad Server Response retries, just at the
 # HTTP-client layer instead of the on-device UI layer.
-_RETRYABLE_STATUS_CODES = {500, 502, 503, 504}
+#
+# UPDATE (2026-09-09), confirmed live (CI run 34365865901): trigger_build
+# raised an uncaught 422 for a freshly-uploaded app_url/test_suite_url pair
+# (a small, correctly-chunked 17-file execute array, well under the real
+# length limit - not the INVALID_SYNTAX/length class of 422 already known
+# about) - crashing run_suite.py before any report was written. Immediately
+# re-running the EXACT same request (same app, fresh test-suite upload,
+# same execute list) succeeded on the very next attempt with no changes at
+# all, pointing at eventual-consistency lag on BrowserStack's side (the
+# just-uploaded app/test-suite artifact not fully indexed yet when
+# trigger_build is called right after) rather than a malformed request.
+# 422 added here so the SAME retry-with-backoff machinery already proven
+# for 5xx responses covers this too - a genuinely permanent 422 (e.g. a
+# real execute-length violation) still fails after these few attempts, just
+# a few seconds later than before.
+_RETRYABLE_STATUS_CODES = {422, 500, 502, 503, 504}
 
 
 def _request_with_retry(method, url, attempts=4, backoff_seconds=5, file_path=None, file_field="file", **kwargs):
@@ -139,10 +154,36 @@ class BrowserStackClient:
         array's serialized length, not by flow count/runtime) executing
         sequentially on one real device - confirmed live when a 33-flow
         mobile_pins build was still genuinely 'running' (not stuck) after the
-        previous 1800s default elapsed."""
+        previous 1800s default elapsed.
+
+        UPDATE (2026-09-09), confirmed live (CI run 34344170467, group-a
+        job): a real BrowserStack-side outage mid-poll raised
+        `requests.exceptions.HTTPError: 503 Server Error (retryable)` out of
+        get_build() - uncaught here, it crashed the ENTIRE run_suite.py
+        process before any report was ever written, losing every other
+        chunk's results too (the exact same class of bug already fixed for
+        a build stuck 'running' past its timeout - see the TimeoutError
+        handling this exact call site's own caller already has). The gap:
+        _request_with_retry()'s own internal retry budget (a few attempts,
+        short backoff) is much shorter than this loop's own 90-minute
+        patience - a BrowserStack outage lasting longer than that short
+        internal window still propagates. Treats an HTTPError the same way
+        a "still running" status already is: log it, sleep, and let the
+        NEXT poll (with the full remaining deadline) try again, instead of
+        giving up the instant the internal retry budget is exhausted."""
         deadline = time.monotonic() + timeout_seconds
         while True:
-            build = self.get_build(build_id)
+            try:
+                build = self.get_build(build_id)
+            except requests.exceptions.HTTPError as exc:
+                if time.monotonic() > deadline:
+                    raise TimeoutError(
+                        f"BrowserStack build {build_id}: still getting HTTP errors polling "
+                        f"for status after {timeout_seconds}s ({exc})"
+                    ) from exc
+                print(f"  (transient error polling build {build_id}, retrying in {poll_seconds}s: {exc})")
+                time.sleep(poll_seconds)
+                continue
             status = build.get("status")
             if status not in ("running", "queued"):
                 return build

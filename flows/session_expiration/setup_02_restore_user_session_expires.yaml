@@ -1,7 +1,7 @@
 appId: org.commcare.dalvik
 tags:
   - session_expiration
-  - partial
+  - automatable
 ---
 # Master Mobile Plan (2026) > Session Expiration > "Setup 2" - Restore User:
 # log in, verify the session-expiration notification appears, and confirm
@@ -9,9 +9,11 @@ tags:
 # 45-second window elapses (per this tab's own "Test Area" note: "This
 # application is set up to log you out automatically after 45 seconds").
 #
-# PARTIAL: same HQ web-user dependency as setup_01_install_application.yaml
-# (this flow re-installs rather than assuming setup_01 ran first in the same
-# session, per this repo's "each flow runnable in isolation" convention).
+# RECLASSIFIED Automatable (2026-09-01), correcting the same stale PARTIAL
+# claim as setup_01_install_application.yaml - see that file's own header
+# for the full correction. Confirmed passing live 2026-09-01. Re-installs
+# rather than assuming setup_01 ran first in the same session, per this
+# repo's "each flow runnable in isolation" convention.
 #
 # Verified against commcare-android source (read-only reference, not modified):
 #   app/instrumentation-tests/src/org/commcare/androidTests/SessionExpirationTests.kt

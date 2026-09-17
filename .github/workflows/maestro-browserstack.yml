@@ -96,19 +96,65 @@ jobs:
             # login(3) + date_widgets(3) + case_filters(1) +
             # conditional_enum_in_case_list(1) = 57 files vs group-c's 17),
             # which is exactly why group-a was still running 2+ hours after
-            # group-b had already finished in a real run. Rebalanced here by
-            # greedily bin-packing each tag's actual file count (computed via
-            # `doc.get("tags")` the same way scripts/run_suite.py's own
-            # select_flow_files() resolves them - every flow file carries
-            # exactly one of these 20 module tags, no overlaps) into 3 groups
-            # of the most equal total size possible: 41/41/40 flow files
-            # (not counting flows/common/*.yaml's 19 files, which
-            # select_flow_files() always adds to every group's run
-            # regardless of tags).
+            # group-b had already finished in a real run. Rebalanced by
+            # file count into 3 groups of 41/41/40 flow files.
+            #
+            # UPDATE (2026-09-11), confirmed live (CI run 34477790541, the
+            # first fully-clean dispatch): file-count balance still isn't
+            # RUNTIME balance - the 3 groups' real wall-clock came in at
+            # group-a 3h36m, group-b 3h44m, group-c 3h18m (a 27min spread),
+            # because individual flows vary hugely in real duration (e.g.
+            # multimedia's 26 flows alone took 105 real minutes, while
+            # trigger_device_logs' 2 flows took under 6). Rebalanced here
+            # using each tag's REAL measured total duration_ms from that
+            # run's own per-group reports/latest_results.json (not file
+            # count) - greedily bin-packed (largest-first, always into the
+            # currently-lightest group) into 3 groups of ~160-167 real
+            # minutes each (down from a 35min spread to under 8min),
+            # treating multimedia+updates_2_49 as one inseparable unit (they
+            # share the same HQ app_id - see the "Run Maestro suite (Updates
+            # tab..." steps' own citation below for why splitting them across
+            # groups would reopen a real race) and keeping prompted_updates's
+            # scenario_01/02 Appium steps pinned to their existing groups
+            # (group-b/group-c respectively, per the explicit instruction
+            # cited on those steps below) rather than moving them, since
+            # moving either would add a 4th/3rd extra non-chunk BrowserStack
+            # build to an already build-heavy group for a <6min gain - not
+            # worth the extra per-build overhead (confirmed live: each
+            # group's OWN summed flow duration_ms undercounts its real
+            # wall-clock by 40-70 real minutes, almost entirely per-build
+            # upload/trigger/poll overhead multiplied by how many separate
+            # BrowserStack builds - main chunks plus every dedicated step
+            # below - that group's job triggers).
+            #
+            # UPDATE (2026-09-11, 2nd correction), confirmed live (CI run
+            # 34588845997): group-a hit a genuine BROWSERSTACK_TESTSUITE_
+            # PARSE_ERROR on one of its chunks (real execute-array length
+            # only 525 chars, well under the 850 limit above - not the
+            # already-fixed length bug), forcing the slow per-file fallback
+            # and leaving group-a still on its main dispatch step after 3
+            # hours while group-b/group-c had already moved well past
+            # theirs. Root cause traced to externalapp_tests living in
+            # group-a: the workflow's own `--other-app` flag below (gated on
+            # `contains(matrix.tags, 'externalapp_tests')`) applies to
+            # EVERY chunk in that group's single run_suite.py invocation,
+            # not just chunks that actually contain externalapp_tests
+            # flows - so every other chunk in group-a (this failing one
+            # included) was uploading an unneeded companion APK as a side
+            # effect of the tag placement. Swapped externalapp_tests
+            # (14.28 real min) out of group-a into group-c, trading back
+            # trigger_device_logs (5.85) + other_error_tests (6.20) - a
+            # near-even swap that keeps all 3 groups within ~1 real minute
+            # of each other by the same duration data above, while moving
+            # the --other-app side effect to group-c instead (whose own
+            # chunks may still pay it unnecessarily - this only relocates
+            # the side effect, doesn't eliminate it; making --other-app
+            # chunk-aware in run_suite.py itself would be the real fix, not
+            # attempted here).
             MATRIX='{"include":[
-              {"name":"group-a","tags":"multimedia install updates_2_49 other_error_tests support_menus trigger_device_logs"},
-              {"name":"group-b","tags":"mobile_pins prompted_updates externalapp_tests updates_partial_failed login case_filters conditional_enum_in_case_list update"},
-              {"name":"group-c","tags":"form_submissions recovery_measures right_to_left_text date_widgets session_expiration menu_badges"}
+              {"name":"group-a","tags":"multimedia updates_2_49 install login update session_expiration trigger_device_logs other_error_tests"},
+              {"name":"group-b","tags":"form_submissions updates_partial_failed case_filters right_to_left_text conditional_enum_in_case_list support_menus menu_badges"},
+              {"name":"group-c","tags":"recovery_measures mobile_pins prompted_updates date_widgets externalapp_tests"}
             ]}'
           else
             MATRIX="{\"include\":[{\"name\":\"single\",\"tags\":\"$TAG\"}]}"
@@ -578,6 +624,618 @@ jobs:
           fi
           python scripts/run_appium_offline_ccz_suite.py "${ARGS[@]}"
 
+      # Master Mobile Plan (2026) > Form Submissions > "Markdown" (row 21) +
+      # "Incomplete Forms 4" (row 30) - HQ-only Submit-History post-checks on
+      # top of the already-automated on-device submit flows (both tagged
+      # form_submissions - moved to group-b in the 2026-09-11 runtime
+      # rebalance above, was group-c). Built 2026-09-01 but never actually
+      # wired into CI until now (caught while building a full
+      # workflow-status export) - see
+      # scripts/run_form_submission_history_check.py's own module docstring
+      # for the full citation.
+      #
+      # UPDATE (2026-09-11): added Repeat Groups 5 + upload_test_2's own
+      # scripts/verify_submission.py checks here too - confirmed live that
+      # script was cited as these 2 rows' automation but never actually
+      # invoked anywhere in this workflow (only mentioned in comments), a
+      # genuinely orphaned check same as this step's own Markdown/Incomplete
+      # Forms 4 checks were before 2026-09-01. verify_submission.py itself
+      # didn't write to reports/latest_results.json at all until this same
+      # update (see its own module docstring) - fixed to match every other
+      # check script's read-merge-write pattern first, then wired in here.
+      # Geoservice 2 (the script's 3rd cited row) is deliberately NOT wired
+      # in yet - confirmed live locally that its own submission genuinely
+      # has no captured location (metadata.location == "---"), a real,
+      # currently-unresolved app/feature gap, not a broken check - per
+      # direct user instruction, holding off until that's investigated
+      # separately rather than immediately turning this step red.
+      # UPDATE (2026-09-15): added Geoservice 2's own check here too, after
+      # switching its flow to submit "Geoservices > Register Case" (which
+      # has a real geopoint question) instead of the location-question-free
+      # "Basic Form" it used previously - per direct user clarification,
+      # this row's real bar is "some question on this form captured a real
+      # location", not the OpenRosa <meta> block's own separate "Auto
+      # Capture Location (all forms)" automatic feature (confirmed live
+      # that stays empty even with a real GPS fix on this exact form - see
+      # scripts/verify_submission.py's own --require-location vs.
+      # --require-geopoint-answer citations for the full distinction).
+      # Verified passing live locally before being wired in here.
+      # UPDATE (2026-09-17), per code review: this step's 5 checks are
+      # independent (different test cases entirely), but the default
+      # `bash -e` shell for `run:` blocks meant the FIRST one to exit
+      # non-zero stopped the rest from ever running, hiding whether the
+      # other 4 would have passed or failed in that same CI run. Runs each
+      # with `|| FAILED=1` instead of letting `-e` short-circuit, so every
+      # check always runs and reports into the merged results.json
+      # regardless of an earlier one's outcome, then fails the step at the
+      # end if any of them did.
+      - name: Verify Form Submissions Submit-History checks (Markdown, Incomplete Forms 4, Repeat Groups 5, upload_test_2, Geoservice 2)
+        if: always() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'form_submissions')))
+        env:
+          HQ_DOMAIN: qateam
+          HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
+          HQ_WEB_USER_PASSWORD: ${{ secrets.HQ_WEB_USER_PASSWORD }}
+        run: |
+          FAILED=0
+          python scripts/run_form_submission_history_check.py \
+            --test-name markdown --username test1 --form-path-contains Markdown || FAILED=1
+          python scripts/run_form_submission_history_check.py \
+            --test-name incomplete_forms_4 --username test1 --form-path-contains "Question Types" || FAILED=1
+          python scripts/verify_submission.py \
+            --test-name repeat_groups_5 --username test1 --form-path Repeats || FAILED=1
+          python scripts/verify_submission.py \
+            --test-name upload_test_2 --username test1 --form-path "Upload Tests for specific" --require-multimedia || FAILED=1
+          python scripts/verify_submission.py \
+            --test-name geoservice_2 --username test1 --form-path "Register Case" --require-geopoint-answer "Capture the case location." || FAILED=1
+          exit $FAILED
+
+      # Master Mobile Plan (2026) > Form Submissions > "Active users login"
+      # (row 60), "Inactive users login" (row 61), "Deactivated user login"
+      # (row 62) - whether HQ's own active/inactive mobile-worker state
+      # actually gates on-device login. No Maestro HQ-pre-step mechanism
+      # exists for toggling a user's activation state, so this uses Appium
+      # the same way every other HQ-action-plus-device-assertion scenario in
+      # this job does - the on-device steps themselves need nothing Maestro
+      # couldn't also do. Uses a dedicated mobile worker (maestro_inactive,
+      # password "123", same convention as this repo's other
+      # maestro-provisioned accounts) created idempotently via
+      # HQClient.create_mobile_worker() rather than reusing CC_TEST_USERNAME
+      # or HQ_MOBILE_WORKER_USERNAME, both load-bearing elsewhere in this
+      # suite. Confirmed live 2026-09-15 that a deactivated account's login
+      # attempt reaches the login screen but fails with a real, stable
+      # "Invalid Username or Password" message - see
+      # scripts/appium_user_activation_scenarios.py's own module docstring
+      # for the full citation. Verified passing live locally before being
+      # wired in here. Same fold-into-the-matrix-job pattern as every other
+      # Appium step in this job, gated on group-b (Form Submissions' own
+      # group) or a scoped form_submissions tag dispatch.
+      - name: Run Appium suite on BrowserStack (Form Submissions - active/inactive/deactivated user login)
+        if: always() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'form_submissions')))
+        env:
+          BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
+          BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
+          HQ_DOMAIN: qateam
+          HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
+          HQ_WEB_USER_PASSWORD: ${{ secrets.HQ_WEB_USER_PASSWORD }}
+          HQ_MOBILE_WORKER_USERNAME: ${{ secrets.HQ_MOBILE_WORKER_USERNAME }}
+          HQ_MOBILE_WORKER_PASSWORD: ${{ secrets.HQ_MOBILE_WORKER_PASSWORD }}
+        run: |
+          declare -A ANDROID_DEVICE_MAP=(
+            ["16.0"]="Samsung Galaxy S26"
+            ["15.0"]="Samsung Galaxy S25"
+            ["14.0"]="Samsung Galaxy S24"
+            ["13.0"]="Samsung Galaxy S23"
+            ["12.0"]="Samsung Galaxy S22"
+            ["11.0"]="Samsung Galaxy S21"
+            ["10.0"]="Samsung Galaxy S20"
+          )
+          ANDROID_VERSION="${{ github.event.inputs.android_version || '16.0' }}"
+          DEVICES="${{ github.event.inputs.devices }}"
+          if [ -z "$DEVICES" ]; then
+            DEVICES="${ANDROID_DEVICE_MAP[$ANDROID_VERSION]}-$ANDROID_VERSION"
+          fi
+          ARGS=(--devices "$DEVICES" --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-appium-user-activation")
+          APK_SOURCE="${{ github.event.inputs.apk_source || 'GitHub Releases' }}"
+          if [ "$APK_SOURCE" != "GitHub Releases" ]; then
+            ARGS+=(--apk "$APK_SOURCE")
+          elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
+            ARGS+=(--release-tag "${{ github.event.inputs.release_tag }}")
+          fi
+          python scripts/run_appium_user_activation_suite.py "${ARGS[@]}"
+
+      # Master Mobile Plan (2026) > Right to Left Text > "Home Screen 8"
+      # (row 23) + "Case list 4" (row 36). Both were Not automatable because
+      # this app's own real Arabic translations broke English-text selectors
+      # once CommCare's IN-APP language was switched to Arabic, and a prior
+      # Maestro attempt hit a real Unicode round-trip bug even matching the
+      # Arabic text directly. Confirmed live 2026-09-15 that CommCare's own
+      # in-app language switch does NOT change Android's real system layout
+      # direction at all (it only swaps which string dictionary CommCare's
+      # own Localization system reads from) - what DOES cause real RTL
+      # mirroring is the device's actual system locale, set here via
+      # UiAutomator2's standard `language`/`locale` capabilities
+      # (AppiumBrowserStackClient.start_session(device_language="ar",
+      # device_locale="SA")) - confirmed this genuinely mirrors CommCare's
+      # home-screen tiles and the case-list action button's arrow, while
+      # leaving CommCare's own string content untouched (so neither
+      # scenario ever needs CommCare's in-app language switch, or any
+      # Arabic-text-matching SELECTOR, at all - see
+      # scripts/appium_rtl_scenarios.py's own module docstring for the full
+      # citation and exact bounds evidence). Verified passing live locally
+      # before being wired in here.
+      #
+      # UPDATE (2026-09-16): also covers "Question Types 1" (row 25) and
+      # "Question Types 3" (row 27), added as two more scenarios in the same
+      # run_appium_rtl_suite.py entry point (no separate CI step needed).
+      # Both rows have TWO original claims each, of which only one half of
+      # each is genuinely checkable - the other half (intra-widget text
+      # alignment for Question Types 1; progress-bar fill DIRECTION, an
+      # animation sampled over time, for Question Types 3) has no
+      # Maestro/Appium assertion primitive at all and stays a documented
+      # Not-automatable gap in the same cell's own note, same precedent as
+      # Case list 4 above. Question Types 1's checkable half (menu row
+      # icon-right-of-text element order) reuses the same RTL-locale
+      # mirroring mechanism. Question Types 3's checkable half (swipe
+      # direction genuinely advances/reverses the form) corrects a prior
+      # Maestro flow's false-negative conclusion that was checking a
+      # resource id that doesn't exist in this app. See
+      # scripts/appium_rtl_scenarios.py's own module docstring for the full
+      # citation. Verified passing live locally before being wired in here.
+      # Same fold-into-the-matrix-job pattern as every other Appium step in
+      # this job, gated on group-b (right_to_left_text's own group) or a
+      # scoped tag dispatch.
+      - name: Run Appium suite on BrowserStack (Right to Left Text - Home Screen 1, Home Screen 8, Case list 4, Question Types 1/3)
+        if: always() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'right_to_left_text')))
+        env:
+          BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
+          BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
+          HQ_DOMAIN: qateam
+          HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
+          HQ_WEB_USER_PASSWORD: ${{ secrets.HQ_WEB_USER_PASSWORD }}
+          CC_TEST_USERNAME: ${{ secrets.CC_TEST_USERNAME }}
+          CC_TEST_PASSWORD: ${{ secrets.CC_TEST_PASSWORD }}
+        run: |
+          declare -A ANDROID_DEVICE_MAP=(
+            ["16.0"]="Samsung Galaxy S26"
+            ["15.0"]="Samsung Galaxy S25"
+            ["14.0"]="Samsung Galaxy S24"
+            ["13.0"]="Samsung Galaxy S23"
+            ["12.0"]="Samsung Galaxy S22"
+            ["11.0"]="Samsung Galaxy S21"
+            ["10.0"]="Samsung Galaxy S20"
+          )
+          ANDROID_VERSION="${{ github.event.inputs.android_version || '16.0' }}"
+          DEVICES="${{ github.event.inputs.devices }}"
+          if [ -z "$DEVICES" ]; then
+            DEVICES="${ANDROID_DEVICE_MAP[$ANDROID_VERSION]}-$ANDROID_VERSION"
+          fi
+          ARGS=(--devices "$DEVICES" --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-appium-rtl")
+          APK_SOURCE="${{ github.event.inputs.apk_source || 'GitHub Releases' }}"
+          if [ "$APK_SOURCE" != "GitHub Releases" ]; then
+            ARGS+=(--apk "$APK_SOURCE")
+          elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
+            ARGS+=(--release-tag "${{ github.event.inputs.release_tag }}")
+          fi
+          python scripts/run_appium_rtl_suite.py "${ARGS[@]}"
+
+      # Master Mobile Plan (2026) > Form Submissions > "Graceful Session
+      # Pause" (row 57) - the row's own PRECONDITION (custom property
+      # cc-auto-form-save-on-pause=yes) is a plain HQ read, same pattern as
+      # Support Menus' own precondition check.
+      #
+      # UPDATE (2026-09-15): built and verified this check works correctly,
+      # but it found a real gap against [Master] Basic Tests (the main
+      # shared app) - genuinely no such property set at all.
+      #
+      # UPDATE (2026-09-17), per direct user-supplied screenshot: that "gap"
+      # was actually this check pointed at the WRONG app - [Master] Basic
+      # Tests NS Copy!!! (APP_REGISTRY["BASIC_TESTS_NS_COPY"], the dedicated
+      # mutation-safe copy already used elsewhere in this repo) genuinely
+      # HAS cc-auto-form-save-on-pause=yes, confirmed live. Re-pointed the
+      # check there - now passes. The row's own on-device steps (force-stop
+      # the app mid-form, relaunch, confirm the draft is restored) were ALSO
+      # genuinely re-tried live against this now-correctly-configured app,
+      # using Appium's real driver.terminate_app() (the correct, non-
+      # adb_shell, non-Maestro-killApp primitive) - and confirmed to fail
+      # with a real UnknownMethodException: this BrowserStack Appium driver
+      # build simply doesn't support terminateApp/activateApp/backgroundApp
+      # at all (its own error enumerates every supported command). This
+      # supersedes an earlier, less-specific "confirmed dead end" claim in
+      # this same comment with concrete, evidence-based citation instead -
+      # see coverage/coverage_matrix.csv's own Graceful Session Pause row
+      # and scripts/run_graceful_session_pause_precondition_check.py's own
+      # module docstring for the full citation. Stays Partial: precondition
+      # automatable and passing; on-device half stays Not automatable on
+      # this harness. Wired in here so both halves stay visible in every
+      # run's report; deliberately excluded from the exit-code-gating
+      # "this_run_results" pattern other checks use.
+      - name: Verify Graceful Session Pause precondition (cc-auto-form-save-on-pause)
+        if: always() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'form_submissions')))
+        continue-on-error: true
+        env:
+          HQ_DOMAIN: qateam
+          HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
+          HQ_WEB_USER_PASSWORD: ${{ secrets.HQ_WEB_USER_PASSWORD }}
+        run: |
+          python scripts/run_graceful_session_pause_precondition_check.py
+
+      # Master Mobile Plan (2026) > Form Submissions > "Casesearch Checkbox
+      # 1" (row 55) / "Casesearch Checkbox 2" (row 56) - adding a Case
+      # Search property in checkbox/multi-select format against a lookup
+      # table lives in HQ's App Builder Case List UI, backed by module
+      # search_config structure - a materially more complex write than the
+      # simple custom_properties toggles hq_client.py already wrapped.
+      # RESOLVED (2026-09-16), per direct user instruction with exact App
+      # Builder steps: HQClient.set_module_search_properties() (real
+      # edit_module_detail_screens endpoint, found by reading commcare-hq
+      # source) adds a real Genre checkbox property to "Songs (See More)"
+      # on the "casesearch" domain's "[Mobile_Tests] Case Search and Claim"
+      # app, builds a real app version from it, verifies on-device that the
+      # Genre field renders as independently-clickable checkboxes and a
+      # multi-genre query returns real results, then REVERTS the property -
+      # per direct user instruction, wired as a REPEATABLE CI step (not
+      # left as a one-time manual verification), since this app is also
+      # edited manually by a colleague. Every run reads the module's
+      # CURRENT search_config fresh (never a hardcoded snapshot) so a
+      # concurrent manual edit is preserved rather than clobbered, and the
+      # revert step retries up to 3 times (confirmed live a first real run
+      # hit a transient network error on the revert alone, requiring manual
+      # cleanup) - a failed revert after all retries fails this step's own
+      # exit code, since leaving a temporary property on a SHARED app is a
+      # worse outcome than a normal test failure. See
+      # scripts/appium_casesearch_scenarios.py's own module docstring for
+      # the full citation. Verified passing live locally before being wired
+      # in here. Gated on group-b (form_submissions' own group) or a scoped
+      # tag dispatch, same as every other Appium step in this job.
+      - name: Run Appium suite on BrowserStack (Form Submissions - Casesearch Checkbox 1/2)
+        if: always() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'form_submissions')))
+        env:
+          BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
+          BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
+          HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
+          HQ_WEB_USER_PASSWORD: ${{ secrets.HQ_WEB_USER_PASSWORD }}
+          CC_TEST_USERNAME: ${{ secrets.CC_TEST_USERNAME }}
+          CC_TEST_PASSWORD: ${{ secrets.CC_TEST_PASSWORD }}
+        run: |
+          # NOTE: does NOT use HQ_DOMAIN - this suite's own domain
+          # ("casesearch", not qateam) comes from app_registry.py's
+          # CASE_SEARCH_AND_CLAIM entry, not the env var every other step
+          # here sets.
+          declare -A ANDROID_DEVICE_MAP=(
+            ["16.0"]="Samsung Galaxy S26"
+            ["15.0"]="Samsung Galaxy S25"
+            ["14.0"]="Samsung Galaxy S24"
+            ["13.0"]="Samsung Galaxy S23"
+            ["12.0"]="Samsung Galaxy S22"
+            ["11.0"]="Samsung Galaxy S21"
+            ["10.0"]="Samsung Galaxy S20"
+          )
+          ANDROID_VERSION="${{ github.event.inputs.android_version || '16.0' }}"
+          DEVICES="${{ github.event.inputs.devices }}"
+          if [ -z "$DEVICES" ]; then
+            DEVICES="${ANDROID_DEVICE_MAP[$ANDROID_VERSION]}-$ANDROID_VERSION"
+          fi
+          ARGS=(--devices "$DEVICES" --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-appium-casesearch-checkbox")
+          APK_SOURCE="${{ github.event.inputs.apk_source || 'GitHub Releases' }}"
+          if [ "$APK_SOURCE" != "GitHub Releases" ]; then
+            ARGS+=(--apk "$APK_SOURCE")
+          elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
+            ARGS+=(--release-tag "${{ github.event.inputs.release_tag }}")
+          fi
+          python scripts/run_casesearch_checkbox_suite.py "${ARGS[@]}"
+
+      # Master Mobile Plan (2026) > Case Filters > "Case Search & Claim 1"
+      # (row 19) - previously Not automatable per coverage_matrix.csv's own
+      # citation: "Different app ('Case Search and Claim') not present in
+      # resources/ and not independently confirmed - not guessed". RESOLVED
+      # (2026-09-16) per a direct user-supplied app link confirming the app
+      # genuinely exists (domain "casesearch", app_registry.py's
+      # CASE_SEARCH_AND_CLAIM - the same app Casesearch Checkbox 1/2 use,
+      # for an unrelated module/row). No HQ app-config change needed here.
+      #
+      # REWRITTEN (2026-09-17), per direct user instruction after reviewing
+      # a real device recording: targets "Songs (Search First)" - the
+      # module the row's own steps literally name - rather than an earlier
+      # "Songs (See More)" pivot. That pivot existed only because an
+      # earlier version of this scenario required a real, currently-
+      # matching case to prove the date filter narrows results, and Search
+      # First's own pre-filled default filters (Song Name="Default Song",
+      # Rating=*****) made every query return zero matches regardless of
+      # date. The user's own recording showed this "Query response had no
+      # results" outcome on Search First is normal and acceptable - the
+      # query completes cleanly and the search screen stays usable - so
+      # this scenario's pass criterion no longer requires real matching
+      # data: it verifies the Date Opened field is present, that entering a
+      # single date (today's date - no need to read a real one off
+      # existing data anymore) in both start/end pickers genuinely
+      # collapses the field to "<date> to <date>" (confirmed live via the
+      # calendar icon's "Switch to text input mode" toggle), then submits
+      # the query and accepts EITHER a real results screen OR a clean "no
+      # results" toast as a pass - only a genuine hang/crash is a failure.
+      # Also uses Appium's dedicated hide_keyboard command rather than a
+      # raw back() press around the date picker, since back() performs a
+      # real navigation instead of a keyboard-dismiss when no keyboard is
+      # actually open (confirmed live, twice, in an earlier version of this
+      # scenario).
+      #
+      # UPDATE (2026-09-17): confirmed live that the date picker's expected
+      # text-entry order (mm/dd/y vs dd/mm/y) isn't fixed - it varies by
+      # BrowserStack device/session (presumably tied to that device's own
+      # regional keyboard/locale setting). The shared date-entry helper
+      # (also used by Case Search & Claim 2 below) now tries mm/dd/y first,
+      # then detects a real "Invalid format ... dd/mm/y" (or mm/dd/y) hint
+      # on screen and retypes in whichever order the hint actually names,
+      # read live rather than assumed. See
+      # scripts/appium_case_search_claim_scenarios.py's own module
+      # docstring for the full citation. Verified passing live locally
+      # (multiple clean consecutive runs) before being wired in here.
+      # Gated on group-b (case_filters' own group) or a scoped tag
+      # dispatch, same as every other Appium step in this job.
+      - name: Run Appium suite on BrowserStack (Case Filters - Case Search & Claim 1)
+        if: always() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'case_filters')))
+        env:
+          BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
+          BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
+          HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
+          HQ_WEB_USER_PASSWORD: ${{ secrets.HQ_WEB_USER_PASSWORD }}
+          CC_TEST_USERNAME: ${{ secrets.CC_TEST_USERNAME }}
+          CC_TEST_PASSWORD: ${{ secrets.CC_TEST_PASSWORD }}
+        run: |
+          # NOTE: does NOT use HQ_DOMAIN - this suite's own domain
+          # ("casesearch", not qateam) comes from app_registry.py's
+          # CASE_SEARCH_AND_CLAIM entry, not the env var every other step
+          # here sets.
+          declare -A ANDROID_DEVICE_MAP=(
+            ["16.0"]="Samsung Galaxy S26"
+            ["15.0"]="Samsung Galaxy S25"
+            ["14.0"]="Samsung Galaxy S24"
+            ["13.0"]="Samsung Galaxy S23"
+            ["12.0"]="Samsung Galaxy S22"
+            ["11.0"]="Samsung Galaxy S21"
+            ["10.0"]="Samsung Galaxy S20"
+          )
+          ANDROID_VERSION="${{ github.event.inputs.android_version || '16.0' }}"
+          DEVICES="${{ github.event.inputs.devices }}"
+          if [ -z "$DEVICES" ]; then
+            DEVICES="${ANDROID_DEVICE_MAP[$ANDROID_VERSION]}-$ANDROID_VERSION"
+          fi
+          ARGS=(--devices "$DEVICES" --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-appium-case-search-claim")
+          APK_SOURCE="${{ github.event.inputs.apk_source || 'GitHub Releases' }}"
+          if [ "$APK_SOURCE" != "GitHub Releases" ]; then
+            ARGS+=(--apk "$APK_SOURCE")
+          elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
+            ARGS+=(--release-tag "${{ github.event.inputs.release_tag }}")
+          fi
+          python scripts/run_case_search_claim_suite.py "${ARGS[@]}"
+
+      # Master Mobile Plan (2026) > Case Filters > "Case Search & Claim 2"
+      # (row 20) - "Date Widget - Single Date". Same app as row 19 above
+      # (casesearch domain, CASE_SEARCH_AND_CLAIM). Steps 1-4 (open Songs
+      # (Search First) -> select a song -> open Shows -> Search Again/open
+      # the search form) are real, live-confirmed navigation, automated
+      # here.
+      #
+      # BLOCKER CONFIRMED LIVE (2026-09-16/17, multiple BrowserStack
+      # sessions): the Shows module's own "Show Date" search property
+      # (when_is_the_show, input_="date") genuinely never renders as a
+      # query prompt on this module at all - a UI rendering gap on this
+      # app's currently installed CommCare client, not a data or
+      # scenario-code problem (of the date/daterange search properties
+      # across this app's modules, this was the only input_="date" one -
+      # every other date field, including row 19's own, uses the working
+      # input_="daterange" widget).
+      #
+      # RESOLVED (2026-09-17), per direct user instruction after reviewing
+      # a real device recording: a NEW property was added to this same
+      # module - "Date Opened" (input_="daterange", confirmed live via
+      # HQClient.get_module_search_config) - which renders and works
+      # correctly. This scenario uses THAT field (not literally "Show
+      # Date", but the row's practical "search by date" intent) the same
+      # way Case Search & Claim 1 uses its own Date Opened field: enters
+      # today's date, verifies the field collapses to "<date> to <date>",
+      # submits the query, and accepts EITHER a real results screen OR a
+      # clean "no results" toast as a pass (same established philosophy as
+      # row 19). Step 6 ("functional on webapps") stays out of scope for
+      # this mobile-only repo; step 7 against the ORIGINAL "Show Date"
+      # widget specifically stays not automatable since that field still
+      # doesn't render. Also benefits from the same date-format
+      # auto-detection fix as row 19 (see that step's own comment above) -
+      # this device's date picker's expected entry order isn't fixed across
+      # BrowserStack sessions. See
+      # scripts/appium_case_search_claim_2_scenarios.py's own module
+      # docstring for the full citation. Verified passing live locally
+      # (multiple clean consecutive runs) before being wired in here.
+      # Gated on group-b (case_filters' own group) or a scoped tag
+      # dispatch, same as every other Appium step in this job.
+      - name: Run Appium suite on BrowserStack (Case Filters - Case Search & Claim 2)
+        if: always() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'case_filters')))
+        env:
+          BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
+          BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
+          HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
+          HQ_WEB_USER_PASSWORD: ${{ secrets.HQ_WEB_USER_PASSWORD }}
+          CC_TEST_USERNAME: ${{ secrets.CC_TEST_USERNAME }}
+          CC_TEST_PASSWORD: ${{ secrets.CC_TEST_PASSWORD }}
+        run: |
+          # NOTE: does NOT use HQ_DOMAIN - this suite's own domain
+          # ("casesearch", not qateam) comes from app_registry.py's
+          # CASE_SEARCH_AND_CLAIM entry, not the env var every other step
+          # here sets.
+          declare -A ANDROID_DEVICE_MAP=(
+            ["16.0"]="Samsung Galaxy S26"
+            ["15.0"]="Samsung Galaxy S25"
+            ["14.0"]="Samsung Galaxy S24"
+            ["13.0"]="Samsung Galaxy S23"
+            ["12.0"]="Samsung Galaxy S22"
+            ["11.0"]="Samsung Galaxy S21"
+            ["10.0"]="Samsung Galaxy S20"
+          )
+          ANDROID_VERSION="${{ github.event.inputs.android_version || '16.0' }}"
+          DEVICES="${{ github.event.inputs.devices }}"
+          if [ -z "$DEVICES" ]; then
+            DEVICES="${ANDROID_DEVICE_MAP[$ANDROID_VERSION]}-$ANDROID_VERSION"
+          fi
+          ARGS=(--devices "$DEVICES" --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-appium-case-search-claim-2")
+          APK_SOURCE="${{ github.event.inputs.apk_source || 'GitHub Releases' }}"
+          if [ "$APK_SOURCE" != "GitHub Releases" ]; then
+            ARGS+=(--apk "$APK_SOURCE")
+          elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
+            ARGS+=(--release-tag "${{ github.event.inputs.release_tag }}")
+          fi
+          python scripts/run_case_search_claim_2_suite.py "${ARGS[@]}"
+
+      # Runs Multimedia's "External File in Forms" - the one Multimedia row
+      # blocked by the same class of gap the Recovery Measures CCZ-picker
+      # step above already solves (Maestro can't place a file at an
+      # arbitrary filesystem path) - see
+      # scripts/appium_multimedia_scenarios.py's own module docstring for
+      # the full citation. Same fold-into-the-matrix-job pattern as every
+      # other Appium step in this job, gated on group-a (multimedia's own
+      # group) or a scoped multimedia tag dispatch.
+      - name: Run Appium suite on BrowserStack (Multimedia - external file in forms)
+        if: always() && (matrix.name == 'group-a' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'multimedia')))
+        env:
+          BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
+          BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
+          HQ_DOMAIN: qateam
+          CC_TEST_USERNAME: ${{ secrets.CC_TEST_USERNAME }}
+          CC_TEST_PASSWORD: ${{ secrets.CC_TEST_PASSWORD }}
+          HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
+          HQ_WEB_USER_PASSWORD: ${{ secrets.HQ_WEB_USER_PASSWORD }}
+        run: |
+          declare -A ANDROID_DEVICE_MAP=(
+            ["16.0"]="Samsung Galaxy S26"
+            ["15.0"]="Samsung Galaxy S25"
+            ["14.0"]="Samsung Galaxy S24"
+            ["13.0"]="Samsung Galaxy S23"
+            ["12.0"]="Samsung Galaxy S22"
+            ["11.0"]="Samsung Galaxy S21"
+            ["10.0"]="Samsung Galaxy S20"
+          )
+          ANDROID_VERSION="${{ github.event.inputs.android_version || '16.0' }}"
+          DEVICES="${{ github.event.inputs.devices }}"
+          if [ -z "$DEVICES" ]; then
+            DEVICES="${ANDROID_DEVICE_MAP[$ANDROID_VERSION]}-$ANDROID_VERSION"
+          fi
+          ARGS=(--devices "$DEVICES" --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-appium-multimedia")
+          APK_SOURCE="${{ github.event.inputs.apk_source || 'GitHub Releases' }}"
+          if [ "$APK_SOURCE" != "GitHub Releases" ]; then
+            ARGS+=(--apk "$APK_SOURCE")
+          elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
+            ARGS+=(--release-tag "${{ github.event.inputs.release_tag }}")
+          fi
+          python scripts/run_appium_multimedia_suite.py "${ARGS[@]}"
+
+      # Master Mobile Plan (2026) > Multimedia > "MM1" (row 8), "MM2" (row 9),
+      # "MM3" (row 10) - previously Not automatable because their Setup steps
+      # as literally written require moving a file the app already has out
+      # of its own external-files directory via the device's own file
+      # manager before the rest of each scenario runs. Reinterprets what
+      # each row actually needs to prove (MM1: a clean full-media install
+      # reaches Practice Mode; MM2: a no-media install reports exactly one
+      # specific missing file, then a targeted repair zip resolves it; MM3:
+      # continuing from MM2's still-partially-broken state, the FULL zip
+      # resolves the remaining missing file and login succeeds) by building
+      # the needed zip(s) LOCALLY (download the app's real multimedia zip
+      # via HQClient, optionally strip one file out with Python's stdlib
+      # zipfile for MM2's targeted repair) and pushing directly to
+      # /sdcard/Download/ via the same push_file mechanism already proven for
+      # CCZs - no on-device file relocation needed at all. See
+      # scripts/appium_mm2_scenario.py's own module docstring for the full
+      # citation, including why `mobile: shell` (the other candidate for a
+      # literal on-device move) is confirmed blocked on BrowserStack's
+      # managed Appium server (adb_shell insecure feature disabled).
+      # UPDATE (2026-09-15): extended from MM2-only to also run MM1
+      # (standalone session) and MM3 (chained after MM2 in the same session,
+      # since MM3 continues MM2's own broken state) - all 3 verified passing
+      # live before being wired in here. Same fold-into-the-matrix-job
+      # pattern as every other Appium step in this job, gated on group-a
+      # (multimedia's own group) or a scoped multimedia tag dispatch.
+      - name: Run Appium suite on BrowserStack (Multimedia - MM1/MM2/MM3 install+repair)
+        if: always() && (matrix.name == 'group-a' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'multimedia')))
+        env:
+          BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
+          BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
+          HQ_DOMAIN: qateam
+          HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
+          HQ_WEB_USER_PASSWORD: ${{ secrets.HQ_WEB_USER_PASSWORD }}
+          CC_TEST_USERNAME: ${{ secrets.CC_TEST_USERNAME }}
+          CC_TEST_PASSWORD: ${{ secrets.CC_TEST_PASSWORD }}
+        run: |
+          declare -A ANDROID_DEVICE_MAP=(
+            ["16.0"]="Samsung Galaxy S26"
+            ["15.0"]="Samsung Galaxy S25"
+            ["14.0"]="Samsung Galaxy S24"
+            ["13.0"]="Samsung Galaxy S23"
+            ["12.0"]="Samsung Galaxy S22"
+            ["11.0"]="Samsung Galaxy S21"
+            ["10.0"]="Samsung Galaxy S20"
+          )
+          ANDROID_VERSION="${{ github.event.inputs.android_version || '16.0' }}"
+          DEVICES="${{ github.event.inputs.devices }}"
+          if [ -z "$DEVICES" ]; then
+            DEVICES="${ANDROID_DEVICE_MAP[$ANDROID_VERSION]}-$ANDROID_VERSION"
+          fi
+          ARGS=(--devices "$DEVICES" --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-appium-mm1-mm2-mm3")
+          APK_SOURCE="${{ github.event.inputs.apk_source || 'GitHub Releases' }}"
+          if [ "$APK_SOURCE" != "GitHub Releases" ]; then
+            ARGS+=(--apk "$APK_SOURCE")
+          elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
+            ARGS+=(--release-tag "${{ github.event.inputs.release_tag }}")
+          fi
+          python scripts/run_appium_mm2_suite.py "${ARGS[@]}"
+
+      # Master Mobile Plan (2026) > Multimedia > "Photo Verification" (row
+      # 47) + "Image Resize 27/28" (rows 41-42) - HQ-only Submit-History
+      # post-checks on top of the already-automated on-device submit flows
+      # above (photo_02_can_remove_chosen_photo.yaml,
+      # image_resize_25/26_*.yaml, both tagged multimedia/group-a). Zero
+      # extra BrowserStack device cost - see
+      # scripts/run_multimedia_form_data_check.py's own module docstring for
+      # the full citation, including why Image Resize 27/28 only asserts
+      # attachment presence/downloadability, not resize-size correctness.
+      # UPDATE (2026-09-15): added Media 4's own check here too - its own
+      # note already said this was "technically approachable via
+      # get_form_attachments(), already proven for Photo Verification/Image
+      # Resize 27-28, just never wired up". min-attachments=2 (not 3+)
+      # since Media 2's own flow (which produces this submission) has a
+      # best-effort, optional video-recording step - confirmed live via a
+      # real recent submission that 3 of its 4 questions (audio/image/sign)
+      # reliably attach, video does not.
+      - name: Verify Multimedia Submit-History checks (Photo Verification, Image Resize 27/28, Media 4)
+        if: always() && (matrix.name == 'group-a' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'multimedia')))
+        env:
+          HQ_DOMAIN: qateam
+          HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
+          HQ_WEB_USER_PASSWORD: ${{ secrets.HQ_WEB_USER_PASSWORD }}
+        run: |
+          python scripts/run_multimedia_form_data_check.py --check-type unanswered \
+            --test-name photo_verification --username test1 \
+            --form-path-contains "Gif/Remove Image" \
+            --expect-unanswered "Take a photo" --expect-unanswered "Choose Image"
+          python scripts/run_multimedia_form_data_check.py --check-type attachments \
+            --test-name image_resize_27_28 --username test1 \
+            --form-path-contains "Image Resize" --min-attachments 3
+          python scripts/run_multimedia_form_data_check.py --check-type attachments \
+            --test-name media_4 --username test1 \
+            --form-path-contains "Media Capture" --min-attachments 2
+
+      # Master Mobile Plan (2026) > Support Menus > "Menu 2" (Force Log
+      # Submission) - HQ-only precondition verification on top of the
+      # already-automated on-device flow (support_menus - moved to group-b
+      # in the 2026-09-11 runtime rebalance above, was group-a). Built
+      # 2026-09-01 but never actually wired into CI until now (same gap as
+      # the Form Submissions checks above) - see
+      # scripts/run_support_menus_log_property_check.py's own module
+      # docstring for the full citation.
+      - name: Verify Support Menus 2 precondition (logenabled)
+        if: always() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'support_menus')))
+        env:
+          HQ_DOMAIN: qateam
+          HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
+          HQ_WEB_USER_PASSWORD: ${{ secrets.HQ_WEB_USER_PASSWORD }}
+        run: python scripts/run_support_menus_log_property_check.py
+
       # No report-history cache restore/save here on purpose: each matrix
       # job's own reports/history.json only reflects ITS slice of tags, not
       # the full logical run, so it isn't meaningful on its own - the
@@ -591,8 +1249,72 @@ jobs:
           path: reports/
           retention-days: 30
 
+  # Master Mobile Plan (2026) > Update > "Make a change" (row 10) + "Check
+  # for new build" (row 13) - both previously Not automatable/N/A. Confirmed
+  # live 2026-09-01 (by reading commcare-hq source directly) that neither
+  # actually needs a device at all: "make a change" is just HQClient.
+  # edit_module_attr() saving the app's draft content, and "check for new
+  # build" is CommCareHQ's own autogenerate_build() mechanism, which fires
+  # for ANY client (not specifically a phone) that fetches the app's live
+  # ODK profile while its draft version is ahead of the latest saved build's
+  # version - see scripts/hq_client.py's check_for_phone_triggered_build()
+  # and scripts/run_update_content_change_check.py for the full citations.
+  # A standalone job (not part of the BrowserStack device matrix above)
+  # since it has zero BrowserStack/device cost - two authenticated HQ calls
+  # plus real verification of HQ's response. Uploads its own reports/ as
+  # maestro-report-update-content-check, matching merge-reports' existing
+  # "maestro-report-*" download glob, so no change needed there beyond
+  # adding this job to its `needs:` list.
+  update-content-check:
+    # UPDATE (2026-09-08), confirmed live (CI run 34214747124): this job ran
+    # concurrently with maestro-tests (no `needs:` ordering between them),
+    # and flows/update/update_target_developer_options_flow.yaml (part of
+    # the "update" tag, in maestro-tests' group-b) references
+    # ${APP_CODE_UPDATE_TEST_ALTERNATE} - resolved via
+    # scripts/hq_client.py:resolve_app_codes(), whose get_app_install_code()
+    # call defaults release_first=True, marking the SAME shared "Update Test
+    # Alternate" app's current top build Released. This job's own check
+    # asserts its freshly-created build stays UNRELEASED (matching the
+    # sheet's own "Do NOT star this build" step) - a real race let that
+    # other job's release call land on this job's own build, failing the
+    # assertion for a reason that has nothing to do with this job's own
+    # correctness. `needs: maestro-tests` orders this job strictly after the
+    # whole matrix (can't depend on just one matrix leg), removing the race
+    # - a small latency cost for a fast, cheap check.
+    needs: maestro-tests
+    if: always() && (github.event.inputs.tag == '' || github.event.inputs.tag == 'All' || github.event.inputs.tag == 'update')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check for phone-triggered build (Update - Make a change / Check for new build)
+        env:
+          HQ_API_USERNAME: ${{ secrets.HQ_API_USERNAME }}
+          HQ_API_PASSWORD: ${{ secrets.HQ_API_PASSWORD }}
+          HQ_SESSION_COOKIE: ${{ secrets.HQ_SESSION_COOKIE }}
+          HQ_DOMAIN: qateam
+          CC_TEST_USERNAME: ${{ secrets.CC_TEST_USERNAME }}
+          HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
+          HQ_WEB_USER_PASSWORD: ${{ secrets.HQ_WEB_USER_PASSWORD }}
+        run: python scripts/run_update_content_change_check.py
+
+      - name: Upload HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maestro-report-update-content-check
+          path: reports/
+          retention-days: 30
+
   merge-reports:
-    needs: [prepare, maestro-tests]
+    needs: [prepare, maestro-tests, update-content-check]
     if: always()
     runs-on: ubuntu-latest
     steps:

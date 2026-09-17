@@ -49,6 +49,19 @@ tags:
     index: 0
 - assertVisible:
     id: "org.commcare.dalvik:id/nav_btn_next"
+# Master Mobile Plan (2026) > Right to Left Text > "Question Types 3" - a
+# swipe-direction check was attempted here (assert nav_btn_back's
+# visibility around a LEFT swipe) and dispatched for real, but the real
+# command log (2026-09-07) showed nav_btn_back NOT visible both before AND
+# after the swipe - i.e. the swipe had NO observable effect on this screen
+# at all, most likely because this form's entry screen doesn't respond to
+# swipe gestures for navigation (only nav_btn_next/nav_btn_finish taps do,
+# per this file's own header citations). An assertion that can't tell a
+# real regression apart from a complete no-op is worse than no assertion -
+# reverted rather than ship a check that would pass either way. Question
+# Types 3 stays Not automatable; both its claims (swipe direction AND
+# progress-bar fill direction) would need a different, not-yet-found signal
+# than button-visibility to verify objectively.
 - hideKeyboard
 # UPDATE, confirmed live (run 31276111657): a single `back` press wasn't
 # enough - the failure screenshot showed the form still open on its first

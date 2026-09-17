@@ -30,6 +30,7 @@ prompt encountered for that account) - if SSO is enforced or the wizard shape
 differs for a different account, use the HQ_SESSION_COOKIE escape hatch instead
 (see login() docstring).
 """
+import datetime
 import html
 import json
 import os
@@ -121,6 +122,9 @@ class HQClient:
     def _reports_url(self, path):
         return f"{self.base_url}/a/{self.domain}/reports/{path}"
 
+    def _settings_url(self, path):
+        return f"{self.base_url}/a/{self.domain}/settings/{path}"
+
     def mark_build_status(self, app_id, saved_app_id, is_released):
         """
         Release or un-release ("In Test") a specific saved build.
@@ -154,6 +158,140 @@ class HQClient:
             raise RuntimeError(f"create_new_build failed: {data['error_html']}")
         return data
 
+    def get_module_search_config(self, app_id, module_unique_id):
+        """
+        Read-only: a module's current Case Search config (search_config),
+        in the STORED shape - the same shape GET /a/<domain>/apps/source/
+        <app_id>/ already returns (get_custom_properties's own endpoint,
+        reused here). Raises ValueError if the module isn't found.
+
+        Master Mobile Plan (2026) > Form Submissions > "Casesearch Checkbox
+        1/2" (rows 55-56): added to safely read the CURRENT state of a
+        module's search properties before mutating it - critical because
+        this repo isn't the only editor of these apps (confirmed live,
+        2026-09-16: a colleague's own manual App Builder edits landed
+        real version-history entries on this exact app/module around the
+        same time this was built), so a hardcoded snapshot from whenever
+        this method was written would risk clobbering someone else's real,
+        concurrent change on revert.
+        """
+        resp = self.session.get(self._apps_url(f"source/{app_id}/"))
+        resp.raise_for_status()
+        data = resp.json()
+        for m in data.get("modules", []):
+            if m.get("unique_id") == module_unique_id:
+                return m.get("search_config") or {}
+        raise ValueError(f"Module {module_unique_id!r} not found in app {app_id!r}")
+
+    @staticmethod
+    def _search_property_stored_to_input(prop, lang="en"):
+        """
+        Convert one CaseSearchProperty from its STORED shape (as returned by
+        get_module_search_config/get_app source) into the INPUT shape
+        set_module_search_properties()/edit_module_detail_screens expects -
+        see that method's own citation for the full source reference on
+        which 'appearance' value produces which stored shape.
+        """
+        ret = {
+            "name": prop["name"],
+            "label": (prop.get("label") or {}).get(lang, ""),
+            "hint": (prop.get("hint") or {}).get(lang, ""),
+        }
+        input_ = prop.get("input_")
+        itemset = prop.get("itemset") or {}
+        appearance = prop.get("appearance")
+        if input_ in ("checkbox", "select", "select1") and itemset.get("nodeset"):
+            fixture = json.dumps({
+                "instance_id": itemset.get("instance_id"),
+                "nodeset": itemset.get("nodeset"),
+                "label": itemset.get("label"),
+                "value": itemset.get("value"),
+                "sort": itemset.get("sort"),
+            })
+            if input_ == "checkbox":
+                ret["appearance"] = "checkbox"
+            else:
+                ret["appearance"] = "fixture"
+                ret["is_multiselect"] = (input_ == "select")
+            ret["fixture"] = fixture
+        elif appearance in ("barcode_scan", "address"):
+            ret["appearance"] = appearance
+        elif input_ in ("date", "daterange"):
+            ret["appearance"] = input_
+        if prop.get("default_value"):
+            ret["default_value"] = prop["default_value"]
+        if prop.get("hidden"):
+            ret["hidden"] = prop["hidden"]
+        if prop.get("exclude"):
+            ret["exclude"] = prop["exclude"]
+        return ret
+
+    def set_module_search_properties(self, app_id, module_unique_id, properties, current_search_config=None):
+        """
+        Overwrite a module's Case Search properties list. REPLACES the
+        whole list (properties not included are dropped), same
+        replace-not-merge caveat as set_custom_properties - always read the
+        module's current search_config first (get_module_search_config) and
+        pass every property you want to KEEP, converted via
+        _search_property_stored_to_input, plus whatever you're adding/
+        changing.
+
+        `properties` must already be in the INPUT shape (plain string
+        label/hint, appearance-based fixture encoding) -
+        _search_property_stored_to_input() converts a property from the
+        STORED shape if you're round-tripping an existing one unchanged.
+
+        `current_search_config` (the STORED dict from
+        get_module_search_config) supplies the other top-level search
+        config fields (auto_launch, default_search, default_properties,
+        etc.) unchanged - omit to use this method's own safe defaults
+        (matching a module with no non-default search settings).
+
+        POST /a/<domain>/apps/edit_module_detail_screens/<app_id>/<module_unique_id>/
+        Body is FORM-encoded (not raw JSON) with each top-level param a
+        separate form field, and the 'search_properties' field itself a
+        JSON-encoded STRING (confirmed live 2026-09-16 - a first attempt
+        posting one raw JSON blob got "Unknown detail type 'None'", because
+        the view reads params via dimagi.utils.web.json_request(request.POST),
+        which json.loads() the STRING VALUE of each individual form field,
+        not the request body as a whole).
+        Source: corehq/apps/app_manager/views/modules.py:
+        edit_module_detail_screens() -> _gather_and_update_search_properties()
+        -> _update_search_properties() (docstring there gives the exact
+        per-property shape mapping used above).
+        """
+        csc = current_search_config or {}
+        search_properties = {
+            "title_label": (csc.get("title_label") or {}).get("en", ""),
+            "description": (csc.get("description") or {}).get("en", ""),
+            "properties": properties,
+            "auto_launch": csc.get("auto_launch", False),
+            "default_search": csc.get("default_search", False),
+            "search_button_display_condition": csc.get("search_button_display_condition", ""),
+            "blacklisted_owner_ids_expression": csc.get("blacklisted_owner_ids_expression", ""),
+            "default_properties": [
+                {"property": p["property"], "defaultValue": p["defaultValue"]}
+                for p in csc.get("default_properties", [])
+            ],
+            "custom_sort_properties": csc.get("custom_sort_properties", []),
+            "data_registry": csc.get("data_registry", ""),
+            "data_registry_workflow": csc.get("data_registry_workflow", ""),
+            "additional_registry_cases": csc.get("additional_registry_cases", []),
+            "custom_related_case_property": csc.get("custom_related_case_property", ""),
+            "inline_search": csc.get("inline_search", False),
+            "instance_name": csc.get("instance_name", ""),
+            "include_all_related_cases": csc.get("include_all_related_cases", False),
+            "search_on_clear": csc.get("search_on_clear", False),
+        }
+        url = self._apps_url(f"edit_module_detail_screens/{app_id}/{module_unique_id}/")
+        fields = {"type": "case", "search_properties": json.dumps(search_properties)}
+        resp = self.session.post(url, data=fields, headers=self._csrf_headers())
+        resp.raise_for_status()
+        data = resp.json()
+        if data.get("error"):
+            raise RuntimeError(f"set_module_search_properties failed: {data['error']}")
+        return data
+
     def set_custom_properties(self, app_id, properties: dict):
         """
         Set the app's Advanced Settings > Custom Properties (e.g. the
@@ -172,6 +310,297 @@ class HQClient:
         )
         resp.raise_for_status()
         return resp.json()
+
+    def get_app_properties(self, app_id):
+        """
+        Read-only counterpart to set_app_properties() below - returns the
+        app's DRAFT `profile.properties` dict (real, NAMED CommCare Profile
+        Settings such as cc-maps-default-layer, cc-autosync-freq, etc. -
+        NOT the free-form `profile.custom_properties` dict get_custom_
+        properties() reads).
+
+        Added for Master Mobile Plan (2026) > Form Submissions > "Geoservice
+        1" (Default Map Tileset), per this row's own coverage_matrix.csv
+        citation: `cc-maps-default-layer` lives under `profile.properties`,
+        confirmed against corehq/apps/app_manager/static/app_manager/json/
+        commcare-profile-settings.yml - the same GET /a/<domain>/apps/
+        source/<app_id>/ endpoint get_custom_properties()/edit_module_attr()
+        already read back from, just a different top-level key of the same
+        response.
+        """
+        resp = self.session.get(self._apps_url(f"source/{app_id}/"))
+        resp.raise_for_status()
+        return resp.json().get("profile", {}).get("properties", {})
+
+    def set_app_properties(self, app_id, properties: dict):
+        """
+        Set real, NAMED CommCare Profile Settings under Advanced Settings >
+        "Android Settings" / "CommCare Settings" etc. (e.g.
+        cc-maps-default-layer, the "Default Map Tileset" dropdown) - NOT
+        the free-form custom_properties dict set_custom_properties() above
+        writes.
+
+        POST /a/<domain>/apps/edit_commcare_profile/<app_id>/ - the SAME
+        endpoint set_custom_properties() posts to, just a different
+        top-level JSON key: {"properties": {...}} instead of
+        {"custom_properties": {...}}.
+
+        `properties` itself IS a true per-key MERGE into
+        app.profile['properties'] - confirmed live (2026-09-17) that a
+        POST of {"properties": {"cc-maps-default-layer": "terrain"}} left
+        every one of the app's other ~30 profile.properties keys
+        (cc-autosync-freq, cc-show-saved, unsent-time-limit, etc.)
+        byte-identical to before the call.
+
+        DANGEROUS CONFIRMED BUG (2026-09-17), found live the hard way: the
+        `custom_properties` side of edit_commcare_profile() is NOT
+        similarly tolerant of omission - a POST that includes "properties"
+        but leaves "custom_properties" out of the body entirely does NOT
+        leave profile.custom_properties untouched. Real evidence: this
+        exact class of call (against BASIC_TESTS_NS_COPY, made by an
+        earlier version of this method that posted bare
+        {"properties": {...}} with no "custom_properties" key at all) was
+        immediately followed by a fresh GET /a/<domain>/apps/source/
+        <app_id>/ showing profile.custom_properties had become `{}` -
+        wiping cc-auto-form-save-on-pause, logenabled, and every other
+        real custom property this app had, silently (a 200 response, no
+        error). The endpoint evidently treats a missing "custom_properties"
+        key as "set it to {}", not "leave it alone" - the opposite of what
+        this method's own docstring assumed before this was caught (see
+        set_custom_properties()'s own sibling caveat: it already documents
+        that ITS OWN "custom_properties" key replaces-not-merges; this is
+        the same replace behavior, just triggered by omission rather than
+        an explicit empty dict).
+
+        FIX: this method now defensively reads the app's CURRENT
+        custom_properties (via get_custom_properties(), a plain GET, right
+        before posting) and echoes them back unchanged in the same POST
+        body, every single call - so "set_app_properties never touches
+        custom_properties" is actually true in practice, not just assumed.
+        Any caller that already knows it's about to change custom_properties
+        too should call set_custom_properties() separately/afterward rather
+        than fighting this echo-back.
+        """
+        current_custom_properties = self.get_custom_properties(app_id)
+        url = self._apps_url(f"edit_commcare_profile/{app_id}/")
+        headers = self._csrf_headers()
+        headers["Content-Type"] = "application/json"
+        resp = self.session.post(
+            url,
+            data=json.dumps({
+                "properties": properties,
+                "custom_properties": current_custom_properties,
+            }),
+            headers=headers,
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+    def edit_module_attr(self, app_id, module_unique_id, attr, value):
+        """
+        Edit one (supported) attribute of a module and save the app's DRAFT
+        content - i.e. Master Mobile Plan (2026) > Update > "Make a change"
+        (save without building). Deliberately defaults callers to `attr="comment"`-
+        style usage: `comment` is a plain, non-language-keyed, purely-internal
+        annotation field (not rendered anywhere in the mobile app's own UI,
+        unlike `name` which sets a real on-device menu label another Maestro
+        flow might tap by text) - the safest possible "trivial content change"
+        to make against a shared QA app.
+
+        POST /a/<domain>/apps/edit_module_attr/<app_id>/<module_unique_id>/<attr>/
+        Body: {<attr>: value} (form-encoded, plain X-CSRFToken header - same
+        convention as every other POST in this file).
+        Source: corehq/apps/app_manager/views/modules.py:edit_module_attr()
+        - confirmed live 2026-09-01: `attr="comment"` maps straight to
+        `module.comment = request.POST.get('comment')` then `app.save(resp)`,
+        no language/lang-cookie involvement (unlike `attr="name"`, which is
+        `module["name"][lang] = ...`). Also confirmed live that `app.save()`
+        unconditionally bumps the app's own draft `version` counter even when
+        the posted value is byte-identical to what's already saved - so this
+        doesn't need a fresh/unique value each call to register as a real
+        "pending change" for check_for_phone_triggered_build() below to react to.
+        Returns the parsed JSON response (`{"update": {"app-version": N}, ...}`).
+        """
+        url = self._apps_url(f"edit_module_attr/{app_id}/{module_unique_id}/{attr}/")
+        resp = self.session.post(url, data={attr: value}, headers=self._csrf_headers())
+        resp.raise_for_status()
+        return resp.json()
+
+    def check_for_phone_triggered_build(self, app_id, username, include_media=False):
+        """
+        Master Mobile Plan (2026) > Update > "Check for new build" - the
+        on-device step ("log back in / sync, HQ should auto-generate a new
+        build") turns out to have NO real device dependency at all: the
+        product mechanism it's testing is CommCareHQ's own
+        `autogenerate_build()` (corehq/apps/app_manager/tasks.py), which
+        fires synchronously whenever ANY client fetches the app's live/draft
+        ODK profile (not a specific build's profile) with its version ahead
+        of the latest saved build's version - confirmed live 2026-09-01 by
+        reading corehq/apps/app_manager/views/download.py's
+        download_odk_profile()/download_odk_media_profile() source directly:
+        `if not request.app.copy_of: autogenerate_build(request.app, username)`.
+        A real Android device hits this same URL as part of its own OTA
+        update check - the "phone" in the test case's name is just whichever
+        client happens to request this URL, and a plain authenticated GET
+        satisfies that identically to a real device, no Maestro/Appium
+        session needed.
+
+        GET /a/<domain>/apps/download/<app_id>/profile.ccpr?username=<username>
+        (or media_profile.ccpr if include_media=True)
+        Source: corehq/apps/app_manager/download_urls.py (url names
+        'download_odk_profile'/'download_odk_media_profile') +
+        corehq/apps/app_manager/views/download.py + tasks.py:autogenerate_build()
+        (comment text: "Auto-generated by a phone update. Will expire after
+        next build if not marked released. Generated by {username}.").
+
+        Confirmed live end-to-end 2026-09-01, repeatedly, against the real
+        "Update Test Alternate" app (qateam/7e8e7e8857f7466495888a37952e7ad0):
+        after an edit_module_attr() call bumps the app's draft version ahead
+        of its newest saved build's version, this call reliably produces a
+        brand new, unreleased build whose build_comment starts with exactly
+        "Auto-generated by a phone update." - matching the sheet's own
+        expected text and its "Do NOT star this build" note.
+
+        CAVEAT, confirmed live: the build creation itself is asynchronous
+        (autogenerate_build_task is queued via Celery's `.delay(...)`, not
+        created inline in this request's response) - typically ready within
+        a few seconds, but callers must poll list_releases() rather than
+        assume it's already there the instant this call returns (see
+        scripts/run_update_content_change_check.py's own poll loop).
+
+        CAVEAT, also confirmed live: the `...Generated by {username}.` tail
+        of the auto-build's comment did NOT reliably reflect the `username`
+        passed here across repeated back-to-back calls during this method's
+        own testing (it sometimes came back "Generated by user unknown
+        user." even with a distinct username passed) - root cause not fully
+        isolated (candidates: the serial_task Celery dedup key being keyed
+        only on app_id+version, or edge/CDN caching on this frequently-hit
+        mobile-OTA endpoint). Callers should assert only the comment's fixed
+        "Auto-generated by a phone update" PREFIX and the build's newness/
+        is_released=False, never the embedded username - which is exactly
+        what run_update_content_change_check.py's own assertions do.
+
+        Returns the raw profile.ccpr response text (XML) - callers that want
+        to assert the new build actually appeared should re-call
+        list_releases() and check the newest entry, same as this method's
+        own live verification did.
+        """
+        path = "media_profile.ccpr" if include_media else "profile.ccpr"
+        url = self._apps_url(f"download/{app_id}/{path}")
+        resp = self.session.get(url, params={"username": username})
+        resp.raise_for_status()
+        return resp.text
+
+    def get_custom_properties(self, app_id):
+        """
+        Read-only counterpart to set_custom_properties() - returns the app's
+        DRAFT `profile.custom_properties` dict as HQ currently has it saved,
+        without touching anything. Added for Master Mobile Plan (2026) >
+        Support Menus > "Menu 2", whose own sheet pre-requisite ("verify the
+        app does NOT have logenabled=on_demand set") was previously only
+        ASSUMED true by the on-device flow (no on-device way to introspect an
+        app-builder setting) - this lets a pre-step actively VERIFY it
+        instead, without the risk of set_custom_properties's own
+        REPLACE-not-merge behavior accidentally wiping the app's other
+        existing custom properties just to check one value.
+
+        GET /a/<domain>/apps/source/<app_id>/ (app_source() view, same
+        endpoint edit_module_attr()'s own live verification already used to
+        read back a module's `comment` field - see that method's docstring).
+        Source: corehq/apps/app_manager/views/apps.py:app_source().
+        """
+        resp = self.session.get(self._apps_url(f"source/{app_id}/"))
+        resp.raise_for_status()
+        return resp.json().get("profile", {}).get("custom_properties", {})
+
+    def create_mobile_worker(self, username, password):
+        """
+        Master Mobile Plan (2026) > Form Submissions > "Active/Inactive/
+        Deactivated users login" (rows 60-62): these need a dedicated mobile
+        worker this program can safely toggle active/inactive without
+        touching CC_TEST_USERNAME/HQ_MOBILE_WORKER_USERNAME's own accounts
+        (both load-bearing for many other flows). Idempotent: if `username`
+        already exists (active or inactive), returns its existing user_id
+        instead of erroring, so re-running this is safe.
+
+        POST /a/<domain>/settings/users/commcare/ (MobileWorkerListView),
+        dispatched via its jQuery-RMI `create_mobile_worker` action -
+        requires the `Djng-Remote-Method` header (not a query param/body
+        field) plus `X-Requested-With: XMLHttpRequest` (JSONResponseMixin's
+        own is_ajax() gate), with a raw JSON body (not form-encoded) whose
+        top-level `user` key holds the new account's fields.
+        Source: corehq/apps/users/views/mobile/users.py:MobileWorkerListView.
+        create_mobile_worker() (self.request.POST reassigned from the raw
+        JSON body, then run through NewMobileWorkerForm - only `username`/
+        `new_password` are required, everything else optional).
+        """
+        existing = self.find_commcare_user(username, active=True) or self.find_commcare_user(username, active=False)
+        if existing:
+            return existing["user_id"]
+
+        url = self._settings_url("users/commcare/")
+        resp = self.session.post(
+            url,
+            data=json.dumps({"user": {"username": username, "password": password}}),
+            headers={
+                **self._csrf_headers(),
+                "Djng-Remote-Method": "create_mobile_worker",
+                "X-Requested-With": "XMLHttpRequest",
+                "Content-Type": "application/json",
+                "Referer": url,
+            },
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        if data.get("error"):
+            raise RuntimeError(f"create_mobile_worker({username!r}) failed: {data['error']}")
+        return data["user_id"]
+
+    def find_commcare_user(self, username, active=True):
+        """
+        Look up a mobile worker's user_id/is_active by username. Only
+        searches active-only or inactive-only per call (HQ's own
+        paginate_mobile_workers endpoint has no "search both" mode) - a
+        caller unsure of current state should try both, as create_mobile_worker()
+        above does.
+
+        GET /a/<domain>/settings/users/commcare/json/?query=&showDeactivatedUsers=
+        Source: corehq/apps/users/views/mobile/users.py:paginate_mobile_workers()
+        (query_string_query against base_username, so bare `username` -
+        without the @domain.commcarehq.org suffix - matches).
+        """
+        resp = self.session.get(self._settings_url("users/commcare/json/"), params={
+            "query": username,
+            "limit": 10,
+            "page": 1,
+            "showDeactivatedUsers": "false" if active else "true",
+        })
+        resp.raise_for_status()
+        for user in resp.json().get("users", []):
+            if user.get("username") == username:
+                return user
+        return None
+
+    def set_commcare_user_active(self, user_id, is_active):
+        """
+        Activate/deactivate a mobile worker by user_id (from
+        create_mobile_worker()/find_commcare_user() above).
+
+        POST /a/<domain>/settings/users/commcare/activate/<user_id>/
+        POST /a/<domain>/settings/users/commcare/deactivate/<user_id>/
+        Source: corehq/apps/users/views/mobile/users.py:activate_commcare_user()/
+        deactivate_commcare_user() (both just call _modify_user_status(),
+        which needs no POST body beyond CSRF - the desired state is baked
+        into which of the two URLs is hit).
+        """
+        action = "activate" if is_active else "deactivate"
+        url = self._settings_url(f"users/commcare/{action}/{user_id}/")
+        resp = self.session.post(url, headers=self._csrf_headers())
+        resp.raise_for_status()
+        data = resp.json()
+        if data.get("error"):
+            raise RuntimeError(f"set_commcare_user_active({user_id!r}, {is_active!r}) failed: {data['error']}")
+        return data
 
     def list_releases(self, app_id, only_show_released=True, limit=5):
         """
@@ -346,6 +775,58 @@ class HQClient:
                 # versions get released.
                 filename = _filename_from_content_disposition(file_resp.headers.get("Content-Disposition"))
                 dest_path = os.path.join(dest_path, filename or f"{build_id}.ccz")
+            with open(dest_path, "wb") as f:
+                for chunk in file_resp.iter_content(chunk_size=1 << 20):
+                    f.write(chunk)
+        return dest_path
+
+    def download_multimedia_zip(self, app_id, dest_path, poll_seconds=3, timeout_seconds=180):
+        """
+        Download the app's CURRENT DRAFT multimedia zip (all real media files
+        the top build's own multimedia_map references) - added for Master
+        Mobile Plan (2026) > Multimedia > "MM2", which needs a real, exactly-
+        one-file-missing repair zip built locally (see
+        scripts/appium_mm2_scenario.py's own module docstring).
+
+        Same async soil-job/poll shape as download_ccz() (GET triggers a
+        Celery task and returns {"download_id", "download_url", ...}; poll
+        download_url's HTML fragment for a "Download File Now" link) -
+        CommCareHQ's DownloadMultimediaZip view (corehq/apps/hqmedia/views.py)
+        uses the exact same DownloadBase/soil framework, just a different
+        trigger URL: GET /a/<domain>/apps/download/<app_id>/multimedia/commcare.zip
+        Source: corehq/apps/hqmedia/urls.py (mounted under app_manager/urls.py's
+        `download/<app_id>/multimedia/` prefix) + views.py:DownloadMultimediaZip.
+
+        IMPORTANT, confirmed live 2026-09-07: this zip can contain files the
+        CURRENT top build no longer actually references (orphaned assets
+        from old builds/tests) - it is NOT the same as "exactly what a
+        fresh no-media install's missing-media prompt will ask for". Cross-
+        check against a real no-media install's own prompt text before
+        assuming every file in this zip is still required (see
+        appium_mm2_scenario.py's own citation of this exact gap).
+        """
+        trigger_url = self._apps_url(f"download/{app_id}/multimedia/commcare.zip")
+        resp = self.session.get(trigger_url)
+        resp.raise_for_status()
+        poll_url = self.base_url + resp.json()["download_url"]
+
+        deadline = time.monotonic() + timeout_seconds
+        file_url = None
+        while True:
+            poll_resp = self.session.get(poll_url)
+            poll_resp.raise_for_status()
+            match = re.search(r'href="([^"]*\?get_file[^"]*)"', poll_resp.text)
+            if match:
+                file_url = match.group(1)
+                break
+            if time.monotonic() > deadline:
+                raise TimeoutError(f"Multimedia zip for app {app_id} not ready after {timeout_seconds}s")
+            time.sleep(poll_seconds)
+
+        if not file_url.startswith("http"):
+            file_url = self.base_url + file_url
+        with self.session.get(file_url, stream=True) as file_resp:
+            file_resp.raise_for_status()
             with open(dest_path, "wb") as f:
                 for chunk in file_resp.iter_content(chunk_size=1 << 20):
                     f.write(chunk)
@@ -611,7 +1092,7 @@ class HQClient:
         print(f"[hq_client] resolved apk_version {label_substring!r} -> {value!r} ({label!r})")
         return value
 
-    def find_recent_submission(self, username, form_path_contains=None, after=None, limit=20):
+    def find_recent_submission(self, username, form_path_contains=None, after=None, limit=500):
         """
         Search the Submit History report (what a human would use at
         /a/<domain>/reports/submit_history/) for the most recent form
@@ -633,7 +1114,31 @@ class HQClient:
         rendering (`json/<report_slug>/` path prefix, confirmed against
         corehq/apps/reports/const.py) - same datatables-style
         iDisplayStart/iDisplayLength/aaData shape used by many other HQ
-        reports, not something specific to this one.
+        reports, not something specific to this one. `sSearch` (DataTables'
+        usual server-side search param) does NOT filter this endpoint -
+        confirmed live 2026-09-10: passing sSearch="Markdown" still returned
+        iTotalDisplayRecords == iTotalRecords (34981) and unfiltered rows -
+        so a wide `limit` is genuinely the only lever available here, not a
+        missed shortcut.
+
+        UPDATE (2026-09-10), confirmed live (CI run 34448685828, group-c
+        job): this call's own default of 50 (the two hardcoded call sites
+        in run_form_submission_history_check.py/run_multimedia_form_data_
+        check.py) missed a real, successful "Markdown" submission entirely
+        - find_recent_submission(..., limit=50) returned None hours after
+        the submission happened, while a manual re-check against the SAME
+        domain (qateam has 34981 total submissions) with limit=1000 found
+        it immediately (submitted_by='test1 "test one"', time='Sep 10, 2026
+        13:40:06 IST', well within the run's own window). Root cause: this
+        domain's Submit History is shared, high-traffic (3 parallel
+        maestro-tests groups all submitting as the same `test1` CC_TEST_
+        USERNAME for hours), and this check runs as one of the LAST steps
+        in its job - by the time it runs, 50+ *other* submissions (any
+        flow, any group) have landed after the target one, pushing it past
+        a 50-row page. Confirmed live limit=200 already finds it in <1s;
+        limit=2000 gets a 400 Bad Request (HQ caps iDisplayLength somewhere
+        between 1000-2000) - 500 is comfortable headroom under that cap
+        while staying fast (~1-1.5s measured).
         """
         url = self._reports_url("json/submit_history/")
         resp = self.session.get(url, params={"iDisplayStart": 0, "iDisplayLength": limit})
@@ -699,20 +1204,164 @@ class HQClient:
         metadata["has_multimedia"] = has_multimedia
         return metadata
 
+    def get_form_answers(self, form_id):
+        """
+        Return {question_label: answer_text} for every question on a
+        submitted form's Form Data page - added for Master Mobile Plan
+        (2026) > Multimedia > "Photo Verification", whose real check is "the
+        question appears unanswered" (not a metadata field - the actual
+        submitted answer value/response text).
+
+        CAVEAT, confirmed live 2026-09-07: an EARLIER version of this method
+        parsed the page's `question_response_map` JSON blob (embedded in
+        `initial-page-data`) instead - that map is populated for text/
+        select/numeric-style questions, but comes back as a bare `{}` for a
+        form whose questions are media widgets (Image/Audio/Video capture-or-
+        choose), which is exactly the question TYPE "Take a photo"/"Choose
+        Image" are. Confirmed against a real Photo 2 submission
+        (form_id 529c2e38-be89-43a4-859a-3540b5b0f5d4): question_response_map
+        was `{}` even though the form genuinely has those 2 questions.
+
+        Source instead: the page's own `<table class="table table-bordered
+        form-data-table">` (the same human-readable Question/Response table
+        a manual tester reads) - confirmed live to render EVERY question
+        type generically, including unanswered media questions (an empty
+        `<div class="form-data-readable form-data-raw">` for the response
+        cell). Each question is one `<td title="/data/<path>">` containing a
+        `form-data-readable` label span, immediately followed by its sibling
+        response `<td>`.  Keyed by the human-readable label (e.g. "Take a
+        photo"), matching what test cases reference, not the raw XPath.
+        """
+        url = self._reports_url(f"form_data/{form_id}/")
+        resp = self.session.get(url)
+        resp.raise_for_status()
+        page_html = resp.text
+
+        table_match = re.search(
+            r'<table class="table table-bordered form-data-table">(.*?)</table>',
+            page_html, re.DOTALL,
+        )
+        if not table_match:
+            return {}
+        table = table_match.group(1)
+
+        cells = re.findall(r"<td\b[^>]*>(.*?)</td>", table, re.DOTALL)
+        answers = {}
+        # Cells alternate (label_cell, response_cell) pairs per row, skipping
+        # the header <tr> (which uses <th>, not <td>, so it never enters this
+        # list at all).
+        for label_cell, response_cell in zip(cells[0::2], cells[1::2]):
+            label_match = re.search(
+                r'form-data-readable">\s*(.*?)\s*</span>', label_cell, re.DOTALL,
+            )
+            if not label_match:
+                continue
+            label = html.unescape(label_match.group(1)).strip()
+            response_match = re.search(
+                r'form-data-raw">\s*(.*?)\s*</div>', response_cell, re.DOTALL,
+            )
+            answers[label] = html.unescape(response_match.group(1)).strip() if response_match else ""
+        return answers
+
+    def get_form_attachments(self, form_id):
+        """
+        Return a list of {question_label, filename, url, size_bytes} for
+        every real file attachment on a submitted form - added for Master
+        Mobile Plan (2026) > Multimedia > "Image Resize 27/28" and "Capture
+        8", whose real checks are "verify you can download the attachments"
+        and "verify [attachments] are not corrupted" (i.e. non-empty,
+        present, real files) rather than eyeballing rendered image quality.
+
+        Source: FormDataView's own `#form-attachments` tab-pane (confirmed
+        live 2026-09-07 against a real submission with audio/image/signature
+        attachments) - each row is a `<tr>` with the question's `title`
+        attribute (`/data/<question>`), its `form-data-readable` label span,
+        and a real download link/img `src` of the form
+        `/a/<domain>/api/form_attachment/v1/<form_id>/<filename>` - the same
+        authenticated-session-servable URL a human clicking "Download" on
+        that tab would hit. `size_bytes` is fetched via a HEAD request's
+        real Content-Length (confirmed live: 200, real byte count) - an
+        objective presence/non-corruption signal, not a rendered-quality
+        judgment.
+        """
+        url = self._reports_url(f"form_data/{form_id}/")
+        resp = self.session.get(url)
+        resp.raise_for_status()
+        page_html = resp.text
+
+        attachments_section = page_html.split('id="form-attachments"', 1)
+        if len(attachments_section) < 2:
+            return []
+        section = attachments_section[1].split('id="form-xml"', 1)[0]
+
+        rows = re.findall(r"<tr><td>(.*?)</td></tr>", section, re.DOTALL)
+        results = []
+        for row in rows:
+            label_match = re.search(
+                r'form-data-readable">\s*(.*?)\s*</span>', row, re.DOTALL,
+            )
+            url_match = re.search(r'(?:href|src)="([^"]*/api/form_attachment/v1/[^"]+)"', row)
+            if not label_match or not url_match:
+                continue
+            attachment_url = url_match.group(1)
+            if not attachment_url.startswith("http"):
+                attachment_url = self.base_url + attachment_url
+            filename = attachment_url.rsplit("/", 1)[-1]
+            size_bytes = None
+            head_resp = self.session.head(attachment_url)
+            if head_resp.ok:
+                content_length = head_resp.headers.get("Content-Length")
+                size_bytes = int(content_length) if content_length is not None else None
+            results.append({
+                "question_label": html.unescape(label_match.group(1)).strip(),
+                "filename": filename,
+                "url": attachment_url,
+                "size_bytes": size_bytes,
+            })
+        return results
+
+
+# Timezone abbreviations this domain's Submit History display has actually
+# been observed to use, mapped to their fixed UTC offset. "IST" here is
+# India Standard Time (UTC+5:30) - confirmed against this project's own
+# configured timezone, not a guess. Add more entries only once confirmed
+# live against real displayed data, same standard as everything else in
+# this file.
+_HQ_DISPLAY_TZ_OFFSETS = {
+    "IST": datetime.timedelta(hours=5, minutes=30),
+}
+
 
 def _parse_hq_display_time(time_str):
-    """Parses SubmitHistory's "Aug 08, 2026 19:46:10 IST" display format.
-    Returns None (rather than raising) on an unrecognized format, since
-    callers treat this as a best-effort recency filter, not a hard
-    requirement."""
-    import datetime
-    match = re.match(r"(\w+ \d{1,2}, \d{4} \d{1,2}:\d{2}:\d{2})", time_str)
+    """Parses SubmitHistory's "Aug 08, 2026 19:46:10 IST" display format
+    into a UTC-aware datetime. Returns None (rather than raising) on an
+    unrecognized format or an unmapped timezone abbreviation, since callers
+    treat this as a best-effort recency filter, not a hard requirement.
+
+    UPDATE (2026-09-17), per code review: this used to silently DROP the
+    trailing timezone abbreviation and return a NAIVE datetime as if it
+    were already UTC. A caller building its own "after" cutoff via
+    datetime.utcnow() (genuinely UTC) and comparing it against that naive-
+    but-actually-IST value was off by the full +5:30 offset - e.g. a
+    submission from 5 minutes ago could read as "13:40:06" and silently
+    fail an `after`-cutoff-within-the-last-N-minutes check that should have
+    included it, since the naive value looked ~5.5h earlier than its real
+    UTC time. Now returns a proper UTC-aware datetime instead, so it can
+    only be compared against another UTC-aware value - see this module's
+    own callers (find_recent_submission) and scripts/verify_submission.py /
+    scripts/run_form_submission_history_check.py for the matching fix on
+    the `after` side."""
+    match = re.match(r"(\w+ \d{1,2}, \d{4} \d{1,2}:\d{2}:\d{2})\s+(\w+)", time_str)
     if not match:
         return None
+    offset = _HQ_DISPLAY_TZ_OFFSETS.get(match.group(2))
+    if offset is None:
+        return None
     try:
-        return datetime.datetime.strptime(match.group(1), "%b %d, %Y %H:%M:%S")
+        naive_local = datetime.datetime.strptime(match.group(1), "%b %d, %Y %H:%M:%S")
     except ValueError:
         return None
+    return (naive_local - offset).replace(tzinfo=datetime.timezone.utc)
 
 
 def resolve_app_codes(registry, base_url=None, username=None, password=None, max_commcare_version=None):
@@ -822,6 +1471,8 @@ def run_pre_step(spec: dict, client: HQClient = None, current_apk_version: str =
         "set_prompt_update_settings": client.set_prompt_update_settings,
         "get_prompt_update_settings": client.get_prompt_update_settings,
         "create_device_log_request": client.create_device_log_request,
+        "edit_module_attr": client.edit_module_attr,
+        "check_for_phone_triggered_build": client.check_for_phone_triggered_build,
     }
     results = []
     last_build_id = None

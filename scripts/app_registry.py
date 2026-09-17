@@ -22,6 +22,21 @@ per app and risk missing the next one.
 """
 
 APP_REGISTRY = {
+    # Master Mobile Plan (2026) > Case Filters > "Case Search & Claim 1/2"
+    # (rows 19-20). Per direct user-supplied link, confirmed live via
+    # HQClient.get_app_install_code(): "[Mobile_Tests] Case Search and
+    # Claim", domain "casesearch" (a dedicated domain, not qateam). Has a
+    # real "Songs (Search First)" module with date_opened configured as
+    # daterange, and "Shows"/"Shows(2)" modules with when_is_the_show as
+    # date/daterange - exactly matching these 2 rows' own steps. (A
+    # near-identical app under domain "qateam", app_id
+    # 7448956367f448549f965786a33996fb, was checked first per an earlier
+    # user-supplied link but confirmed NOT to have the Genre-as-checkbox
+    # config Casesearch Checkbox 1/2 (Form Submissions rows 55-56) need -
+    # that gap is still open, left as-is per direct user instruction; this
+    # "casesearch" domain copy has the identical gap, checked exhaustively
+    # across all 21 modules.)
+    "CASE_SEARCH_AND_CLAIM": ("casesearch", "414ea62a6610470eb8582a13954515ea"),
     "BASIC_TESTS": ("qateam", "cdfa6c85eb594b23b0c08729cd2beff1"),
     # UPDATE (2026-08-20), per direct user-supplied link, confirmed live via
     # HQClient.list_releases (name == "Case Managements!"): the
