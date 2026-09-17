@@ -30,6 +30,7 @@ prompt encountered for that account) - if SSO is enforced or the wizard shape
 differs for a different account, use the HQ_SESSION_COOKIE escape hatch instead
 (see login() docstring).
 """
+import datetime
 import html
 import json
 import os
@@ -1320,19 +1321,47 @@ class HQClient:
         return results
 
 
+# Timezone abbreviations this domain's Submit History display has actually
+# been observed to use, mapped to their fixed UTC offset. "IST" here is
+# India Standard Time (UTC+5:30) - confirmed against this project's own
+# configured timezone, not a guess. Add more entries only once confirmed
+# live against real displayed data, same standard as everything else in
+# this file.
+_HQ_DISPLAY_TZ_OFFSETS = {
+    "IST": datetime.timedelta(hours=5, minutes=30),
+}
+
+
 def _parse_hq_display_time(time_str):
-    """Parses SubmitHistory's "Aug 08, 2026 19:46:10 IST" display format.
-    Returns None (rather than raising) on an unrecognized format, since
-    callers treat this as a best-effort recency filter, not a hard
-    requirement."""
-    import datetime
-    match = re.match(r"(\w+ \d{1,2}, \d{4} \d{1,2}:\d{2}:\d{2})", time_str)
+    """Parses SubmitHistory's "Aug 08, 2026 19:46:10 IST" display format
+    into a UTC-aware datetime. Returns None (rather than raising) on an
+    unrecognized format or an unmapped timezone abbreviation, since callers
+    treat this as a best-effort recency filter, not a hard requirement.
+
+    UPDATE (2026-09-17), per code review: this used to silently DROP the
+    trailing timezone abbreviation and return a NAIVE datetime as if it
+    were already UTC. A caller building its own "after" cutoff via
+    datetime.utcnow() (genuinely UTC) and comparing it against that naive-
+    but-actually-IST value was off by the full +5:30 offset - e.g. a
+    submission from 5 minutes ago could read as "13:40:06" and silently
+    fail an `after`-cutoff-within-the-last-N-minutes check that should have
+    included it, since the naive value looked ~5.5h earlier than its real
+    UTC time. Now returns a proper UTC-aware datetime instead, so it can
+    only be compared against another UTC-aware value - see this module's
+    own callers (find_recent_submission) and scripts/verify_submission.py /
+    scripts/run_form_submission_history_check.py for the matching fix on
+    the `after` side."""
+    match = re.match(r"(\w+ \d{1,2}, \d{4} \d{1,2}:\d{2}:\d{2})\s+(\w+)", time_str)
     if not match:
         return None
+    offset = _HQ_DISPLAY_TZ_OFFSETS.get(match.group(2))
+    if offset is None:
+        return None
     try:
-        return datetime.datetime.strptime(match.group(1), "%b %d, %Y %H:%M:%S")
+        naive_local = datetime.datetime.strptime(match.group(1), "%b %d, %Y %H:%M:%S")
     except ValueError:
         return None
+    return (naive_local - offset).replace(tzinfo=datetime.timezone.utc)
 
 
 def resolve_app_codes(registry, base_url=None, username=None, password=None, max_commcare_version=None):

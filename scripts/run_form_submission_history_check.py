@@ -48,9 +48,13 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 
 def run(hq, username, form_path_contains, after_minutes_ago=None):
+    # UPDATE (2026-09-17), per code review: HQClient._parse_hq_display_time
+    # now returns UTC-aware datetimes (it used to silently drop the "IST"
+    # suffix and return a naive value that was actually ~5.5h off UTC) - so
+    # `after` must be UTC-aware too, or comparing them raises TypeError.
     after = None
     if after_minutes_ago is not None:
-        after = datetime.datetime.utcnow() - datetime.timedelta(minutes=after_minutes_ago)
+        after = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=after_minutes_ago)
 
     # limit=500, not 50: confirmed live (CI run 34448685828) a real Markdown
     # submission fell off a 50-row Submit History page by the time this

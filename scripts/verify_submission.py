@@ -143,11 +143,19 @@ def main():
         password=os.environ.get("HQ_WEB_USER_PASSWORD"),
     )
 
+    # UPDATE (2026-09-17), per code review: HQClient._parse_hq_display_time
+    # now returns UTC-aware datetimes (it used to silently drop the "IST"
+    # suffix and return a naive value that was actually ~5.5h off UTC) - so
+    # `after` must be UTC-aware too, or comparing them raises TypeError. A
+    # bare `--after` string with no offset (e.g. "2026-08-08T19:00:00") is
+    # treated as UTC, matching --after-minutes-ago's own convention below.
     after = None
     if args.after:
         after = datetime.datetime.fromisoformat(args.after)
+        if after.tzinfo is None:
+            after = after.replace(tzinfo=datetime.timezone.utc)
     elif args.after_minutes_ago is not None:
-        after = datetime.datetime.utcnow() - datetime.timedelta(minutes=args.after_minutes_ago)
+        after = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=args.after_minutes_ago)
 
     start = time.monotonic()
     try:

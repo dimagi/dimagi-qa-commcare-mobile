@@ -182,34 +182,46 @@ def main():
 
     original_tileset = hq.get_app_properties(app_id).get("cc-maps-default-layer")
     print(f"Current (pre-test) cc-maps-default-layer: {original_tileset!r}")
-    print(f"Setting cc-maps-default-layer to {args.tileset!r} and creating a new build ...")
-    hq.set_app_properties(app_id, {"cc-maps-default-layer": args.tileset})
-    hq.create_new_build(
-        app_id,
-        comment=f"QA automation: Default Map Tileset = {args.tileset!r} "
-                f"(scripts/run_geoservice1_suite.py pipeline verification)",
-    )
-    confirmed = hq.get_app_properties(app_id).get("cc-maps-default-layer")
-    if confirmed != args.tileset:
-        raise RuntimeError(
-            f"set_app_properties did not take effect as HQ now reports it: expected {args.tileset!r}, "
-            f"got {confirmed!r} - not proceeding to install/spend BrowserStack time against a build that "
-            f"doesn't have the tileset value this run intended to test."
-        )
-    app_code = hq.get_app_install_code(app_id)
-
-    cc_username = os.environ["CC_TEST_USERNAME"]
-    cc_password = os.environ["CC_TEST_PASSWORD"]
-
-    bs = AppiumBrowserStackClient()
-    print(f"Uploading APK ({apk_path}) to BrowserStack ...")
-    app_url = bs.upload_app(apk_path)["app_url"]
 
     print(f"Running Geoservice 1 map-form-loads check (tileset={args.tileset}) ...")
     start = time.monotonic()
     driver = None
     result = None
     try:
+        # UPDATE (2026-09-17), per code review: the mutation (set_app_properties
+        # + create_new_build + the confirmation read-back) and the subsequent
+        # app-code/APK-upload resolution used to run BEFORE this try block -
+        # any exception there (a transient HQ read-lag on the confirmation
+        # check, a network blip during create_new_build/get_app_install_code/
+        # bs.upload_app) would propagate straight out of main() with the
+        # revert's own finally never reached, leaving the SHARED
+        # BASIC_TESTS_NS_COPY app mutated with no revert. Moved inside this
+        # try so the revert in `finally` below covers the WHOLE mutation
+        # window, not just the on-device portion - same shape as
+        # run_casesearch_checkbox_suite.py's own mutation-inside-try/finally.
+        print(f"Setting cc-maps-default-layer to {args.tileset!r} and creating a new build ...")
+        hq.set_app_properties(app_id, {"cc-maps-default-layer": args.tileset})
+        hq.create_new_build(
+            app_id,
+            comment=f"QA automation: Default Map Tileset = {args.tileset!r} "
+                    f"(scripts/run_geoservice1_suite.py pipeline verification)",
+        )
+        confirmed = hq.get_app_properties(app_id).get("cc-maps-default-layer")
+        if confirmed != args.tileset:
+            raise RuntimeError(
+                f"set_app_properties did not take effect as HQ now reports it: expected {args.tileset!r}, "
+                f"got {confirmed!r} - not proceeding to install/spend BrowserStack time against a build that "
+                f"doesn't have the tileset value this run intended to test."
+            )
+        app_code = hq.get_app_install_code(app_id)
+
+        cc_username = os.environ["CC_TEST_USERNAME"]
+        cc_password = os.environ["CC_TEST_PASSWORD"]
+
+        bs = AppiumBrowserStackClient()
+        print(f"Uploading APK ({apk_path}) to BrowserStack ...")
+        app_url = bs.upload_app(apk_path)["app_url"]
+
         driver = bs.start_session(app_url, device, os_version, build_name=args.build_name,
                                    session_name=f"geoservice1_{args.tileset}")
         geo1.verify_map_form_loads(driver, app_code, cc_username, cc_password)
