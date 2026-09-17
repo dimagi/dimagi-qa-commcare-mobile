@@ -109,7 +109,8 @@ def main():
     try:
         driver = bs.start_session(app_url, device, os_version, build_name=args.build_name,
                                    session_name="case_search_claim_1")
-        cscl.run_case_search_claim_1(driver, app_code, cc_username, cc_password)
+        completed, outcome = cscl.run_case_search_claim_1(driver, app_code, cc_username, cc_password)
+        print(f"  Query outcome: {outcome.get('result')!r}")
         result = report_generator.TestResult(
             name="case_filters/case_search_claim_1",
             workflow="case_filters",
