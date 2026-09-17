@@ -945,9 +945,19 @@ jobs:
       # raw back() press around the date picker, since back() performs a
       # real navigation instead of a keyboard-dismiss when no keyboard is
       # actually open (confirmed live, twice, in an earlier version of this
-      # scenario). See scripts/appium_case_search_claim_scenarios.py's own
-      # module docstring for the full citation. Verified passing live
-      # locally (two clean consecutive runs) before being wired in here.
+      # scenario).
+      #
+      # UPDATE (2026-09-17): confirmed live that the date picker's expected
+      # text-entry order (mm/dd/y vs dd/mm/y) isn't fixed - it varies by
+      # BrowserStack device/session (presumably tied to that device's own
+      # regional keyboard/locale setting). The shared date-entry helper
+      # (also used by Case Search & Claim 2 below) now tries mm/dd/y first,
+      # then detects a real "Invalid format ... dd/mm/y" (or mm/dd/y) hint
+      # on screen and retypes in whichever order the hint actually names,
+      # read live rather than assumed. See
+      # scripts/appium_case_search_claim_scenarios.py's own module
+      # docstring for the full citation. Verified passing live locally
+      # (multiple clean consecutive runs) before being wired in here.
       # Gated on group-b (case_filters' own group) or a scoped tag
       # dispatch, same as every other Appium step in this job.
       - name: Run Appium suite on BrowserStack (Case Filters - Case Search & Claim 1)
@@ -986,6 +996,82 @@ jobs:
             ARGS+=(--release-tag "${{ github.event.inputs.release_tag }}")
           fi
           python scripts/run_case_search_claim_suite.py "${ARGS[@]}"
+
+      # Master Mobile Plan (2026) > Case Filters > "Case Search & Claim 2"
+      # (row 20) - "Date Widget - Single Date". Same app as row 19 above
+      # (casesearch domain, CASE_SEARCH_AND_CLAIM). Steps 1-4 (open Songs
+      # (Search First) -> select a song -> open Shows -> Search Again/open
+      # the search form) are real, live-confirmed navigation, automated
+      # here.
+      #
+      # BLOCKER CONFIRMED LIVE (2026-09-16/17, multiple BrowserStack
+      # sessions): the Shows module's own "Show Date" search property
+      # (when_is_the_show, input_="date") genuinely never renders as a
+      # query prompt on this module at all - a UI rendering gap on this
+      # app's currently installed CommCare client, not a data or
+      # scenario-code problem (of the date/daterange search properties
+      # across this app's modules, this was the only input_="date" one -
+      # every other date field, including row 19's own, uses the working
+      # input_="daterange" widget).
+      #
+      # RESOLVED (2026-09-17), per direct user instruction after reviewing
+      # a real device recording: a NEW property was added to this same
+      # module - "Date Opened" (input_="daterange", confirmed live via
+      # HQClient.get_module_search_config) - which renders and works
+      # correctly. This scenario uses THAT field (not literally "Show
+      # Date", but the row's practical "search by date" intent) the same
+      # way Case Search & Claim 1 uses its own Date Opened field: enters
+      # today's date, verifies the field collapses to "<date> to <date>",
+      # submits the query, and accepts EITHER a real results screen OR a
+      # clean "no results" toast as a pass (same established philosophy as
+      # row 19). Step 6 ("functional on webapps") stays out of scope for
+      # this mobile-only repo; step 7 against the ORIGINAL "Show Date"
+      # widget specifically stays not automatable since that field still
+      # doesn't render. Also benefits from the same date-format
+      # auto-detection fix as row 19 (see that step's own comment above) -
+      # this device's date picker's expected entry order isn't fixed across
+      # BrowserStack sessions. See
+      # scripts/appium_case_search_claim_2_scenarios.py's own module
+      # docstring for the full citation. Verified passing live locally
+      # (multiple clean consecutive runs) before being wired in here.
+      # Gated on group-b (case_filters' own group) or a scoped tag
+      # dispatch, same as every other Appium step in this job.
+      - name: Run Appium suite on BrowserStack (Case Filters - Case Search & Claim 2)
+        if: always() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'case_filters')))
+        env:
+          BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
+          BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
+          HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
+          HQ_WEB_USER_PASSWORD: ${{ secrets.HQ_WEB_USER_PASSWORD }}
+          CC_TEST_USERNAME: ${{ secrets.CC_TEST_USERNAME }}
+          CC_TEST_PASSWORD: ${{ secrets.CC_TEST_PASSWORD }}
+        run: |
+          # NOTE: does NOT use HQ_DOMAIN - this suite's own domain
+          # ("casesearch", not qateam) comes from app_registry.py's
+          # CASE_SEARCH_AND_CLAIM entry, not the env var every other step
+          # here sets.
+          declare -A ANDROID_DEVICE_MAP=(
+            ["16.0"]="Samsung Galaxy S26"
+            ["15.0"]="Samsung Galaxy S25"
+            ["14.0"]="Samsung Galaxy S24"
+            ["13.0"]="Samsung Galaxy S23"
+            ["12.0"]="Samsung Galaxy S22"
+            ["11.0"]="Samsung Galaxy S21"
+            ["10.0"]="Samsung Galaxy S20"
+          )
+          ANDROID_VERSION="${{ github.event.inputs.android_version || '16.0' }}"
+          DEVICES="${{ github.event.inputs.devices }}"
+          if [ -z "$DEVICES" ]; then
+            DEVICES="${ANDROID_DEVICE_MAP[$ANDROID_VERSION]}-$ANDROID_VERSION"
+          fi
+          ARGS=(--devices "$DEVICES" --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-appium-case-search-claim-2")
+          APK_SOURCE="${{ github.event.inputs.apk_source || 'GitHub Releases' }}"
+          if [ "$APK_SOURCE" != "GitHub Releases" ]; then
+            ARGS+=(--apk "$APK_SOURCE")
+          elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
+            ARGS+=(--release-tag "${{ github.event.inputs.release_tag }}")
+          fi
+          python scripts/run_case_search_claim_2_suite.py "${ARGS[@]}"
 
       # Runs Multimedia's "External File in Forms" - the one Multimedia row
       # blocked by the same class of gap the Recovery Measures CCZ-picker

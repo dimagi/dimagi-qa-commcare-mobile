@@ -107,17 +107,44 @@ def _open_date_range_picker(driver):
     target.click()
 
 
-def _enter_single_date_in_picker(driver, field_format_date):
+def _enter_single_date_in_picker(driver, month, day, year):
+    """Enters the same single date into both the picker's start/end text
+    fields. UPDATE (2026-09-17), confirmed live via a real failure
+    screenshot: this field's expected text-entry ORDER (mm/dd/y vs dd/mm/y)
+    is not fixed - it varies by BrowserStack device/session (seen live:
+    "9/17/2026" was accepted as mm/dd/y on most sessions, but one session
+    instead showed "Invalid format. Use: dd/mm/y" for that exact same
+    string, presumably tied to that device's own regional keyboard/locale
+    setting, not something this repo controls). Tries mm/dd/y first (the
+    order confirmed live to work on most sessions so far); if that trips a
+    real "Invalid format ... dd/mm/y" or "... mm/dd/y" validation hint,
+    re-types in whichever order the hint actually names, read live rather
+    than guessed. A day/month pair that's ambiguous in both orders (both
+    <=12) could in principle be silently accepted in the wrong order with
+    no hint shown - that's still caught downstream by
+    _assert_date_field_shows_single_day_range's own exact ISO-date check,
+    just via a different assertion, not a silent false pass."""
     h.tap_by_text(driver, "Switch to text input mode", timeout=10)
     time.sleep(1)
     edits = sorted(driver.find_elements(AppiumBy.CLASS_NAME, "android.widget.EditText"), key=lambda e: e.rect["x"])
     if len(edits) < 2:
         raise AssertionError(f"Expected 2 date EditText fields in the picker, found {len(edits)}")
     start_field, end_field = edits[0], edits[1]
-    for field in (start_field, end_field):
-        field.click()
-        field.clear()
-        field.send_keys(field_format_date)
+
+    def _type(order):
+        value = f"{month}/{day}/{year}" if order == "mdy" else f"{day}/{month}/{year}"
+        for field in (start_field, end_field):
+            field.click()
+            field.clear()
+            field.send_keys(value)
+
+    _type("mdy")
+    time.sleep(0.5)
+    hint = next((t for t in h.all_visible_texts(driver) if "dd/mm" in t.lower() or "mm/dd" in t.lower()), None)
+    if hint:
+        order = "dmy" if "dd/mm" in hint.lower() else "mdy"
+        _type(order)
+        time.sleep(0.5)
     h.hide_keyboard(driver)
     h.tap_by_text(driver, "SAVE", timeout=10)
 
@@ -162,7 +189,6 @@ def _submit_query_and_accept_either_outcome(driver, timeout=25, poll=0.5):
 
 def run_case_search_claim_1(driver, app_code, username, password):
     today = datetime.date.today()
-    field_format_date = f"{today.month}/{today.day}/{today.year}"
     iso_date = today.isoformat()
     outcome = {}
 
@@ -174,7 +200,7 @@ def run_case_search_claim_1(driver, app_code, username, password):
         ("Verify the Date Opened search field is present", lambda: _assert_date_opened_field_present(driver)),
         ("Open the Date Opened calendar widget", lambda: _open_date_range_picker(driver)),
         ("Enter today's date manually (switch to text input mode)",
-         lambda: _enter_single_date_in_picker(driver, field_format_date)),
+         lambda: _enter_single_date_in_picker(driver, today.month, today.day, today.year)),
         ("Verify the entered date is reflected with the end date autopopulated",
          lambda: _assert_date_field_shows_single_day_range(driver, iso_date)),
         ("Submit the query and accept either a results screen or a clean 'no results' outcome",
