@@ -808,26 +808,36 @@ jobs:
           python scripts/run_appium_rtl_suite.py "${ARGS[@]}"
 
       # Master Mobile Plan (2026) > Form Submissions > "Graceful Session
-      # Pause" (row 57) - the row's own on-device steps (force-stop the app
-      # mid-form, relaunch, confirm the draft is restored) stay genuinely
-      # Not automatable (confirmed dead end on terminateApp/backgroundApp/
-      # adb_shell-style forced termination on BrowserStack - Maestro's stop/
-      # kill primitives don't reproduce a real crash), but the row's own
-      # PRECONDITION (custom property cc-auto-form-save-on-pause=yes) is a
-      # plain HQ read, same pattern as Support Menus' own precondition
-      # check. UPDATE (2026-09-15): built and verified this check works
-      # correctly, but it found a REAL gap - confirmed live that [Master]
-      # Basic Tests genuinely has no cc-auto-form-save-on-pause property set
-      # at all (property name verified against commcare-android source,
-      # MainConfigurablePreferences.AUTO_SAVE_FORM_ON_PAUSE, not guessed).
-      # Per direct user instruction, NOT fixed by setting the property
-      # ourselves (a real HQ app-config change) - wired in here so this gap
-      # is visible in every run rather than silently undocumented, and
-      # deliberately excluded from the exit-code-gating "this_run_results"
-      # pattern other checks use, since a currently-failing precondition
-      # is real signal, not a broken script - see
-      # scripts/run_graceful_session_pause_precondition_check.py's own
-      # module docstring for the full citation.
+      # Pause" (row 57) - the row's own PRECONDITION (custom property
+      # cc-auto-form-save-on-pause=yes) is a plain HQ read, same pattern as
+      # Support Menus' own precondition check.
+      #
+      # UPDATE (2026-09-15): built and verified this check works correctly,
+      # but it found a real gap against [Master] Basic Tests (the main
+      # shared app) - genuinely no such property set at all.
+      #
+      # UPDATE (2026-09-17), per direct user-supplied screenshot: that "gap"
+      # was actually this check pointed at the WRONG app - [Master] Basic
+      # Tests NS Copy!!! (APP_REGISTRY["BASIC_TESTS_NS_COPY"], the dedicated
+      # mutation-safe copy already used elsewhere in this repo) genuinely
+      # HAS cc-auto-form-save-on-pause=yes, confirmed live. Re-pointed the
+      # check there - now passes. The row's own on-device steps (force-stop
+      # the app mid-form, relaunch, confirm the draft is restored) were ALSO
+      # genuinely re-tried live against this now-correctly-configured app,
+      # using Appium's real driver.terminate_app() (the correct, non-
+      # adb_shell, non-Maestro-killApp primitive) - and confirmed to fail
+      # with a real UnknownMethodException: this BrowserStack Appium driver
+      # build simply doesn't support terminateApp/activateApp/backgroundApp
+      # at all (its own error enumerates every supported command). This
+      # supersedes an earlier, less-specific "confirmed dead end" claim in
+      # this same comment with concrete, evidence-based citation instead -
+      # see coverage/coverage_matrix.csv's own Graceful Session Pause row
+      # and scripts/run_graceful_session_pause_precondition_check.py's own
+      # module docstring for the full citation. Stays Partial: precondition
+      # automatable and passing; on-device half stays Not automatable on
+      # this harness. Wired in here so both halves stay visible in every
+      # run's report; deliberately excluded from the exit-code-gating
+      # "this_run_results" pattern other checks use.
       - name: Verify Graceful Session Pause precondition (cc-auto-form-save-on-pause)
         if: always() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'form_submissions')))
         continue-on-error: true

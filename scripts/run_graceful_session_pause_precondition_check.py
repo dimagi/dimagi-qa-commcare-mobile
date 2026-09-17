@@ -1,14 +1,46 @@
 """
 Master Mobile Plan (2026) > Form Submissions > "Graceful Session Pause"
 (row 57) - the sheet's own pre-requisite is "HQ Apps should have the custom
-property 'cc-auto-form-save-on-pause' set to 'yes'". The row's own on-device
-steps (kill the app mid-form via force-stop, relaunch, confirm the draft is
-restored) were never automatable regardless - this repo has a confirmed dead
-end on terminateApp/backgroundApp/adb_shell-style forced termination on
-BrowserStack (Maestro's stop/kill primitives don't reproduce a genuine crash
-the way this row's own steps need) - but the PRECONDITION itself is a plain
-HQ custom-properties read, the same pattern already proven for Support
-Menus' own precondition check (run_support_menus_log_property_check.py).
+property 'cc-auto-form-save-on-pause' set to 'yes'".
+
+UPDATE (2026-09-17), per direct user-supplied screenshot + live
+re-verification: this check was pointed at the WRONG app. APP_REGISTRY
+["BASIC_TESTS"] (the main shared "[Master] Basic Tests" app) genuinely does
+NOT have this property set (confirmed live again today via
+get_custom_properties: {'cc-enable-background-sync': 'yes', 'logenabled':
+'on_demand', 'num-views-before-reducing-frequency': '3',
+'reduced-show-frequency': '4', 'regular-show-frequency': '2'} - no
+cc-auto-form-save-on-pause key at all) - but APP_REGISTRY
+["BASIC_TESTS_NS_COPY"] (the dedicated "[Master] Basic Tests NS Copy!!!"
+copy already used elsewhere in this repo for prompted_update_scenario_01/02
+and auto_cc_update_03, precisely so mutation-heavy tests don't collide with
+the shared main app) DOES have it, confirmed live: get_custom_properties
+returns {'cc-auto-form-save-on-pause': 'yes', ...}. Switched this check to
+BASIC_TESTS_NS_COPY accordingly - this was never a "the property is
+genuinely missing everywhere" gap, just a check pointed at the wrong one of
+two near-identical apps, same class of mismatch already root-caused for
+this NS Copy app's signature widget (capture_01_gather_signature.yaml) and
+its prompted-update settings (see app_registry.py's own citations).
+
+The row's own on-device steps (force-stop the app mid-form, relaunch,
+confirm the draft is restored) were ALSO genuinely re-tried live against
+this now-correctly-configured app (installed via app-code, logged in,
+navigated Start > Basic_Form_Tests > Question_Types!, answered a question,
+then called Appium's driver.terminate_app("org.commcare.dalvik") -
+`mobile: terminateApp`, NOT Maestro's killApp/backgroundApp and NOT
+adb_shell) - and genuinely still fail: terminate_app raised a real
+UnknownMethodException, "Unknown mobile command 'terminateApp'", whose own
+error message enumerates every mobile: command this BrowserStack Appium
+driver build (appium-uiautomator2-driver on Appium 1.22.0) supports, and
+NONE of terminateApp/activateApp/backgroundApp are in that list. "shell" is
+nominally listed but this repo separately confirmed elsewhere that
+BrowserStack disables the underlying adb_shell feature account-wide, so a
+real `am force-stop` isn't reachable that way either. No
+appium_graceful_session_pause_scenarios.py/run_graceful_session_pause_suite.py
+was built, since the on-device mechanism this row needs is confirmed, with
+concrete fresh evidence (not a guess or an overgeneralized carryover), to
+not exist on this harness. See coverage/coverage_matrix.csv's own Graceful
+Session Pause row for the full citation.
 
 Property name confirmed against commcare-android source (not guessed):
 MainConfigurablePreferences.java's AUTO_SAVE_FORM_ON_PAUSE constant =
@@ -42,7 +74,7 @@ def main():
     from dotenv import load_dotenv
     load_dotenv(REPO_ROOT / ".env")
 
-    domain, app_id = APP_REGISTRY["BASIC_TESTS"]
+    domain, app_id = APP_REGISTRY["BASIC_TESTS_NS_COPY"]
     hq = hq_client_module.HQClient(domain=domain).login(
         username=os.environ.get("HQ_WEB_USER_EMAIL"), password=os.environ.get("HQ_WEB_USER_PASSWORD"),
     )

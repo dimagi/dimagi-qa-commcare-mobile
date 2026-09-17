@@ -310,6 +310,91 @@ class HQClient:
         resp.raise_for_status()
         return resp.json()
 
+    def get_app_properties(self, app_id):
+        """
+        Read-only counterpart to set_app_properties() below - returns the
+        app's DRAFT `profile.properties` dict (real, NAMED CommCare Profile
+        Settings such as cc-maps-default-layer, cc-autosync-freq, etc. -
+        NOT the free-form `profile.custom_properties` dict get_custom_
+        properties() reads).
+
+        Added for Master Mobile Plan (2026) > Form Submissions > "Geoservice
+        1" (Default Map Tileset), per this row's own coverage_matrix.csv
+        citation: `cc-maps-default-layer` lives under `profile.properties`,
+        confirmed against corehq/apps/app_manager/static/app_manager/json/
+        commcare-profile-settings.yml - the same GET /a/<domain>/apps/
+        source/<app_id>/ endpoint get_custom_properties()/edit_module_attr()
+        already read back from, just a different top-level key of the same
+        response.
+        """
+        resp = self.session.get(self._apps_url(f"source/{app_id}/"))
+        resp.raise_for_status()
+        return resp.json().get("profile", {}).get("properties", {})
+
+    def set_app_properties(self, app_id, properties: dict):
+        """
+        Set real, NAMED CommCare Profile Settings under Advanced Settings >
+        "Android Settings" / "CommCare Settings" etc. (e.g.
+        cc-maps-default-layer, the "Default Map Tileset" dropdown) - NOT
+        the free-form custom_properties dict set_custom_properties() above
+        writes.
+
+        POST /a/<domain>/apps/edit_commcare_profile/<app_id>/ - the SAME
+        endpoint set_custom_properties() posts to, just a different
+        top-level JSON key: {"properties": {...}} instead of
+        {"custom_properties": {...}}.
+
+        `properties` itself IS a true per-key MERGE into
+        app.profile['properties'] - confirmed live (2026-09-17) that a
+        POST of {"properties": {"cc-maps-default-layer": "terrain"}} left
+        every one of the app's other ~30 profile.properties keys
+        (cc-autosync-freq, cc-show-saved, unsent-time-limit, etc.)
+        byte-identical to before the call.
+
+        DANGEROUS CONFIRMED BUG (2026-09-17), found live the hard way: the
+        `custom_properties` side of edit_commcare_profile() is NOT
+        similarly tolerant of omission - a POST that includes "properties"
+        but leaves "custom_properties" out of the body entirely does NOT
+        leave profile.custom_properties untouched. Real evidence: this
+        exact class of call (against BASIC_TESTS_NS_COPY, made by an
+        earlier version of this method that posted bare
+        {"properties": {...}} with no "custom_properties" key at all) was
+        immediately followed by a fresh GET /a/<domain>/apps/source/
+        <app_id>/ showing profile.custom_properties had become `{}` -
+        wiping cc-auto-form-save-on-pause, logenabled, and every other
+        real custom property this app had, silently (a 200 response, no
+        error). The endpoint evidently treats a missing "custom_properties"
+        key as "set it to {}", not "leave it alone" - the opposite of what
+        this method's own docstring assumed before this was caught (see
+        set_custom_properties()'s own sibling caveat: it already documents
+        that ITS OWN "custom_properties" key replaces-not-merges; this is
+        the same replace behavior, just triggered by omission rather than
+        an explicit empty dict).
+
+        FIX: this method now defensively reads the app's CURRENT
+        custom_properties (via get_custom_properties(), a plain GET, right
+        before posting) and echoes them back unchanged in the same POST
+        body, every single call - so "set_app_properties never touches
+        custom_properties" is actually true in practice, not just assumed.
+        Any caller that already knows it's about to change custom_properties
+        too should call set_custom_properties() separately/afterward rather
+        than fighting this echo-back.
+        """
+        current_custom_properties = self.get_custom_properties(app_id)
+        url = self._apps_url(f"edit_commcare_profile/{app_id}/")
+        headers = self._csrf_headers()
+        headers["Content-Type"] = "application/json"
+        resp = self.session.post(
+            url,
+            data=json.dumps({
+                "properties": properties,
+                "custom_properties": current_custom_properties,
+            }),
+            headers=headers,
+        )
+        resp.raise_for_status()
+        return resp.json()
+
     def edit_module_attr(self, app_id, module_unique_id, attr, value):
         """
         Edit one (supported) attribute of a module and save the app's DRAFT
