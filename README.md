@@ -47,7 +47,7 @@ You'll need:
 - **CommCareHQ** credentials with edit-apps access on the `qateam` domain, for flows whose sheet-row is tagged `Partial` because they need an HQ-side action (mark a build Released, toggle update settings). Either `HQ_API_USERNAME`/`HQ_API_PASSWORD`, or the `HQ_SESSION_COOKIE` escape hatch - see the caveat in `scripts/hq_client.py`.
 - The `updates_2_49` prompted-update scenarios' dynamic dev-build lookup (`hq_client.py`'s `find_dev_apk_version()`) needs whichever of the above (`HQ_SESSION_COOKIE` or `HQ_API_USERNAME`/`HQ_API_PASSWORD`) is a **superuser** account on the `qateam` domain - alpha/dev CommCare versions aren't rendered as `<option>` choices for a non-superuser account at all.
 - CommCare mobile-worker test credentials (`CC_TEST_USERNAME`/`CC_TEST_PASSWORD`, matching the sheet's `test1/123`).
-- Non-core suite only: `CC_CASELIST_USERNAME`/`CC_CASELIST_PASSWORD` (Case List Optimization tab's `123` user) and `CC_LARGE_APP_USERNAME`/`CC_LARGE_APP_PASSWORD` (Performance Tests tab's `large` user).
+- Non-core suite only: `CC_CASELIST_USERNAME` (Case List Optimization tab's `123` user) and `CC_LARGE_APP_USERNAME` (Performance Tests tab's `large` user). Both share test1's password, so they use `CC_TEST_PASSWORD`.
 
 ## Running locally
 

@@ -3,7 +3,8 @@ appId: org.commcare.dalvik
 # Non-core helper: install the "Case List - optimization" app and log in as
 # the case-list test user - the sheet's own "123" user, who has the large
 # case load these timings are about (credentials come from the
-# CC_CASELIST_USERNAME/PASSWORD env vars, never hardcoded).
+# CC_CASELIST_USERNAME env var, never hardcoded; it shares test1's password,
+# CC_TEST_PASSWORD).
 - runFlow:
     file: ../common/install_app_by_code.yaml
     env:
@@ -12,6 +13,6 @@ appId: org.commcare.dalvik
     file: ../common/login.yaml
     env:
       USERNAME: ${CC_CASELIST_USERNAME}
-      PASSWORD: ${CC_CASELIST_PASSWORD}
+      PASSWORD: ${CC_TEST_PASSWORD}
 - runFlow:
     file: dismiss_pin_prompt_if_shown.yaml

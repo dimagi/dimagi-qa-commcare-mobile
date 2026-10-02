@@ -9,7 +9,7 @@ env:
 ---
 # Master Mobile Plan (2026) > Performance Tests > timing rows 1-2 on "Large
 # App" (35 forms, big case list - from its released CCZ), as the sheet's
-# "large" user (CC_LARGE_APP_USERNAME/PASSWORD env vars).
+# "large" user (CC_LARGE_APP_USERNAME; same password as test1, CC_TEST_PASSWORD).
 #   Row 1: cold start (stopApp + launchApp) until the login screen shows.
 #   Row 2: login until the home screen's "Start" shows. Timed around the
 #          whole flows/common/login.yaml call, so it includes a few seconds
@@ -47,7 +47,7 @@ env:
     file: ../common/login.yaml
     env:
       USERNAME: ${CC_LARGE_APP_USERNAME}
-      PASSWORD: ${CC_LARGE_APP_PASSWORD}
+      PASSWORD: ${CC_TEST_PASSWORD}
 - runFlow:
     file: ../common/dismiss_pin_prompt_if_shown.yaml
 - runScript:

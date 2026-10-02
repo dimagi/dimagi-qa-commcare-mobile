@@ -78,9 +78,9 @@ FLOW_ENV_VARS = [
     "HQ_DOMAIN",
     "HQ_MOBILE_WORKER_USERNAME", "HQ_MOBILE_WORKER_PASSWORD",
     "HQ_WEB_USER_EMAIL", "HQ_WEB_USER_PASSWORD",
-    # flows_non_core/ only: Case List Optimization and Performance Tests users.
-    "CC_CASELIST_USERNAME", "CC_CASELIST_PASSWORD",
-    "CC_LARGE_APP_USERNAME", "CC_LARGE_APP_PASSWORD",
+    # flows_non_core/ only: Case List Optimization and Performance Tests users
+    # (their password is the same as test1's, so they reuse CC_TEST_PASSWORD).
+    "CC_CASELIST_USERNAME", "CC_LARGE_APP_USERNAME",
 ]
 
 

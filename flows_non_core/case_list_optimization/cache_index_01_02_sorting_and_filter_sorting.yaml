@@ -20,7 +20,7 @@ env:
     file: ../common/login.yaml
     env:
       USERNAME: ${CC_CASELIST_USERNAME}
-      PASSWORD: ${CC_CASELIST_PASSWORD}
+      PASSWORD: ${CC_TEST_PASSWORD}
 - runFlow:
     file: ../common/dismiss_pin_prompt_if_shown.yaml
 - runFlow:

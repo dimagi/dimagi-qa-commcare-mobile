@@ -132,9 +132,7 @@ jobs:
           HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
           HQ_WEB_USER_PASSWORD: ${{ secrets.HQ_WEB_USER_PASSWORD }}
           CC_CASELIST_USERNAME: ${{ secrets.CC_CASELIST_USERNAME }}
-          CC_CASELIST_PASSWORD: ${{ secrets.CC_CASELIST_PASSWORD }}
           CC_LARGE_APP_USERNAME: ${{ secrets.CC_LARGE_APP_USERNAME }}
-          CC_LARGE_APP_PASSWORD: ${{ secrets.CC_LARGE_APP_PASSWORD }}
         run: |
           # Same android_version-to-device mapping as maestro-browserstack.yml.
           declare -A ANDROID_DEVICE_MAP=(
