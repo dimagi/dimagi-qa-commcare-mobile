@@ -66,8 +66,8 @@ on:
         required: false
         default: ""
   schedule:
-    # Nightly at 03:00 UTC against whatever the latest commcare-android release is.
-    - cron: "0 3 * * *"
+    # Weekdays (Mon-Fri) at 00:30 UTC against whatever the latest commcare-android release is.
+    - cron: "30 0 * * 1-5"
 
 jobs:
   # Computes the matrix maestro-tests fans out over. A specific --tag pick
