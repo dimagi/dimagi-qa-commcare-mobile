@@ -346,3 +346,42 @@ appId: org.commcare.dalvik
     notVisible:
       id: "org.commcare.dalvik:id/(progress_dialog_message|dialog_cancel_button)"
     timeout: 180000
+#
+# UPDATE (2026-10-02, run 36986745866 on kb/harden-login-sync-wait-and-appium-
+# session-retry): multimedia/lazy_video_03_download_and_play still failed
+# with "Element not found: Start" - the failure hierarchy was the login
+# screen showing "Bad Server Response" after every retry above had run out.
+# Two things made those retries weaker than they read:
+#  1. The "pause" between them is waitForAnimationToEnd with a 3-5s timeout,
+#     but that timeout is a MAXIMUM - on a static login screen it returns
+#     almost immediately. Measured on BrowserStack with a scratch flow:
+#     waitForAnimationToEnd(timeout 15000) returned in well under 14s, while
+#     an evalScript busy-wait really held for the requested time. So all the
+#     retries above fire within seconds of each other, which is exactly the
+#     "hammering a struggling server" the 2026-08-08 note meant to avoid.
+#  2. Even at their nominal spacing, ~20s total is short next to a restore
+#     that stays slow/erroring for minutes (the shared test1 account).
+#
+# Fix: a last-resort loop with REAL, escalating pauses (10s, 20s, 30s, 40s,
+# 45s, 45s = ~3 min) before each re-tap, then a real 10s hold so a late-
+# arriving error is on screen when the loop re-samples. It only runs if one
+# of the three known error texts is STILL visible, so healthy logins are not
+# slowed. The wait for both progress-dialog variants is repeated inside the
+# loop because a successful re-tap starts a fresh restore. Delay is a plain
+# Date.now() busy-wait in evalScript (Maestro has no sleep command); output.*
+# is used for the counter because bare vars don't survive between evalScripts.
+- evalScript: ${ output.loginRetryN = 0 }
+- repeat:
+    times: 6
+    while:
+      visible:
+        text: "(?i)Bad Server Response|Server Error|Couldn.t Reach Server"
+    commands:
+      - evalScript: ${ output.loginRetryN = output.loginRetryN + 1; (function(){ var end = Date.now() + Math.min(10000 * output.loginRetryN, 45000); while (Date.now() < end) {} })() }
+      - tapOn:
+          id: "org.commcare.dalvik:id/login_button"
+      - extendedWaitUntil:
+          notVisible:
+            id: "org.commcare.dalvik:id/(progress_dialog_message|dialog_cancel_button)"
+          timeout: 180000
+      - evalScript: ${ (function(){ var end = Date.now() + 10000; while (Date.now() < end) {} })() }
