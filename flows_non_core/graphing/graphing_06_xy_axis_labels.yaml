@@ -1,0 +1,67 @@
+appId: org.commcare.dalvik
+tags:
+  - graphing
+  - partial
+---
+# Master Mobile Plan (2026) > Graphing > Graphing 6 (text parts only).
+# Graphs are c3/d3 SVG inside a WebView (commcare-android
+# app/src/org/commcare/graph/view/GraphView.java getView(), assets
+# graphing/c3.min.js), not a custom-drawn canvas - so their <text> nodes
+# (axis titles, the "BOTTOM" annotation) may reach the accessibility tree
+# Maestro reads. This flow is the probe for that: it asserts the XY graph's
+# axis titles and annotation text from the app's suite.xml
+# (m0.case_long.*.graph.key.x-title/y-title). If it passes, Graphing 7-11
+# and 20-22's text checks can be automated the same way. Colours,
+# zoom/rotation distortion and point positions stay manual either way.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_GRAPHING}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+- runScript:
+    file: assets/generate_run_suffix.js
+- runFlow:
+    file: ../common/graphing_create_case_with_point.yaml
+    env:
+      CASE_NAME: "Maestro Axis ${output.runSuffix}"
+
+- tapOn: "View Cases & Graphs"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/screen_entity_select_list"
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: "Maestro Axis ${output.runSuffix}"
+    direction: DOWN
+    timeout: 20000
+- tapOn: "Maestro Axis ${output.runSuffix}"
+# "View Cases & Graphs" is a view-only case list, so its detail screen's
+# button is "DONE", not the "Continue" of a form's case selection
+# (confirmed live 2026-10-02).
+- extendedWaitUntil:
+    visible: "(?i)done"
+    timeout: 15000
+- assertVisible: "XY Graph"
+- extendedWaitUntil:
+    visible:
+      text: "(?i)x values"
+    timeout: 15000
+- assertVisible:
+    text: "(?i)y values"
+- assertVisible:
+    text: "BOTTOM"
+- back
+- back
+
+- runFlow:
+    file: ../common/graphing_remove_case.yaml
+    env:
+      CASE_NAME: "Maestro Axis ${output.runSuffix}"

@@ -1,0 +1,19 @@
+appId: org.commcare.dalvik
+---
+# Non-core helper: with the "Choose your Language" dialog open
+# (home.menu.locale.select), pick the language that is NOT English.
+# [Master] Basic Tests has exactly two languages, en and hin (app source
+# "langs"); each entry is shown in its own script, so the non-English one is
+# matched by excluding English (Java regex negative lookahead) inside
+# R.id.choices_list_view rather than by its Devanagari text - the core
+# suite's right_to_left_text/setup_03 found native-script text matching
+# unreliable.
+# Confirmed live (2026-10-02): an earlier version tapped `text: ".+"` with
+# index 1, which landed on English again (each row exposes more than one
+# text node), so the language never changed.
+- assertVisible: "Choose your Language"
+- tapOn:
+    text: '(?i)(?!english\b).+'
+    childOf:
+      id: "org.commcare.dalvik:id/choices_list_view"
+- assertNotVisible: "Choose your Language"

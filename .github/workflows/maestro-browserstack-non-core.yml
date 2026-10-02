@@ -1,0 +1,259 @@
+name: Maestro BrowserStack QA (Non-Core)
+
+# Non-core CommCare Mobile workflows - the Master Mobile Plan tabs on the
+# Inventory's "CommCare Mobile - Non-Core" tab, flows in flows_non_core/
+# (see flows_non_core/README.md). Same pipeline as maestro-browserstack.yml
+# (run_suite.py -> BrowserStack Maestro -> merged HTML report -> Slack), but
+# its own workflow, artifacts and report history so core and non-core runs
+# never mix. run_suite.py's --flows-root flows_non_core keeps it from ever
+# selecting a core flow.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Run only non-core flows carrying this tag. All runs every non-core flow."
+        required: false
+        type: choice
+        default: "All"
+        options:
+          - "All"
+          - advanced_settings
+          - case_list_optimization
+          - developer_options
+          - graphing
+          - mapbox
+          - performance_tests
+          - printing
+          - sd_card_dump
+          - text_to_speech
+          - wifi_direct
+      release_tag:
+        description: "commcare-android GitHub release tag to test (e.g. commcare_2.64.0). Leave blank for latest. Ignored unless apk_source is 'GitHub Releases'."
+        required: false
+        default: ""
+      apk_source:
+        description: "APK to test. 'GitHub Releases' uses release_tag above (or latest). Any other option tests that committed resources/*.apk directly."
+        required: false
+        type: choice
+        default: "GitHub Releases"
+        options:
+          - "GitHub Releases"
+          - "resources/app-commcare-release-Android16.apk"
+      android_version:
+        description: "Android version to test on (maps to the Samsung Galaxy flagship BrowserStack has at that version). Ignored if 'devices' is set."
+        required: false
+        type: choice
+        default: "16.0"
+        options:
+          - "16.0"
+          - "15.0"
+          - "14.0"
+          - "13.0"
+          - "12.0"
+          - "11.0"
+          - "10.0"
+      devices:
+        description: "Comma-separated BrowserStack device names - overrides android_version when set."
+        required: false
+        default: ""
+  # Weekly, Saturdays 01:00 UTC, against the latest commcare-android release.
+  # A full non-core run takes ~70 min on its 2 parallel sessions (see the
+  # prepare job), so it's done well before the core suite's 03:00 UTC run.
+  schedule:
+    - cron: "0 1 * * 6"
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      start_epoch: ${{ steps.set-matrix.outputs.start_epoch }}
+    steps:
+      - id: set-matrix
+        run: |
+          echo "start_epoch=$(date +%s)" >> "$GITHUB_OUTPUT"
+          TAG="${{ github.event.inputs.tag }}"
+          if [ -z "$TAG" ] || [ "$TAG" = "All" ]; then
+            # 2 parallel BrowserStack sessions (the plan allows 5; the core
+            # suite's nightly run uses 3, so both fit even if they overlap).
+            # Split by each tag's real measured test time from the first
+            # live runs (2026-10-02, Galaxy S26 / Android 16), largest
+            # first into the lighter group:
+            #   group-a: advanced_settings 36.6 + text_to_speech 9.8 +
+            #            graphing ~8.5 + printing 6.1           = ~61 min
+            #   group-b: case_list_optimization 31.9 + developer_options
+            #            10.7 + mapbox 7.0 + performance_tests 3.3 +
+            #            wifi_direct 3.1 + sd_card_dump 2.8      = ~59 min
+            # (~2h10m end to end on one session; ~70 min on two, counting
+            # BrowserStack's per-build upload/queue overhead.) Rebalance from
+            # the run report's durations if tags grow.
+            MATRIX='{"include":[
+              {"name":"group-a","tags":"advanced_settings text_to_speech graphing printing"},
+              {"name":"group-b","tags":"case_list_optimization developer_options mapbox performance_tests wifi_direct sd_card_dump"}
+            ]}'
+          else
+            MATRIX="{\"include\":[{\"name\":\"single\",\"tags\":\"$TAG\"}]}"
+          fi
+          echo "matrix=$(echo "$MATRIX" | tr -d '\n')" >> "$GITHUB_OUTPUT"
+
+  maestro-tests:
+    needs: prepare
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.prepare.outputs.matrix) }}
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run non-core Maestro suite on BrowserStack
+        env:
+          BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
+          BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
+          HQ_API_USERNAME: ${{ secrets.HQ_API_USERNAME }}
+          HQ_API_PASSWORD: ${{ secrets.HQ_API_PASSWORD }}
+          HQ_SESSION_COOKIE: ${{ secrets.HQ_SESSION_COOKIE }}
+          HQ_DOMAIN: qateam
+          CC_TEST_USERNAME: ${{ secrets.CC_TEST_USERNAME }}
+          CC_TEST_PASSWORD: ${{ secrets.CC_TEST_PASSWORD }}
+          CC_TEST2_USERNAME: ${{ secrets.CC_TEST2_USERNAME }}
+          CC_TEST2_PASSWORD: ${{ secrets.CC_TEST2_PASSWORD }}
+          HQ_MOBILE_WORKER_USERNAME: ${{ secrets.HQ_MOBILE_WORKER_USERNAME }}
+          HQ_MOBILE_WORKER_PASSWORD: ${{ secrets.HQ_MOBILE_WORKER_PASSWORD }}
+          HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
+          HQ_WEB_USER_PASSWORD: ${{ secrets.HQ_WEB_USER_PASSWORD }}
+          CC_CASELIST_USERNAME: ${{ secrets.CC_CASELIST_USERNAME }}
+          CC_CASELIST_PASSWORD: ${{ secrets.CC_CASELIST_PASSWORD }}
+          CC_LARGE_APP_USERNAME: ${{ secrets.CC_LARGE_APP_USERNAME }}
+          CC_LARGE_APP_PASSWORD: ${{ secrets.CC_LARGE_APP_PASSWORD }}
+        run: |
+          # Same android_version-to-device mapping as maestro-browserstack.yml.
+          declare -A ANDROID_DEVICE_MAP=(
+            ["16.0"]="Samsung Galaxy S26"
+            ["15.0"]="Samsung Galaxy S25"
+            ["14.0"]="Samsung Galaxy S24"
+            ["13.0"]="Samsung Galaxy S23"
+            ["12.0"]="Samsung Galaxy S22"
+            ["11.0"]="Samsung Galaxy S21"
+            ["10.0"]="Samsung Galaxy S20"
+          )
+          ANDROID_VERSION="${{ github.event.inputs.android_version || '16.0' }}"
+          DEVICES="${{ github.event.inputs.devices }}"
+          if [ -z "$DEVICES" ]; then
+            DEVICES="${ANDROID_DEVICE_MAP[$ANDROID_VERSION]}-$ANDROID_VERSION"
+          fi
+          ARGS=(--flows-root flows_non_core --devices "$DEVICES" --build-name "QA-COMMCARE-MOBILE-NONCORE-${{ matrix.name }}" --retry-failed)
+          for T in ${{ matrix.tags }}; do ARGS+=(--tag "$T"); done
+          APK_SOURCE="${{ github.event.inputs.apk_source || 'GitHub Releases' }}"
+          if [ "$APK_SOURCE" != "GitHub Releases" ]; then
+            ARGS+=(--apk "$APK_SOURCE")
+          elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
+            ARGS+=(--release-tag "${{ github.event.inputs.release_tag }}")
+          fi
+          python scripts/run_suite.py "${ARGS[@]}"
+
+      # Case List Optimization / Performance Tests flows measure load times;
+      # the values are recomputed from the Maestro command log's step
+      # timestamps (see the script's docstring) and shown on the run's
+      # summary page, plus reports/timings.json in the artifact.
+      - name: Report measured load times
+        if: always()
+        env:
+          BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
+          BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
+        run: |
+          if [ -f reports/latest_results.json ]; then
+            { echo "## Measured load times"; echo; python scripts/extract_flow_timings.py; } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maestro-non-core-report-${{ matrix.name }}
+          path: reports/
+          retention-days: 30
+
+  merge-reports:
+    needs: [prepare, maestro-tests]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # Separate cache key prefix from the core workflow's "report-history-",
+      # so the non-core pass-rate trend never mixes with the core one.
+      - name: Restore report history
+        uses: actions/cache/restore@v4
+        with:
+          path: reports/history.json
+          key: report-history-non-core-${{ github.run_id }}
+          restore-keys: report-history-non-core-
+
+      - name: Download run artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: maestro-non-core-report-*
+          path: artifacts/
+
+      - name: Merge reports
+        run: python scripts/merge_reports.py artifacts/*/
+
+      - name: Save report history
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: reports/history.json
+          key: report-history-non-core-${{ github.run_id }}
+
+      - name: Upload merged HTML report
+        if: always()
+        id: upload_report
+        uses: actions/upload-artifact@v4
+        with:
+          name: maestro-non-core-report
+          path: reports/
+          retention-days: 30
+
+      - name: Compute run duration
+        id: duration
+        if: always()
+        run: |
+          elapsed=$(( $(date +%s) - ${{ needs.prepare.outputs.start_epoch }} ))
+          hours=$(( elapsed / 3600 ))
+          minutes=$(( (elapsed % 3600) / 60 ))
+          if [ "$hours" -gt 0 ]; then
+            echo "text=${hours}h ${minutes}m" >> "$GITHUB_OUTPUT"
+          else
+            echo "text=${minutes}m" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Same Slack channel as the core suite; the post's header carries this
+      # workflow's own name ("... (Non-Core)", via GITHUB_WORKFLOW in
+      # slack_notify.py), so the two are easy to tell apart.
+      - name: Post Slack notification
+        if: always()
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
+          REPORT_ARTIFACT_URL: ${{ steps.upload_report.outputs.artifact-url }}
+          RUN_TAG: ${{ github.event.inputs.tag }}
+          RUN_DURATION: ${{ steps.duration.outputs.text }}
+          ANDROID_VERSION: ${{ github.event.inputs.android_version || '16.0' }}
+        run: python scripts/slack_notify.py

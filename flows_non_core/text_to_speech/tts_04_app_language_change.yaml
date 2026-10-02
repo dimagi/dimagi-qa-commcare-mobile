@@ -1,0 +1,49 @@
+appId: org.commcare.dalvik
+tags:
+  - text_to_speech
+  - partial
+---
+# Master Mobile Plan (2026) > Text to Speech > TTS 4. Switch the whole app to
+# Hindi from the home screen (More options > Change Language, same path as
+# the core suite's right_to_left_text/setup_03), then open the Text to Speech
+# form: the label must be the non-English one and the TTS button present.
+# The navigation text stays English after the switch: CommCare ships only
+# English UI strings (app/assets/locales/), and the app's hin/app_strings.txt
+# keeps "Basic Form Tests" / "Text to Speech" unchanged.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_BASIC_TESTS}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+- runFlow:
+    file: ../common/enable_tts_and_open_tts_form.yaml
+- back
+- tapOn:
+    text: "(?i)exit without saving"
+    optional: true
+- back
+- back
+- tapOn: "More options"
+- tapOn: "Change Language"
+- runFlow:
+    file: ../common/pick_second_language.yaml
+- tapOn: "Start"
+- tapOn: "Basic Form Tests"
+- scrollUntilVisible:
+    element:
+      text: "Text to Speech"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "Text to Speech"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/tts_button"
+    timeout: 15000
+- assertNotVisible: "Hello, how are you?"

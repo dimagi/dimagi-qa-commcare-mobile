@@ -1,0 +1,25 @@
+appId: org.commcare.dalvik
+tags:
+  - advanced_settings
+  - automatable
+---
+# Master Mobile Plan (2026) > Advanced Settings > Custom Properties 10
+# (cc-list-refresh=yes). The Followup case list's "Date and Time Now" column
+# is format-date(now(), '%y/%n/%e - %H:%M:%S') (m0_case_short in the app's
+# suite.xml), so with auto-refresh on, the value on screen must change
+# within ~15s without touching anything. Copies the current value, then waits
+# (up to 40s) for that exact text to disappear. \Q..\E quotes the copied
+# value literally, same reason as flows/common/login.yaml.
+- runFlow:
+    file: ../common/login_advanced_settings.yaml
+- runFlow:
+    file: ../common/open_advanced_settings_followup_case_list.yaml
+- copyTextFrom:
+    text: '\d{2}/\d{1,2}/\d{1,2} - \d{2}:\d{2}:\d{2}'
+    index: 0
+- extendedWaitUntil:
+    notVisible:
+      text: '\Q${maestro.copiedText}\E'
+    timeout: 40000
+- assertVisible:
+    text: '\d{2}/\d{1,2}/\d{1,2} - \d{2}:\d{2}:\d{2}'

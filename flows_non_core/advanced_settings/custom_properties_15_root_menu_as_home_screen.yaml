@@ -1,0 +1,95 @@
+appId: org.commcare.dalvik
+tags:
+  - advanced_settings
+  - automatable
+---
+# Master Mobile Plan (2026) > Advanced Settings > Custom Properties 15
+# (cc-use-root-menu-as-home-screen=yes on the "Root menu as Home screen"
+# app). After login CommCare opens RootMenuHomeActivity: the module list
+# plus a nav drawer behind the action bar's home button
+# (HomeNavDrawerController.setupNavDrawer sets setDisplayHomeAsUpEnabled, so
+# the button carries the standard "Navigate up" description; drawer list is
+# R.id.nav_drawer in grid_menu_layout.xml). Drawer item titles are the
+# home.menu.* / home.sync strings. Modules/forms from the app's CCZ:
+# Surveys > Survey (one "Name" text question).
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_ROOT_MENU_HOME}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- runFlow:
+    file: ../common/dismiss_pin_prompt_if_shown_no_wait.yaml
+- extendedWaitUntil:
+    visible: "Surveys"
+    timeout: 20000
+- assertVisible: "Case List"
+- assertNotVisible: "Start"
+- tapOn: "Navigate up"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/nav_drawer"
+    timeout: 10000
+- assertVisible: "Sync with Server"
+- assertVisible: "Settings"
+# Confirmed live (2026-10-02): a back press here closed the drawer AND left
+# the app (this IS the app's root screen). The drawer can't be swiped shut
+# (HomeNavDrawerController sets LOCK_MODE_LOCKED_CLOSED), so tap the scrim
+# to the right of it instead.
+- tapOn:
+    point: "92%, 50%"
+- extendedWaitUntil:
+    notVisible:
+      id: "org.commcare.dalvik:id/nav_drawer"
+    timeout: 10000
+
+# Submit a form, then the module list (with the drawer button) must be back.
+- tapOn: "Surveys"
+- tapOn: "Survey"
+- inputText: "Maestro root menu"
+- repeat:
+    times: 3
+    while:
+      notVisible:
+        id: "org.commcare.dalvik:id/nav_btn_finish"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/nav_btn_next"
+          optional: true
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"
+- extendedWaitUntil:
+    visible: "Surveys"
+    timeout: 20000
+- assertVisible: "Navigate up"
+
+# Back out of a form without saving.
+- tapOn: "Surveys"
+- tapOn: "Survey"
+- back
+- tapOn: "EXIT WITHOUT SAVING"
+# Back only until the module list shows - one press too many leaves the app.
+- repeat:
+    times: 2
+    while:
+      notVisible: "Case List"
+    commands:
+      - back
+- extendedWaitUntil:
+    visible: "Surveys"
+    timeout: 10000
+- assertVisible: "Navigate up"
+
+# Background and bring back to the foreground (stopApp: false keeps the
+# session, same as the core suite's login_and_background.yaml callers).
+- pressKey: "home"
+- launchApp:
+    appId: org.commcare.dalvik
+    stopApp: false
+- extendedWaitUntil:
+    visible: "Surveys"
+    timeout: 15000
+- assertVisible: "Navigate up"

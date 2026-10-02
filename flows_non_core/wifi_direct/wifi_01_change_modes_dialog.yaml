@@ -1,0 +1,46 @@
+appId: org.commcare.dalvik
+tags:
+  - wifi_direct
+  - automatable
+---
+# Master Mobile Plan (2026) > Wi-Fi Direct > WiFi 1 - the only row of this tab
+# that runs on one device. Advanced > "Wi-Fi Direct" (home.menu.wifi.direct)
+# must open the mode dialog ("Send, Receive, Submit" /
+# wifi.direct.change.state.*) with Transfer / Receive / Submit choices
+# (wifi.direct.*.forms; android_translatable_strings.txt), and picking
+# Receive must switch modes. Transferring forms between two devices (WiFi
+# 2-8) is not automatable on a single-device cloud session.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_BASIC_TESTS}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+- tapOn: "More options"
+- tapOn: "Advanced"
+- scrollUntilVisible:
+    element:
+      text: "Wi-Fi Direct"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Wi-Fi Direct"
+- tapOn:
+    text: "(?i)allow|while using the app"
+    optional: true
+- extendedWaitUntil:
+    visible: "Send, Receive, Submit"
+    timeout: 15000
+- assertVisible: "Do you want to send, receive, or submit forms?"
+- assertVisible: "Transfer"
+- assertVisible: "Submit"
+- tapOn: "Receive"
+- extendedWaitUntil:
+    visible:
+      text: "(?i)entered receive mode|wi-fi direct is off.*"
+    timeout: 15000

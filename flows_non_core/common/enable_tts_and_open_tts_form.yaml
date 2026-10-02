@@ -1,0 +1,27 @@
+appId: org.commcare.dalvik
+---
+# Non-core helper: from the [Master] Basic Tests home screen, turn on
+# "Enable Text To Speech" (cc-enable-tts, app/res/xml/main_preferences.xml)
+# and open Basic Form Tests > Text to Speech. Ends on its first question.
+- tapOn: "More options"
+- tapOn: "Settings"
+- scrollUntilVisible:
+    element:
+      text: "Enable Text To Speech"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "Enable Text To Speech"
+- tapOn: "Enabled"
+- back
+- tapOn: "Start"
+- tapOn: "Basic Form Tests"
+- scrollUntilVisible:
+    element:
+      text: "Text to Speech"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "Text to Speech"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/tts_button"
+    timeout: 15000
