@@ -43,6 +43,30 @@ from browserstack_client import _request_with_retry
 UPLOAD_API_BASE = "https://api-cloud.browserstack.com/app-automate"
 APPIUM_HUB_URL = "https://hub.browserstack.com/wd/hub"
 
+# Nightly runs (2026-09-25, 2026-10-01) lost whole scenarios to BrowserStack
+# infrastructure errors raised while the Appium session was still starting -
+# "Could not proxy command to the remote server. Original error: socket hang
+# up" - before a single test step ran. Same commit, same APK and a green
+# rerun, so it is transient: the hub accepted the session but the device's
+# Appium server was not reachable yet. Only errors matching these markers are
+# retried; anything else (bad credentials, bad capabilities, a real app
+# failure) is re-raised on the first attempt so it is not masked or delayed.
+SESSION_START_ATTEMPTS = 3
+SESSION_START_BACKOFF_SECONDS = 10
+_TRANSIENT_SESSION_ERROR_MARKERS = (
+    "socket hang up",
+    "could not proxy command to the remote server",
+    "could not start mobile browser",
+    "econnreset",
+    "etimedout",
+)
+
+
+def _is_transient_session_error(exc):
+    if isinstance(exc, (URLLibMaxRetryError, ConnectionError)):
+        return True
+    return any(marker in str(exc).lower() for marker in _TRANSIENT_SESSION_ERROR_MARKERS)
+
 
 class AppiumBrowserStackClient:
     def __init__(self, username=None, access_key=None):
@@ -202,7 +226,7 @@ class AppiumBrowserStackClient:
             options.locale = device_locale
         options.set_capability("bstack:options", bstack_options)
 
-        driver = webdriver.Remote(command_executor=APPIUM_HUB_URL, options=options)
+        driver = self._create_driver_with_retry(options)
         if interactive_debugging:
             print(f"[appium_browserstack_client] Live device view: "
                   f"https://app-automate.browserstack.com/dashboard/v2/sessions/{driver.session_id}")
@@ -222,6 +246,37 @@ class AppiumBrowserStackClient:
         # wasn't enough.
         driver.orientation = "PORTRAIT"
         return driver
+
+    @staticmethod
+    def _create_driver_with_retry(options):
+        """webdriver.Remote plus a cheap readiness probe, retried on transient
+        BrowserStack session-start errors (see _TRANSIENT_SESSION_ERROR_MARKERS).
+        The probe (get_window_size) is the first command that has to reach the
+        device's Appium server, so the proxy failure surfaces here instead of
+        in the caller's first real step. A half-created session is quit before
+        the next attempt so it does not keep a BrowserStack parallel slot."""
+        last_error = None
+        for attempt in range(1, SESSION_START_ATTEMPTS + 1):
+            driver = None
+            try:
+                driver = webdriver.Remote(command_executor=APPIUM_HUB_URL, options=options)
+                driver.get_window_size()
+                return driver
+            except Exception as exc:
+                if driver is not None:
+                    try:
+                        driver.quit()
+                    except Exception:
+                        pass
+                if not _is_transient_session_error(exc) or attempt == SESSION_START_ATTEMPTS:
+                    raise
+                last_error = exc
+                wait = SESSION_START_BACKOFF_SECONDS * attempt
+                print(f"[appium_browserstack_client] Session start attempt {attempt}/"
+                      f"{SESSION_START_ATTEMPTS} failed with a transient error "
+                      f"({type(exc).__name__}: {str(exc).splitlines()[0][:200]}); retrying in {wait}s")
+                time.sleep(wait)
+        raise last_error  # unreachable: the loop either returns or raises
 
     @staticmethod
     def install_mid_session(driver, app_url):
