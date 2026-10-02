@@ -34,6 +34,40 @@ from browserstack_client import BrowserStackClient
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 FLOWS_DIR = REPO_ROOT / "flows"
+# Selectable flow trees for --flows-root. "flows" is the core CommCare Mobile
+# suite (the Inventory sheet's "CommCare Mobile" tab); "flows_non_core" holds
+# the Master Mobile Plan tabs listed on the "CommCare Mobile - Non-Core" tab
+# instead, kept in a separate tree so a core run's tag/"All" selection can
+# never pick them up (and vice versa) - see flows_non_core/README.md.
+FLOWS_ROOTS = {
+    "flows": REPO_ROOT / "flows",
+    "flows_non_core": REPO_ROOT / "flows_non_core",
+}
+# Shared runFlow subflows (login, install_app_by_code, ...) always come from
+# the core tree's common/, whichever root is selected - non-core flows
+# reference them as ../common/<file>.yaml exactly like core flows do, and
+# build_flows_zip() places them at the zip's common/ either way. A non-core-
+# only helper can live in flows_non_core/common/; it's merged into the same
+# zip common/ folder (a filename clash with core common/ is an error).
+CORE_COMMON_DIR = REPO_ROOT / "flows" / "common"
+
+
+def common_dirs():
+    """The common/ subflow folders for the currently selected FLOWS_DIR."""
+    dirs = [CORE_COMMON_DIR]
+    own = FLOWS_DIR / "common"
+    if own != CORE_COMMON_DIR and own.is_dir():
+        dirs.append(own)
+    return dirs
+
+
+def common_flow_files():
+    files = [p for d in common_dirs() for p in d.glob("*.yaml")]
+    names = [p.name for p in files]
+    clashes = sorted({n for n in names if names.count(n) > 1})
+    if clashes:
+        raise SystemExit(f"common/ subflow name clash between {[str(d) for d in common_dirs()]}: {clashes}")
+    return files
 
 # Whitelist of vars flows may reference via ${VAR} - passed to BrowserStack's
 # setEnvVariables so it can do the substitution server-side (this isn't a
@@ -44,6 +78,9 @@ FLOW_ENV_VARS = [
     "HQ_DOMAIN",
     "HQ_MOBILE_WORKER_USERNAME", "HQ_MOBILE_WORKER_PASSWORD",
     "HQ_WEB_USER_EMAIL", "HQ_WEB_USER_PASSWORD",
+    # flows_non_core/ only: Case List Optimization and Performance Tests users
+    # (their password is the same as test1's, so they reuse CC_TEST_PASSWORD).
+    "CC_CASELIST_USERNAME", "CC_LARGE_APP_USERNAME",
 ]
 
 
@@ -130,7 +167,7 @@ def select_flow_files(tags=None, explicit_flows=None):
                 selected.add(path)
 
     # common/ is always needed for runFlow references
-    for path in (FLOWS_DIR / "common").glob("*.yaml"):
+    for path in common_flow_files():
         selected.add(path)
     return sorted(selected)
 
@@ -167,7 +204,9 @@ def build_flows_zip(flow_files, out_dir):
     if staging.exists():
         shutil.rmtree(staging)
     for f in flow_files:
-        rel = f.relative_to(FLOWS_DIR)
+        # common/ subflows may come from the core tree even when FLOWS_DIR is
+        # flows_non_core (see CORE_COMMON_DIR) - always land them at common/.
+        rel = pathlib.Path("common", f.name) if f.parent.name == "common" else f.relative_to(FLOWS_DIR)
         dest = staging / rel
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(f, dest)
@@ -259,7 +298,7 @@ def run_all_builds(bs, flow_files, app_url, args, env_variables, other_app_urls,
     (synthesized as "failed" with a clear reason) rather than risking the
     open-ended retry/fallback chain that caused the 6-hour hang above."""
     non_common_files = [f for f in flow_files if f.parent.name != "common"]
-    common_files = list((FLOWS_DIR / "common").glob("*.yaml"))
+    common_files = common_flow_files()
     chunks = chunk_flows_by_execute_length(non_common_files, FLOWS_DIR)
 
     def synthesize_missing(files, reason):
@@ -620,7 +659,14 @@ def main():
                               "flows and merge the result - a test that passes on retry is reported as "
                               "'rerun' (flaky) instead of 'failed'. Relies on report_generator.match_flow_files' "
                               "name-matching heuristic - see its docstring caveat.")
+    parser.add_argument("--flows-root", choices=sorted(FLOWS_ROOTS), default="flows",
+                         help="Which flow tree --tag/--flow selection runs against: the core suite "
+                              "(flows/, default) or the non-core one (flows_non_core/). Shared "
+                              "common/ subflows come from flows/common/ either way.")
     args = parser.parse_args()
+
+    global FLOWS_DIR
+    FLOWS_DIR = FLOWS_ROOTS[args.flows_root]
 
     load_dotenv(REPO_ROOT / ".env")
 

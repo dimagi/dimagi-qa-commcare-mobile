@@ -17,8 +17,10 @@ See [docs/FRAMEWORK.md](docs/FRAMEWORK.md) for the full design writeup and
 ## Layout
 
 ```
-flows/                  Maestro flow YAML, one subdirectory per workflow
+flows/                  Maestro flow YAML, one subdirectory per workflow (core suite)
   common/               Reusable subflows (login, logout, PIN helpers, ...)
+flows_non_core/         Non-core workflows (Inventory's "CommCare Mobile - Non-Core" tab) -
+                        kept separate from flows/, see flows_non_core/README.md
 hq_setup/               Declarative JSON pre-steps some flows need (see below)
 scripts/
   download_apk.py       Pulls the release APK from dimagi/commcare-android's GitHub releases
@@ -29,7 +31,8 @@ scripts/
   run_suite.py          Orchestrates all of the above
 coverage/coverage_matrix.csv   Every test case's automatability classification
 reports/                Generated HTML reports (gitignored) + history.json (tracked)
-.github/workflows/maestro-browserstack.yml   CI entry point
+.github/workflows/maestro-browserstack.yml   CI entry point (core suite)
+.github/workflows/maestro-browserstack-non-core.yml   CI entry point (non-core suite)
 ```
 
 ## Setup
@@ -44,6 +47,7 @@ You'll need:
 - **CommCareHQ** credentials with edit-apps access on the `qateam` domain, for flows whose sheet-row is tagged `Partial` because they need an HQ-side action (mark a build Released, toggle update settings). Either `HQ_API_USERNAME`/`HQ_API_PASSWORD`, or the `HQ_SESSION_COOKIE` escape hatch - see the caveat in `scripts/hq_client.py`.
 - The `updates_2_49` prompted-update scenarios' dynamic dev-build lookup (`hq_client.py`'s `find_dev_apk_version()`) needs whichever of the above (`HQ_SESSION_COOKIE` or `HQ_API_USERNAME`/`HQ_API_PASSWORD`) is a **superuser** account on the `qateam` domain - alpha/dev CommCare versions aren't rendered as `<option>` choices for a non-superuser account at all.
 - CommCare mobile-worker test credentials (`CC_TEST_USERNAME`/`CC_TEST_PASSWORD`, matching the sheet's `test1/123`).
+- Non-core suite only: `CC_CASELIST_USERNAME` (Case List Optimization tab's `123` user) and `CC_LARGE_APP_USERNAME` (Performance Tests tab's `large` user). Both share test1's password, so they use `CC_TEST_PASSWORD`.
 
 ## Running locally
 
@@ -57,6 +61,9 @@ python scripts/run_suite.py --tag prompted_updates \
 
 # One specific flow file
 python scripts/run_suite.py --flow flows/install/install_04_see_apps_menu_item_visible.yaml
+
+# The non-core suite (flows_non_core/) - same options, plus --flows-root
+python scripts/run_suite.py --flows-root flows_non_core --tag advanced_settings
 ```
 
 `run_suite.py` downloads the latest `commcare-android` release APK

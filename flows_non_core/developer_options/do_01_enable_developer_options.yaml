@@ -1,0 +1,43 @@
+appId: org.commcare.dalvik
+tags:
+  - developer_options
+  - automatable
+---
+# Master Mobile Plan (2026) > Developer Options > DO1.
+# Item titles from app/res/xml/preferences_developer.xml (commcare-android,
+# read-only), same four items commcare-android's own
+# DeveloperOptionsTests.testDevelopersOptions checks. The 4x About > OK unlock
+# is the core suite's flows/common/enable_pin_login_option.yaml pattern.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_BASIC_TESTS}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+- repeat:
+    times: 4
+    commands:
+      - tapOn: "More options"
+      - tapOn: "About CommCare"
+      - tapOn: "OK"
+- tapOn: "More options"
+- tapOn: "Settings"
+- tapOn: "Developer Options"
+- assertVisible: "Developer Mode Enabled"
+- assertVisible: "Show Update Options Item"
+- scrollUntilVisible:
+    element:
+      text: "Image Above Question Text Enabled"
+    direction: DOWN
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: "Detect and Trigger Purge on Form Save"
+    direction: DOWN
+    timeout: 15000

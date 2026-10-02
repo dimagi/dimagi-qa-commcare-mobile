@@ -1,0 +1,32 @@
+appId: org.commcare.dalvik
+tags:
+  - advanced_settings
+  - automatable
+---
+# Master Mobile Plan (2026) > Advanced Settings > Custom Properties 4
+# (cc-superuser-enabled=yes). Unlike Developer Options > DO1 there is NO
+# 4x About > OK unlock here - the custom property alone has to make
+# "Developer Options" show up in Settings. Item titles from
+# app/res/xml/preferences_developer.xml (commcare-android, read-only).
+- runFlow:
+    file: ../common/login_advanced_settings.yaml
+- tapOn: "More options"
+- tapOn: "Settings"
+- scrollUntilVisible:
+    element:
+      text: "Developer Options"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "Developer Options"
+- assertVisible: "Developer Mode Enabled"
+- assertVisible: "Show Update Options Item"
+- scrollUntilVisible:
+    element:
+      text: "Image Above Question Text Enabled"
+    direction: DOWN
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: "Detect and Trigger Purge on Form Save"
+    direction: DOWN
+    timeout: 15000

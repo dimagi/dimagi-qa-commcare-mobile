@@ -1,0 +1,69 @@
+appId: org.commcare.dalvik
+tags:
+  - case_list_optimization
+  - partial
+env:
+  # Loud-failure ceiling only - the sheet sets no limit.
+  LOAD_BUDGET_MS: "60000"
+---
+# Master Mobile Plan (2026) > Case List Optimization and Cache > Setup 2,
+# Cache and index-1, Cache and index-2, on the "cache and index
+# configuration" app (menus from its released CCZ). Times both case lists.
+# Partial: the rows also ask that the list comes back sorted (age ascending /
+# name ascending); checking sort order needs every row's value read back,
+# which isn't done yet - this only proves the cached/indexed lists load.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_CACHE_AND_INDEX}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_CASELIST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- runFlow:
+    file: ../common/dismiss_pin_prompt_if_shown.yaml
+- runFlow:
+    file: ../common/open_case_list_menu.yaml
+    env:
+      MENU: "Case List - sorting- cache and index"
+      FORM: "Followup Form"
+# Timed steps stay top-level so their timestamps land in the command log
+# (see open_case_list_menu.yaml); scripts/extract_flow_timings.py reports
+# the start_timer -> stop_timer gap under the assertTrue label below.
+- runScript:
+    file: ../common/assets/start_timer.js
+- tapOn: "Followup Form"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/screen_entity_select_list"
+    timeout: 180000
+- runScript:
+    file: ../common/assets/stop_timer.js
+- assertTrue:
+    condition: ${output.elapsedMs < Number(LOAD_BUDGET_MS)}
+    label: "TIMING Cache and index-1 (sorting)"
+- runFlow:
+    file: ../common/back_to_home.yaml
+- runFlow:
+    file: ../common/open_case_list_menu.yaml
+    env:
+      MENU: "Case List - filter-sorting- cache and index"
+      FORM: "Followup Form"
+# Timed steps stay top-level so their timestamps land in the command log
+# (see open_case_list_menu.yaml); scripts/extract_flow_timings.py reports
+# the start_timer -> stop_timer gap under the assertTrue label below.
+- runScript:
+    file: ../common/assets/start_timer.js
+- tapOn: "Followup Form"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/screen_entity_select_list"
+    timeout: 180000
+- runScript:
+    file: ../common/assets/stop_timer.js
+- assertTrue:
+    condition: ${output.elapsedMs < Number(LOAD_BUDGET_MS)}
+    label: "TIMING Cache and index-2 (filter-sorting)"
+- runFlow:
+    file: ../common/back_to_home.yaml

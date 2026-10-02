@@ -1,0 +1,56 @@
+appId: org.commcare.dalvik
+tags:
+  - printing
+  - partial
+---
+# Master Mobile Plan (2026) > Printing > Form Printing 1-4.
+# [Master] Basic Tests > Printing > Print from A Form: name, age, hometown
+# (text), then print (appearance="intent:print"), from the app's released
+# CCZ. The callout button is "Get Data" (intent.callout.get in
+# android_translatable_strings.txt); it starts
+# org.commcare.print.TemplatePrinterActivity, which hands off to Android's
+# system print UI. Partial: we only check the system print UI opens.
+# Form Printing 5 (checking the PDF contents) stays manual - there's no way
+# to read a generated PDF from this toolset.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_BASIC_TESTS}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+- tapOn: "Start"
+- scrollUntilVisible:
+    element:
+      text: "Printing"
+    direction: DOWN
+    timeout: 20000
+- tapOn: "Printing"
+- tapOn: "Print from A Form"
+- extendedWaitUntil:
+    visible: "Name"
+    timeout: 15000
+- inputText: "Maestro Print"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+- assertVisible: "Age"
+- inputText: "30"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+- assertVisible: "Hometown"
+- inputText: "Cambridge"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+- extendedWaitUntil:
+    visible: "Get Data"
+    timeout: 10000
+- tapOn: "Get Data"
+- extendedWaitUntil:
+    visible:
+      text: "(?i).*(save as pdf|select a printer|all printers|print).*"
+    timeout: 30000

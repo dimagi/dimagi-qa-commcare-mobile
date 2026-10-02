@@ -1,0 +1,26 @@
+appId: org.commcare.dalvik
+---
+# Non-core helper: from the Advanced Settings home screen, open Case List >
+# Followup Form's case list, registering one case first only if the list is
+# empty (so repeated runs don't keep adding cases for the shared test user).
+# "List is empty." is m0_no_items_text in the app's app_strings.txt.
+- tapOn: "Start"
+- tapOn: "Case List"
+- tapOn: "Followup Form"
+- runFlow:
+    when:
+      visible: "List is empty."
+    commands:
+      - back
+      - tapOn: "Registration Form"
+      - runFlow:
+          file: fill_advanced_settings_registration.yaml
+          env:
+            CASE_NAME: "Maestro Followup Case"
+      - tapOn: "Start"
+      - tapOn: "Case List"
+      - tapOn: "Followup Form"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/screen_entity_select_list"
+    timeout: 15000

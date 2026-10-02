@@ -286,6 +286,27 @@ APP_REGISTRY = {
     # Questions" menu item that doesn't exist on APP_CODE_MULTIMEDIA).
     # User-confirmed app_id (2026-08-13) via its HQ Releases page URL.
     "LAZY_VIDEOS": ("qateam", "9348a6c0baa5b98d1082a8e94048697a"),
+
+    # ---- Non-core apps (flows_non_core/, the Inventory's "CommCare Mobile
+    # - Non-Core" tab). app_ids confirmed live 2026-10-02 via HQ's
+    # /apps/api/list_apps/ by name, matching the Master Mobile Plan tabs'
+    # own Application/Domain lines. Every top build was already Released at
+    # that point, so get_app_install_code's release_first is a no-op for
+    # them today.
+    # Advanced Settings tab, Custom Properties 1-10 / Settings 1-4.
+    "ADVANCED_SETTINGS": ("qateam", "7d825cb288674ef9acd9950a7782f8d6"),
+    # Advanced Settings tab, Custom Properties 15.
+    "ROOT_MENU_HOME": ("qateam", "5d433764b62d29e47e776407a3cbd742"),
+    # Graphing tab (its Domain link).
+    "GRAPHING": ("qateam", "633b6c82c4b044a1b44964f9dc0e3d2d"),
+    # Mapbox tab ("Mapbox Tests").
+    "MAPBOX_TESTS": ("qateam", "782d45f72add02307b2d4c3ede87a99d"),
+    # Performance Tests tab ("Large App").
+    "LARGE_APP": ("qateam", "935044327e1aeb419a73d91037486357"),
+    # Case List Optimization and Cache tab - its two Domain links:
+    # "Case List - optimization" and "cache and index configuration".
+    "CASE_LIST_OPT": ("qateam", "b0cd79c6a0e249f4a0a1723ea529a742"),
+    "CACHE_AND_INDEX": ("qateam", "1ec1f67174327b5846acdfc45fd842cc"),
 }
 
 # Keys that must always resolve to the app's single most recent build,
