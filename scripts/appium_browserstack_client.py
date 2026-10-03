@@ -274,7 +274,7 @@ class AppiumBrowserStackClient:
                 wait = SESSION_START_BACKOFF_SECONDS * attempt
                 print(f"[appium_browserstack_client] Session start attempt {attempt}/"
                       f"{SESSION_START_ATTEMPTS} failed with a transient error "
-                      f"({type(exc).__name__}: {str(exc).splitlines()[0][:200]}); retrying in {wait}s")
+                      f"({type(exc).__name__}: {(str(exc).splitlines() or [""])[0][:200]}); retrying in {wait}s")
                 time.sleep(wait)
         raise last_error  # unreachable: the loop either returns or raises
 
