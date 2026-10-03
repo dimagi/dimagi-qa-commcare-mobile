@@ -296,3 +296,92 @@ appId: org.commcare.dalvik
           notVisible:
             id: "org.commcare.dalvik:id/dialog_cancel_button"
           timeout: 120000
+# UPDATE (2026-10-02), confirmed live from 10 days of nightly runs on main
+# (all 11 on the SAME commit and CommCare 2.64.0 APK - so external state,
+# not a code change). 6 of the 8 Maestro failures in that window - e.g.
+# capture_01/capture_02/auto_cc_update_03 in run 36959122212, plus
+# 09-22/09-28/10-01 - failed with "Element not found: Start" (or "Sync with
+# Server") while the failure screenshot showed the HOME screen dimmed behind
+# a still-spinning "Communicating with Server / Updating phone data from
+# server." dialog. That run's own Maestro command trace (BrowserStack
+# maestro_commands_url) showed this subflow's dialog_cancel_button wait
+# above passing in 538ms - because THIS dialog is a different variant with
+# NO STOP button. The hierarchy dump attached to the failed tapOn shows its
+# real ids: progress_fragment_determinate > progress_dialog_title >
+# dialog_title_text ("Communicating with Server"), and main_content_holder >
+# progress_bar + progress_dialog_message ("Updating phone data from
+# server."). While it is up the home-screen tiles are not in the
+# accessibility tree at all, so every caller's next "Start"/"Sync with
+# Server" lookup just times out.
+#
+# This was invisible in passing runs only because callers absorbed it: across
+# 68 login call sites measured in two nightly runs, the step immediately
+# after this subflow (a tap on / wait for "Start", which takes ~1-2s when the
+# tile is already showing) took a median 8.3s (p90 11.4s, max ~26s) - the
+# dialog is up at the END of this subflow in most runs, and the caller's own
+# short default wait (~17s; 20s in several flows) quietly waits it out. That
+# only works while HQ's restore is fast; in a slow window it isn't enough,
+# which is exactly every failure above. Earlier fixes patched this one flow
+# at a time (e.g. commcare_odk_01/03's 20s "Start" waits); this fixes it once
+# for all ~125 call sites.
+#
+# Fix: wait here until NEITHER dialog variant is on screen - the STOP-button
+# variant (dialog_cancel_button) and the no-STOP variant
+# (progress_dialog_message), as one regex-alternation id selector (Maestro
+# id selectors are regexes; external_app_02 already relies on
+# "nav_btn_(next|finish)" the same way). notVisible passes immediately when
+# no dialog is showing, so flows that land on an update prompt / recovery
+# screen are not slowed. Checked twice with a settle in between: the
+# login-screen dialog can finish and the home-screen sync dialog start a
+# beat later, and a single check can land in that gap. 180s is generous on
+# purpose - a restore genuinely stuck for 3 minutes should fail loudly here
+# with a clear cause rather than as a confusing "Start not found" later.
+- extendedWaitUntil:
+    notVisible:
+      id: "org.commcare.dalvik:id/(progress_dialog_message|dialog_cancel_button)"
+    timeout: 180000
+- waitForAnimationToEnd:
+    timeout: 3000
+- extendedWaitUntil:
+    notVisible:
+      id: "org.commcare.dalvik:id/(progress_dialog_message|dialog_cancel_button)"
+    timeout: 180000
+#
+# UPDATE (2026-10-02, run 36986745866 on kb/harden-login-sync-wait-and-appium-
+# session-retry): multimedia/lazy_video_03_download_and_play still failed
+# with "Element not found: Start" - the failure hierarchy was the login
+# screen showing "Bad Server Response" after every retry above had run out.
+# Two things made those retries weaker than they read:
+#  1. The "pause" between them is waitForAnimationToEnd with a 3-5s timeout,
+#     but that timeout is a MAXIMUM - on a static login screen it returns
+#     almost immediately. Measured on BrowserStack with a scratch flow:
+#     waitForAnimationToEnd(timeout 15000) returned in well under 14s, while
+#     an evalScript busy-wait really held for the requested time. So all the
+#     retries above fire within seconds of each other, which is exactly the
+#     "hammering a struggling server" the 2026-08-08 note meant to avoid.
+#  2. Even at their nominal spacing, ~20s total is short next to a restore
+#     that stays slow/erroring for minutes (the shared test1 account).
+#
+# Fix: a last-resort loop with REAL, escalating pauses (10s, 20s, 30s, 40s,
+# 45s, 45s = ~3 min) before each re-tap, then a real 10s hold so a late-
+# arriving error is on screen when the loop re-samples. It only runs if one
+# of the three known error texts is STILL visible, so healthy logins are not
+# slowed. The wait for both progress-dialog variants is repeated inside the
+# loop because a successful re-tap starts a fresh restore. Delay is a plain
+# Date.now() busy-wait in evalScript (Maestro has no sleep command); output.*
+# is used for the counter because bare vars don't survive between evalScripts.
+- evalScript: ${ output.loginRetryN = 0 }
+- repeat:
+    times: 6
+    while:
+      visible:
+        text: "(?i)Bad Server Response|Server Error|Couldn.t Reach Server"
+    commands:
+      - evalScript: ${ output.loginRetryN = output.loginRetryN + 1; (function(){ var end = Date.now() + Math.min(10000 * output.loginRetryN, 45000); while (Date.now() < end) {} })() }
+      - tapOn:
+          id: "org.commcare.dalvik:id/login_button"
+      - extendedWaitUntil:
+          notVisible:
+            id: "org.commcare.dalvik:id/(progress_dialog_message|dialog_cancel_button)"
+          timeout: 180000
+      - evalScript: ${ (function(){ var end = Date.now() + 10000; while (Date.now() < end) {} })() }
