@@ -307,6 +307,36 @@ APP_REGISTRY = {
     # "Case List - optimization" and "cache and index configuration".
     "CASE_LIST_OPT": ("qateam", "b0cd79c6a0e249f4a0a1723ea529a742"),
     "CACHE_AND_INDEX": ("qateam", "1ec1f67174327b5846acdfc45fd842cc"),
+    # Database Change tab, Database Change 11-12: "install the SECOND most
+    # recent version of the Basic Tests application", then update it. Pinned
+    # to v1139 (released, CC 2.61.0) - the second most recent released build
+    # as of 2026-10-02 (v1141 is the top). Already released, so
+    # release_first=False never touches it.
+    "BASIC_TESTS_PREV": ("qateam", "cdfa6c85eb594b23b0c08729cd2beff1", "872e99dc68b6403d9605a4db79af8d51", False),
+    # Printing tab, Print from Detail 3. Only some Basic Tests builds attach a
+    # print template to the Case Tests case detail: v1133 (released, CC
+    # 2.58.0, build comment "Updated 'Case Tests' case details printing
+    # template - 2.58 version") does - its suite.xml m3_case_long references
+    # the template - while the current top build (v1141) still ships the
+    # template file but no longer references it, so CommCare hides "Print
+    # Case Detail" there (EntityDetailActivity, detail.isPrintEnabled()).
+    # Checked 2026-10-02 in both builds' CCZs.
+    "BT_PRINT_DETAIL": ("qateam", "cdfa6c85eb594b23b0c08729cd2beff1", "4821760e4faf4e2cb17151f072ea5a8e", False),
+    # Advanced Settings tab, Custom Properties 11-14 ("Targeted Updates App",
+    # confirmed via /apps/api/list_apps/). Only read by
+    # scripts/run_targeted_updates_check.py, which cuts its own builds and
+    # resolves their install codes itself - no flow references
+    # APP_CODE_TARGETED_UPDATES directly.
+    "TARGETED_UPDATES": ("qateam", "95ed9b8953cbeb7ec9b02df127496d8b"),
+    # Old-client builds for scripts/run_appium_non_core_upgrade_suite.py,
+    # which installs them on resources/commcare_2.45_release.apk before
+    # upgrading CommCare - CommCare 2.45 can only install builds that target
+    # 2.45 or older (checked via list_releases 2026-10-02; no Basic Tests
+    # build qualifies, all are 2.58+). Both already released.
+    #   Database Change tab: "Database Change!" v28, CC 2.21.0.
+    "DB_CHANGE_OLD": ("qateam", "a87e38752a0743a78b254afbd1876405", "7353c96984694384aa82cebc52eafcde", False),
+    #   Performance Tests tab: "Large App" v194, CC 2.41.1.
+    "LARGE_APP_OLD": ("qateam", "935044327e1aeb419a73d91037486357", "c979bb16b99742d4893b72ccd7e717db", False),
 }
 
 # Keys that must always resolve to the app's single most recent build,

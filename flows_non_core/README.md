@@ -27,6 +27,22 @@ test case, `tags: [<workflow>, automatable|partial]`, every flow runnable on a
 fresh install, and every non-obvious selector cites the commcare-android
 source it came from.
 
+Some rows need more than a plain Maestro run, and have their own runners:
+
+- `scripts/run_targeted_updates_check.py`: Advanced Settings > Custom
+  Properties 11-14. It sets the Targeted Updates App's custom properties on
+  HQ, cuts the builds each row needs, runs the matching flow, then restores
+  the app. Those flows are tagged `needs_dedicated_runner`, so plain tag runs
+  skip them.
+- `scripts/run_appium_non_core_upgrade_suite.py`: Database Change and
+  Performance rows that upgrade CommCare mid-test (2.45 → release, Appium).
+
+Flows tagged `blocked_app_config` (Graphing 20/22) are skipped until the
+HQ-side problem in their header is fixed.
+
+Per-row status for every non-core tab is in the Master Mobile Plan's columns
+I/J/K, the same columns the core tabs use.
+
 ## Running
 
 ```bash

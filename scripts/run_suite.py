@@ -160,6 +160,22 @@ def select_flow_files(tags=None, explicit_flows=None):
             # --tag not_automatable.
             if "not_automatable" in flow_tags and (not tags or "not_automatable" not in tags):
                 continue
+            # Same exclusion pattern: a flow that is written and correct but
+            # can't pass until something is fixed on HQ's side (app config /
+            # data, not the client or this repo) - e.g. flows_non_core/graphing/
+            # graphing_20_22 (the app's mobile reports fixture isn't restored
+            # to the test user). Run it on purpose with --flow or
+            # --tag blocked_app_config once the HQ side is fixed.
+            if "blocked_app_config" in flow_tags and (not tags or "blocked_app_config" not in tags):
+                continue
+            # Same exclusion pattern: a flow that only makes sense when a
+            # dedicated runner has prepared HQ state for it and passes it
+            # --env values (e.g. scripts/run_targeted_updates_check.py for
+            # flows_non_core/advanced_settings/custom_properties_11_14_*) -
+            # swept into a plain tag run it would just fail on a missing
+            # ${...} variable. Run it through its runner.
+            if "needs_dedicated_runner" in flow_tags and (not tags or "needs_dedicated_runner" not in tags):
+                continue
             if not tags:
                 selected.add(path)
                 continue
@@ -659,6 +675,12 @@ def main():
                               "flows and merge the result - a test that passes on retry is reported as "
                               "'rerun' (flaky) instead of 'failed'. Relies on report_generator.match_flow_files' "
                               "name-matching heuristic - see its docstring caveat.")
+    parser.add_argument("--env", action="append", dest="extra_env", default=[], metavar="KEY=VALUE",
+                         help="Extra flow variable (repeatable), passed to BrowserStack alongside the "
+                              "FLOW_ENV_VARS / APP_CODE_* ones and overriding them - for a caller that "
+                              "prepares HQ state itself and must hand the flow a value only it knows "
+                              "(e.g. scripts/run_targeted_updates_check.py's install code for the build "
+                              "it just cut). Never use it for secrets that belong in FLOW_ENV_VARS.")
     parser.add_argument("--flows-root", choices=sorted(FLOWS_ROOTS), default="flows",
                          help="Which flow tree --tag/--flow selection runs against: the core suite "
                               "(flows/, default) or the non-core one (flows_non_core/). Shared "
@@ -862,6 +884,12 @@ def _dispatch_and_report(args, apk_path, apk_commcare_version, prior_build_by_ap
             env_variables.update(hq_client_module.resolve_app_codes(
                 {k: _registry_entry(k) for k in unfiltered_keys},
             ))
+
+        for item in args.extra_env:
+            key, sep, value = item.partition("=")
+            if not sep or not key:
+                raise SystemExit(f"--env expects KEY=VALUE, got {item!r}")
+            env_variables[key] = value
 
         # See DEFAULT_WALL_CLOCK_BUDGET_SECONDS's own comment - computed once
         # here so it covers the WHOLE run (main pass + --retry-failed pass),

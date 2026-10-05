@@ -1,0 +1,121 @@
+appId: org.commcare.dalvik
+tags:
+  - graphing
+  - partial
+  - blocked_app_config
+---
+# BLOCKED (confirmed live 2026-10-02, BrowserStack Galaxy S26 / CommCare
+# 2.64.0): the Add Details form submits fine, but opening "User Info Reports"
+# raises CommCare's own error "Unable to find lookup table
+# jr://fixture/commcare:reports. Make sure it exists and this user has access
+# to it." - the Graphing app's mobile report (UCR) fixture isn't being
+# restored to the test user, so the report graphs can't load at all, manually
+# or automated. Needs fixing on HQ (the app's mobile UCR / report config).
+# Excluded from default runs by the blocked_app_config tag (see
+# scripts/run_suite.py); run it with --flow once HQ is fixed.
+# Master Mobile Plan (2026) > Graphing > Graphing 20 and 22 (partial).
+# Graphing 20: User Info > Add Details (name required, age, weight - from
+# the Graphing app's CCZ), then User Info Reports > "User Info Graph [DO NOT
+# DELETE OR EDIT]" shows a stacked bar graph whose legend has Age / Weight
+# and axis titles Name / Details (m3.6bcb8f49...graph.* in app_strings.txt).
+# Graphing 22: the "No Axes Graph" report renders.
+# Reports come from HQ's UCR data at last sync, so the bar for the user
+# added here may only appear after HQ processes it - the checks are on the
+# graph itself (legend / titles), not on that new bar.
+# Partial: "stacked", "no grid", label placement, "no axes" and rotation are
+# visual and stay manual.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_GRAPHING}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+- runScript:
+    file: assets/generate_run_suffix.js
+
+# Graphing 20 step 1 - add a user with an age and weight.
+- tapOn: "Start"
+- tapOn: "User Info"
+- tapOn: "Add Details"
+- extendedWaitUntil:
+    visible: "Name"
+    timeout: 15000
+- tapOn:
+    below:
+      text: "Name"
+    index: 0
+- inputText: "Maestro User ${output.runSuffix}"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+- extendedWaitUntil:
+    visible:
+      text: "Age.*"
+    timeout: 10000
+- tapOn:
+    below:
+      text: "Age.*"
+    index: 0
+- inputText: "30"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+- extendedWaitUntil:
+    visible:
+      text: "Weight.*"
+    timeout: 10000
+- tapOn:
+    below:
+      text: "Weight.*"
+    index: 0
+- inputText: "60"
+- repeat:
+    times: 3
+    while:
+      notVisible:
+        id: "org.commcare.dalvik:id/nav_btn_finish"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/nav_btn_next"
+          optional: true
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+
+# Graphing 20 steps 2-6 - the stacked report graph.
+- tapOn: "Start"
+- tapOn: "User Info Reports"
+- extendedWaitUntil:
+    visible:
+      text: "User Info Graph.*"
+    timeout: 20000
+- tapOn:
+    text: "User Info Graph.*"
+- extendedWaitUntil:
+    visible: "Age"
+    timeout: 20000
+- assertVisible: "Weight"
+- assertVisible: "Details"
+
+# Graphing 22 - the no-axes report graph renders.
+# Back to the report list (one or two backs depending on whether the report
+# opened straight to its detail) - stop as soon as the list shows.
+- repeat:
+    times: 2
+    while:
+      notVisible: "No Axes Graph"
+    commands:
+      - back
+- extendedWaitUntil:
+    visible: "No Axes Graph"
+    timeout: 15000
+- tapOn: "No Axes Graph"
+- extendedWaitUntil:
+    visible: "(?i)done|continue"
+    timeout: 20000

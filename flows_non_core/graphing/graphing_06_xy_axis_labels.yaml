@@ -58,6 +58,12 @@ tags:
     text: "(?i)y values"
 - assertVisible:
     text: "BOTTOM"
+# Graphing 6 step 3: left-axis tick labels and the secondary (right) axis
+# title - all visible as text in the live 2026-10-02 failure screenshot.
+- assertVisible: "zero"
+- assertVisible: "five"
+- assertVisible: "ten"
+- assertVisible: "Secondary Y Values"
 - back
 - back
 
