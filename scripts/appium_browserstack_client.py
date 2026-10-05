@@ -272,9 +272,13 @@ class AppiumBrowserStackClient:
                     raise
                 last_error = exc
                 wait = SESSION_START_BACKOFF_SECONDS * attempt
+                # Computed outside the f-string: reusing the same quote character
+                # inside an f-string expression is a SyntaxError before Python 3.12,
+                # and CI runs 3.11. An empty message must not raise IndexError here.
+                detail = (str(exc).splitlines() or [""])[0][:200]
                 print(f"[appium_browserstack_client] Session start attempt {attempt}/"
                       f"{SESSION_START_ATTEMPTS} failed with a transient error "
-                      f"({type(exc).__name__}: {(str(exc).splitlines() or [""])[0][:200]}); retrying in {wait}s")
+                      f"({type(exc).__name__}: {detail}); retrying in {wait}s")
                 time.sleep(wait)
         raise last_error  # unreachable: the loop either returns or raises
 
