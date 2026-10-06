@@ -54,6 +54,21 @@ _HIDDEN_INPUT_RE = re.compile(
 )
 
 
+# Nightly run 37398101404 (2026-10-06, schedule on main) lost group-a and
+# group-b entirely - 0 of their ~110 flows ran - because install-code
+# resolution crashed on the very first HQ errors it met, before any Maestro
+# test started: group-b got "409 Conflict" from releases/release/<build>/
+# (mark_build_status) and group-a got "500 Internal Server Error" from
+# odk/<build>/short_odk_media_url/ (get_app_install_code). The three groups
+# resolve the same shared apps at the same second, so the 409 is most likely
+# two groups releasing the same build at once, and the 500 a transient HQ /
+# short-URL-service error. Neither call had any retry. The unaffected group-c
+# finished green, so the report showed 82 instead of 154 results.
+HQ_RETRY_ATTEMPTS = 4
+HQ_RETRY_BASE_SECONDS = 5
+_TRANSIENT_HQ_STATUSES = (500, 502, 503, 504)
+
+
 class HQClient:
     def __init__(self, base_url=None, domain=None):
         self.base_url = (base_url or DEFAULT_BASE_URL).rstrip("/")
@@ -132,16 +147,48 @@ class HQClient:
         Source: corehq/apps/app_manager/views/releases.py:release_build()
         """
         url = self._apps_url(f"view/{app_id}/releases/release/{saved_app_id}/")
-        resp = self.session.post(
-            url,
-            data={"is_released": "true" if is_released else "false", "ajax": "true"},
-            headers=self._csrf_headers(),
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        if data.get("error"):
-            raise RuntimeError(f"mark_build_status failed: {data['error']}")
-        return data
+        for attempt in range(1, HQ_RETRY_ATTEMPTS + 1):
+            try:
+                resp = self.session.post(
+                    url,
+                    data={"is_released": "true" if is_released else "false", "ajax": "true"},
+                    headers=self._csrf_headers(),
+                )
+            except (requests.ConnectionError, requests.Timeout) as exc:
+                if attempt == HQ_RETRY_ATTEMPTS:
+                    raise
+                self._backoff("mark_build_status", attempt, type(exc).__name__)
+                continue
+            if resp.status_code == 409 or resp.status_code in _TRANSIENT_HQ_STATUSES:
+                # 409: a concurrent request (another CI group releasing the
+                # same shared build) beat this one. If the build is already in
+                # the wanted state the goal is met; otherwise retry.
+                if resp.status_code == 409 and self._build_has_released_state(
+                        app_id, saved_app_id, is_released):
+                    return {"already_in_requested_state": True}
+                if attempt == HQ_RETRY_ATTEMPTS:
+                    resp.raise_for_status()
+                self._backoff("mark_build_status", attempt, f"HTTP {resp.status_code}")
+                continue
+            resp.raise_for_status()
+            data = resp.json()
+            if data.get("error"):
+                raise RuntimeError(f"mark_build_status failed: {data['error']}")
+            return data
+
+    def _backoff(self, what, attempt, reason):
+        wait = HQ_RETRY_BASE_SECONDS * attempt
+        print(f"[hq_client] {what} attempt {attempt}/{HQ_RETRY_ATTEMPTS} failed ({reason}); "
+              f"retrying in {wait}s")
+        time.sleep(wait)
+
+    def _build_has_released_state(self, app_id, saved_app_id, is_released):
+        try:
+            builds = self.list_releases(app_id, only_show_released=False, limit=50)
+        except Exception:
+            return False
+        return any(b.get("id") == saved_app_id and bool(b.get("is_released")) == bool(is_released)
+                   for b in builds)
 
     def create_new_build(self, app_id, comment=""):
         """
@@ -721,7 +768,18 @@ class HQClient:
 
         url_type = "short_odk_media_url" if include_media else "short_odk_url"
         url = self._apps_url(f"odk/{saved_app_id}/{url_type}/")
-        resp = self.session.get(url, params={"profile": ""})
+        for attempt in range(1, HQ_RETRY_ATTEMPTS + 1):
+            try:
+                resp = self.session.get(url, params={"profile": ""})
+            except (requests.ConnectionError, requests.Timeout) as exc:
+                if attempt == HQ_RETRY_ATTEMPTS:
+                    raise
+                self._backoff("get_app_install_code", attempt, type(exc).__name__)
+                continue
+            if resp.status_code in _TRANSIENT_HQ_STATUSES and attempt < HQ_RETRY_ATTEMPTS:
+                self._backoff("get_app_install_code", attempt, f"HTTP {resp.status_code}")
+                continue
+            break
         resp.raise_for_status()
         match = re.match(r"^https?://.*/(\w+)/?$", resp.text.strip())
         if not match:
