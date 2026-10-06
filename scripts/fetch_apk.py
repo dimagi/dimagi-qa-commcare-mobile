@@ -36,6 +36,8 @@ import sys
 import tempfile
 import zipfile
 
+import apk_info
+
 DEFAULT_REPO = "dimagi/commcare-android"
 DEFAULT_ARTIFACT = "commcare-release-apk"
 EXPECTED_PACKAGE = "org.commcare.dalvik"
@@ -232,7 +234,7 @@ def fetch(run_value, artifact, out_dir="apks", repo=DEFAULT_REPO, branch=None):
         run_id = find_latest_run(repo, artifact, branch=branch)
     else:
         repo, run_id = parse_run(run_value, repo)
-    describe_run(repo, run_id)
+    run_info = describe_run(repo, run_id)
     find_artifact(repo, run_id, artifact)
 
     with tempfile.TemporaryDirectory() as tmp:
@@ -247,6 +249,8 @@ def fetch(run_value, artifact, out_dir="apks", repo=DEFAULT_REPO, branch=None):
         dest_dir.mkdir(parents=True, exist_ok=True)
         dest = dest_dir / f"commcare-android-run-{run_id}-{artifact}.apk"
         shutil.move(str(apk), dest)
+    info = apk_info.write_sidecar(dest, run_id=run_id, branch=run_info.get("headBranch"), artifact=artifact)
+    print(f"Version {info.get('versionName')} from run {run_id} on '{run_info.get('headBranch')}'")
     print(f"APK ready: {dest} ({dest.stat().st_size / 1_048_576:.1f} MB)")
     return dest
 
