@@ -65,9 +65,26 @@ def parse_run(value, default_repo=DEFAULT_REPO):
     return default_repo, run_id
 
 
+_READ_ONLY_RUN_SUBCOMMANDS = ("view", "download")
+_API_WRITE_FLAGS = ("-X", "--method", "-f", "--raw-field", "-F", "--field", "--input")
+
+
+def _assert_read_only(args):
+    """This script only ever READS dimagi/commcare-android (list/view runs, download artifacts).
+    It must never dispatch, re-run, cancel or otherwise trigger anything on the dev team's repo,
+    so any other gh usage is rejected here - before it runs - rather than trusted to review."""
+    if args and args[0] == "run" and len(args) > 1 and args[1] in _READ_ONLY_RUN_SUBCOMMANDS:
+        return
+    if args and args[0] == "api" and not any(a in _API_WRITE_FLAGS or a.startswith("--method=")
+                                             for a in args):
+        return  # gh api defaults to GET unless a write flag/field makes it a POST
+    raise SystemExit(f"Refusing gh {' '.join(args[:3])} ...: fetch_apk.py is read-only on commcare-android.")
+
+
 def _gh(*args, timeout=120, attempts=1):
     """Run gh with a hard timeout (a stalled artifact download otherwise hangs the job until
     the workflow's own timeout) and optional retries on timeout."""
+    _assert_read_only(args)
     gh = shutil.which("gh")
     if not gh:
         raise SystemExit("The GitHub CLI (gh) is required but was not found on PATH.")
