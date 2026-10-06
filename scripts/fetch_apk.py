@@ -16,6 +16,7 @@ Usage:
     python scripts/fetch_apk.py --run https://github.com/dimagi/commcare-android/actions/runs/37427195893 \
         --artifact commcare-qaAutomation-release-apk
     python scripts/fetch_apk.py --latest                         # newest dispatched dev build, any branch
+    python scripts/fetch_apk.py --latest --branch commcare_2.65  # ... on one branch
     python scripts/fetch_apk.py --run 37427195893 --github-env   # CI: exports APK_OVERRIDE
 
 Needs the GitHub CLI (`gh`) authenticated: locally via `gh auth login`, in CI via
@@ -41,6 +42,7 @@ EXPECTED_PACKAGE = "org.commcare.dalvik"
 
 _RUN_URL_RE = re.compile(r"^https://github\.com/([\w.-]+/[\w.-]+)/actions/runs/(\d+)(?:[/?#].*)?$")
 _ARTIFACT_RE = re.compile(r"^[\w.\-]+$")
+_BRANCH_RE = re.compile(r"^[\w./\-]+$")
 
 
 def parse_run(value, default_repo=DEFAULT_REPO):
@@ -89,7 +91,7 @@ PR_CI_WORKFLOW_FILE = "commcare-android-pr-workflow.yml"
 PR_CI_WORKFLOW = "commcare-android PR CI"
 
 
-def _dispatched_runs(repo, scan):
+def _dispatched_runs(repo, scan, branch=None):
     """Successful, manually dispatched PR CI runs as {id: created_at}, newest build per id.
 
     Two independent REST listings are merged (with and without the server-side status filter)
@@ -98,6 +100,8 @@ def _dispatched_runs(repo, scan):
     weeks earlier. Run ids only ever increase, so the merged set is ordered by id, not by the
     order the API happened to return."""
     base = f"repos/{repo}/actions/workflows/{PR_CI_WORKFLOW_FILE}/runs?event=workflow_dispatch&per_page={scan}"
+    if branch:
+        base += f"&branch={branch}"
     jq = r'.workflow_runs[] | select(.conclusion == "success") | "\(.id) \(.head_branch) \(.created_at)"'
     found = {}
     for query in (base + "&status=success", base):
@@ -107,13 +111,16 @@ def _dispatched_runs(repo, scan):
     return found
 
 
-def find_latest_run(repo, artifact, scan=50):
+def find_latest_run(repo, artifact, scan=50, branch=None):
     """Newest successful manually dispatched ("Run workflow") PR CI run, on ANY branch (dev build
     branch names change every time), that still has a non-expired `artifact`. These are the builds
     the team creates for testing before a release; pull_request runs are deliberately excluded."""
-    runs = _dispatched_runs(repo, scan)
+    if branch and not _BRANCH_RE.match(branch):
+        raise SystemExit(f"Invalid branch name '{branch}'.")
+    runs = _dispatched_runs(repo, scan, branch)
     if not runs:
-        raise SystemExit(f"No successful dispatched '{PR_CI_WORKFLOW}' runs found in {repo}.")
+        raise SystemExit(f"No successful dispatched '{PR_CI_WORKFLOW}' runs found in {repo}"
+                         + (f" on branch '{branch}'." if branch else "."))
     newest = sorted(runs, reverse=True)
     print(f"Newest successful dispatched runs: "
           + ", ".join(f"{i} ({runs[i][0]}, {runs[i][1][:10]})" for i in newest[:3]))
@@ -183,11 +190,11 @@ def pick_apk(directory):
     return apks[0]
 
 
-def fetch(run_value, artifact, out_dir="apks", repo=DEFAULT_REPO):
+def fetch(run_value, artifact, out_dir="apks", repo=DEFAULT_REPO, branch=None):
     if not _ARTIFACT_RE.match(artifact or ""):
         raise SystemExit(f"Invalid artifact name '{artifact}'.")
     if run_value is None:
-        run_id = find_latest_run(repo, artifact)
+        run_id = find_latest_run(repo, artifact, branch=branch)
     else:
         repo, run_id = parse_run(run_value, repo)
     describe_run(repo, run_id)
@@ -218,6 +225,9 @@ def main():
                             "the artifact.")
     parser.add_argument("--artifact", default=DEFAULT_ARTIFACT,
                         help=f"Artifact name to download (default {DEFAULT_ARTIFACT}).")
+    parser.add_argument("--branch", default="",
+                        help="With --latest: only consider runs on this commcare-android branch "
+                             "(blank = any branch).")
     parser.add_argument("--out-dir", default="apks")
     parser.add_argument("--resolve-only", action="store_true",
                         help="Only print which run would be used; download nothing.")
@@ -228,10 +238,10 @@ def main():
     if args.resolve_only:
         if not _ARTIFACT_RE.match(args.artifact or ""):
             sys.exit(f"Invalid artifact name '{args.artifact}'.")
-        run_id = find_latest_run(DEFAULT_REPO, args.artifact) if args.latest else parse_run(args.run)[1]
+        run_id = find_latest_run(DEFAULT_REPO, args.artifact, branch=args.branch or None) if args.latest else parse_run(args.run)[1]
         describe_run(DEFAULT_REPO, run_id)
         return
-    dest = fetch(None if args.latest else args.run, args.artifact, args.out_dir)
+    dest = fetch(None if args.latest else args.run, args.artifact, args.out_dir, branch=args.branch or None)
     if args.github_env:
         env_file = os.environ.get("GITHUB_ENV")
         if not env_file:
