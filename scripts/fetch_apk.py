@@ -85,32 +85,53 @@ def _gh(*args, timeout=120, attempts=1):
         return proc.stdout
 
 
+PR_CI_WORKFLOW_FILE = "commcare-android-pr-workflow.yml"
 PR_CI_WORKFLOW = "commcare-android PR CI"
 
 
-def find_latest_run(repo, artifact, scan=30):
+def _dispatched_runs(repo, scan):
+    """Successful, manually dispatched PR CI runs as {id: created_at}, newest build per id.
+
+    Two independent REST listings are merged (with and without the server-side status filter)
+    because `gh run list` / the filtered listing was seen returning an INCOMPLETE set that omitted
+    the newest runs - both locally and in the Actions job - which silently selected a build from
+    weeks earlier. Run ids only ever increase, so the merged set is ordered by id, not by the
+    order the API happened to return."""
+    base = f"repos/{repo}/actions/workflows/{PR_CI_WORKFLOW_FILE}/runs?event=workflow_dispatch&per_page={scan}"
+    jq = r'.workflow_runs[] | select(.conclusion == "success") | "\(.id) \(.head_branch) \(.created_at)"'
+    found = {}
+    for query in (base + "&status=success", base):
+        for line in _gh("api", query, "--jq", jq).splitlines():
+            run_id, branch, created = line.split(" ", 2)
+            found[int(run_id)] = (branch, created)
+    return found
+
+
+def find_latest_run(repo, artifact, scan=50):
     """Newest successful manually dispatched ("Run workflow") PR CI run, on ANY branch (dev build
     branch names change every time), that still has a non-expired `artifact`. These are the builds
     the team creates for testing before a release; pull_request runs are deliberately excluded."""
-    out = _gh("run", "list", "-R", repo, "--workflow", PR_CI_WORKFLOW, "--event", "workflow_dispatch",
-              "--status", "success", "--limit", str(scan), "--json", "databaseId,headBranch,createdAt")
-    runs = json.loads(out)
-    for run in runs:  # newest first
-        run_id = str(run["databaseId"])
-        # Listed twice before a run is skipped: one transient/empty artifact listing from the API
-        # must not silently downgrade "latest" to an older build (seen once during local testing).
+    runs = _dispatched_runs(repo, scan)
+    if not runs:
+        raise SystemExit(f"No successful dispatched '{PR_CI_WORKFLOW}' runs found in {repo}.")
+    newest = sorted(runs, reverse=True)
+    print(f"Newest successful dispatched runs: "
+          + ", ".join(f"{i} ({runs[i][0]}, {runs[i][1][:10]})" for i in newest[:3]))
+    for run_id in newest:
+        branch, created = runs[run_id]
+        # Listed twice before a run is skipped: one transient/empty artifact listing must not
+        # silently downgrade "latest" to an older build.
         for listing in (1, 2):
             names = _gh("api", f"repos/{repo}/actions/runs/{run_id}/artifacts", "--paginate",
                         "--jq", ".artifacts[] | select(.expired == false) | .name").split()
             if artifact in names:
                 break
         else:
-            print(f"Skipping run {run_id} on '{run['headBranch']}' ({run['createdAt']}): "
+            print(f"Skipping run {run_id} on '{branch}' ({created}): "
                   f"no live '{artifact}' artifact (has: {', '.join(names) or 'none'})")
             continue
-        print(f"Latest dispatched build with a live '{artifact}': run {run_id} on '{run['headBranch']}' "
-              f"({run['createdAt']})")
-        return run_id
+        print(f"Latest dispatched build with a live '{artifact}': run {run_id} on '{branch}' ({created})")
+        return str(run_id)
     raise SystemExit(
         f"No successful dispatched '{PR_CI_WORKFLOW}' run in the last {len(runs)} still has a live "
         f"'{artifact}' artifact. Dispatch the commcare-android workflow again, or pass --run."
