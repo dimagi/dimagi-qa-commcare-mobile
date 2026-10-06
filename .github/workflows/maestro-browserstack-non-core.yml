@@ -291,4 +291,8 @@ jobs:
           RUN_TAG: ${{ github.event.inputs.tag }}
           RUN_DURATION: ${{ steps.duration.outputs.text }}
           ANDROID_VERSION: ${{ github.event.inputs.android_version || '16.0' }}
+          # So the report can say "CANCELLED" / "INCOMPLETE" instead of posting a green
+          # card for a run whose groups were stopped or never reported.
+          MATRIX_RESULT: ${{ needs.maestro-tests.result }}
+          MATRIX_JSON: ${{ needs.prepare.outputs.matrix }}
         run: python scripts/slack_notify.py

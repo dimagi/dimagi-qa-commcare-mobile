@@ -140,7 +140,48 @@ def render_failed_tests_txt(failed_results, out_path):
     pathlib.Path(out_path).write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def build_message(counts, failed_results, report_artifact_url, run_url):
+ARTIFACTS_DIR = REPO_ROOT / "artifacts"
+
+
+def missing_groups():
+    """Names of matrix groups that produced no results artifact, and how many were expected.
+
+    Run 37398101404 (2026-10-06): group-a and group-b crashed before running a single flow, only
+    group-c reported, and Slack posted a green "100% (82/82)" for what was really 82 of 154 -
+    nothing marked the card as partial. The matrix (MATRIX_JSON, the prepare job's output) says
+    which groups were expected; each reporting group leaves artifacts/<prefix>-<name>/latest_results.json.
+    Returns ([], 0) when the matrix isn't provided (e.g. a local run), i.e. no completeness claim."""
+    try:
+        expected = [m["name"] for m in json.loads(os.environ.get("MATRIX_JSON", ""))["include"]]
+    except (ValueError, KeyError, TypeError):
+        return [], 0
+    reported_dirs = [d.name for d in ARTIFACTS_DIR.glob("*") if (d / "latest_results.json").exists()]
+    missing = [n for n in expected if not any(d.endswith(f"-{n}") for d in reported_dirs)]
+    return missing, len(expected)
+
+
+def build_cancelled_message(run_url):
+    workflow = os.environ.get("GITHUB_WORKFLOW", "Maestro BrowserStack QA")
+    event = os.environ.get("GITHUB_EVENT_NAME", "manual")
+    event_label = _EVENT_LABELS.get(event, event.replace("_", " ").upper())
+    tag = (os.environ.get("RUN_TAG") or "ALL").upper()
+    line = (f"Triggered by *{os.environ.get('GITHUB_ACTOR', '?')}* · on branch "
+            f"*{os.environ.get('GITHUB_REF_NAME', '?')}*")
+    if os.environ.get("RUN_DURATION"):
+        line += f" · stopped after *{os.environ['RUN_DURATION']}*"
+    lines = [
+        f":no_entry: *[{tag}] {workflow} Run #{os.environ.get('GITHUB_RUN_NUMBER', '?')} was CANCELLED "
+        f"({event_label} event)*",
+        line,
+        "_No pass rate reported: the test groups were stopped before they finished, and any partial "
+        "numbers would not represent the suite._",
+    ]
+    if run_url:
+        lines += ["", f"<{run_url}|:link: View run>"]
+    return "\n".join(lines)
+
+
+def build_message(counts, failed_results, report_artifact_url, run_url, missing=(), expected=0):
     workflow = os.environ.get("GITHUB_WORKFLOW", "Maestro BrowserStack QA")
     event = os.environ.get("GITHUB_EVENT_NAME", "manual")
     event_label = _EVENT_LABELS.get(event, event.replace("_", " ").upper())
@@ -149,6 +190,8 @@ def build_message(counts, failed_results, report_artifact_url, run_url):
     ref = os.environ.get("GITHUB_REF_NAME", "?")
     actor = os.environ.get("GITHUB_ACTOR", "?")
     status_icon = ":white_check_mark:" if counts["failed"] == 0 else ":x:"
+    if missing:
+        status_icon = ":warning:"  # never a green check on a run that is missing groups
 
     version_path = REPORTS_DIR / "apk_version.txt"
     apk_version = version_path.read_text(encoding="utf-8").strip() if version_path.exists() else None
@@ -173,6 +216,9 @@ def build_message(counts, failed_results, report_artifact_url, run_url):
         f"{status_icon} :bar_chart: *[{tag}] {workflow} Run #{run_number} Test Summary Charts "
         f"triggered by {event_label} event*",
         branch_line,
+        *([f":warning: *INCOMPLETE RUN* - only {expected - len(missing)} of {expected} test groups "
+           f"reported results (missing: {', '.join(missing)}). The numbers below cover only the groups "
+           f"that reported - do not read them as the whole suite."] if missing else []),
         "",
         (f"*Pass rate:* {counts['pass_rate']:.1f}% ({counts['passed'] + counts['rerun']}/{counts['total']})   "
          f"*Total:* {counts['total']}   *Passed:* {counts['passed']}   *Failed:* {counts['failed']}   "
@@ -219,6 +265,14 @@ def main():
     token = os.environ["SLACK_BOT_TOKEN"]
     channel_id = os.environ["SLACK_CHANNEL_ID"]
 
+    if os.environ.get("MATRIX_RESULT") == "cancelled":
+        # The test groups were stopped (e.g. the run was cancelled to free BrowserStack slots).
+        # Whatever little was merged (often just the HQ-only update-content-check) is not a result.
+        _slack_post("chat.postMessage", token,
+                    json={"channel": channel_id, "text": build_cancelled_message(_gh_run_url())})
+        print("Run was cancelled - posted a cancelled notice instead of results.")
+        return
+
     results_path = REPORTS_DIR / "latest_results.json"
     # UPDATE, confirmed live (2026-08-08, run 31256655977, force-cancelled
     # mid-run): merge_reports.py raises (rather than writing this file) when
@@ -247,7 +301,10 @@ def main():
         print("REPORT_ARTIFACT_URL not set - the message will have no 'Download HTML report' "
               "link (set it from the actions/upload-artifact step's `artifact-url` output).")
 
-    message = build_message(counts, failed_results, report_artifact_url, _gh_run_url())
+    missing, expected = missing_groups()
+    if missing:
+        print(f"INCOMPLETE: {len(missing)} of {expected} groups produced no results: {', '.join(missing)}")
+    message = build_message(counts, failed_results, report_artifact_url, _gh_run_url(), missing, expected)
 
     with tempfile.TemporaryDirectory() as tmp:
         chart_path = pathlib.Path(tmp) / "slack-chart.png"
