@@ -16,6 +16,7 @@ Usage:
     python scripts/fetch_apk.py --run https://github.com/dimagi/commcare-android/actions/runs/37427195893 \
         --artifact commcare-qaAutomation-release-apk
     python scripts/fetch_apk.py --latest                         # newest dispatched dev build, any branch
+    python scripts/fetch_apk.py --latest --branch commcare_2.65  # ... on one branch
     python scripts/fetch_apk.py --run 37427195893 --github-env   # CI: exports APK_OVERRIDE
 
 Needs the GitHub CLI (`gh`) authenticated: locally via `gh auth login`, in CI via
@@ -35,12 +36,15 @@ import sys
 import tempfile
 import zipfile
 
+import apk_info
+
 DEFAULT_REPO = "dimagi/commcare-android"
 DEFAULT_ARTIFACT = "commcare-release-apk"
 EXPECTED_PACKAGE = "org.commcare.dalvik"
 
 _RUN_URL_RE = re.compile(r"^https://github\.com/([\w.-]+/[\w.-]+)/actions/runs/(\d+)(?:[/?#].*)?$")
 _ARTIFACT_RE = re.compile(r"^[\w.\-]+$")
+_BRANCH_RE = re.compile(r"^[\w./\-]+$")
 
 
 def parse_run(value, default_repo=DEFAULT_REPO):
@@ -63,9 +67,26 @@ def parse_run(value, default_repo=DEFAULT_REPO):
     return default_repo, run_id
 
 
+_READ_ONLY_RUN_SUBCOMMANDS = ("view", "download")
+_API_WRITE_FLAGS = ("-X", "--method", "-f", "--raw-field", "-F", "--field", "--input")
+
+
+def _assert_read_only(args):
+    """This script only ever READS dimagi/commcare-android (list/view runs, download artifacts).
+    It must never dispatch, re-run, cancel or otherwise trigger anything on the dev team's repo,
+    so any other gh usage is rejected here - before it runs - rather than trusted to review."""
+    if args and args[0] == "run" and len(args) > 1 and args[1] in _READ_ONLY_RUN_SUBCOMMANDS:
+        return
+    if args and args[0] == "api" and not any(a in _API_WRITE_FLAGS or a.startswith("--method=")
+                                             for a in args):
+        return  # gh api defaults to GET unless a write flag/field makes it a POST
+    raise SystemExit(f"Refusing gh {' '.join(args[:3])} ...: fetch_apk.py is read-only on commcare-android.")
+
+
 def _gh(*args, timeout=120, attempts=1):
     """Run gh with a hard timeout (a stalled artifact download otherwise hangs the job until
     the workflow's own timeout) and optional retries on timeout."""
+    _assert_read_only(args)
     gh = shutil.which("gh")
     if not gh:
         raise SystemExit("The GitHub CLI (gh) is required but was not found on PATH.")
@@ -85,32 +106,76 @@ def _gh(*args, timeout=120, attempts=1):
         return proc.stdout
 
 
+PR_CI_WORKFLOW_FILE = "commcare-android-pr-workflow.yml"
 PR_CI_WORKFLOW = "commcare-android PR CI"
 
 
-def find_latest_run(repo, artifact, scan=30):
+UNFILTERED_PAGES = 6  # x100 runs: reaches back ~a month even with many pull_request runs in between
+
+
+def _dispatched_runs(repo, scan, branch=None):
+    """Successful, manually dispatched PR CI runs as {id: (branch, created_at)}.
+
+    Three independent listings are merged, because the `event=workflow_dispatch` filtered listings
+    were seen returning a STALE set from inside Actions (and once locally) - missing every run newer
+    than ~2026-09-10 - which silently selected a weeks-old build; the same query with a `branch`
+    filter, which takes another path, was right. Sources:
+      A. event=workflow_dispatch & status=success      (server-side filters)
+      B. event=workflow_dispatch                        (server-side event filter only)
+      C. no event/status filter, paged, filtered locally (does not depend on the event index)
+    Run ids only ever increase, so the merged set is ordered by id, not by the order returned."""
+    base = f"repos/{repo}/actions/workflows/{PR_CI_WORKFLOW_FILE}/runs?per_page=%d" % scan
+    suffix = f"&branch={branch}" if branch else ""
+    jq = r'.workflow_runs[] | select(.conclusion == "success" and .event == "workflow_dispatch") | "\(.id) \(.head_branch) \(.created_at)"'
+    sources = {
+        "A": [base + "&event=workflow_dispatch&status=success" + suffix],
+        "B": [base + "&event=workflow_dispatch" + suffix],
+        "C": [f"repos/{repo}/actions/workflows/{PR_CI_WORKFLOW_FILE}/runs?per_page=100&page={n}" + suffix
+              for n in range(1, UNFILTERED_PAGES + 1)],
+    }
+    found = {}
+    for name, queries in sources.items():
+        ids = []
+        for query in queries:
+            lines = _gh("api", query, "--jq", jq).splitlines()
+            for line in lines:
+                run_id, run_branch, created = line.split(" ", 2)
+                found[int(run_id)] = (run_branch, created)
+                ids.append(int(run_id))
+            if not lines and name == "C":
+                pass  # an all-PR page is normal; keep paging
+        print(f"  listing {name}: {len(ids)} dispatched runs, newest {max(ids) if ids else 'none'}")
+    return found
+
+
+def find_latest_run(repo, artifact, scan=50, branch=None):
     """Newest successful manually dispatched ("Run workflow") PR CI run, on ANY branch (dev build
     branch names change every time), that still has a non-expired `artifact`. These are the builds
     the team creates for testing before a release; pull_request runs are deliberately excluded."""
-    out = _gh("run", "list", "-R", repo, "--workflow", PR_CI_WORKFLOW, "--event", "workflow_dispatch",
-              "--status", "success", "--limit", str(scan), "--json", "databaseId,headBranch,createdAt")
-    runs = json.loads(out)
-    for run in runs:  # newest first
-        run_id = str(run["databaseId"])
-        # Listed twice before a run is skipped: one transient/empty artifact listing from the API
-        # must not silently downgrade "latest" to an older build (seen once during local testing).
+    if branch and not _BRANCH_RE.match(branch):
+        raise SystemExit(f"Invalid branch name '{branch}'.")
+    runs = _dispatched_runs(repo, scan, branch)
+    if not runs:
+        raise SystemExit(f"No successful dispatched '{PR_CI_WORKFLOW}' runs found in {repo}"
+                         + (f" on branch '{branch}'." if branch else "."))
+    newest = sorted(runs, reverse=True)
+    print(f"Newest successful dispatched runs: "
+          + ", ".join(f"{i} ({runs[i][0]}, {runs[i][1][:10]})" for i in newest[:3]))
+    for run_id in newest:
+        branch, created = runs[run_id]
+        # Listed twice before a run is skipped: one transient/empty artifact listing must not
+        # silently downgrade "latest" to an older build.
         for listing in (1, 2):
             names = _gh("api", f"repos/{repo}/actions/runs/{run_id}/artifacts", "--paginate",
                         "--jq", ".artifacts[] | select(.expired == false) | .name").split()
             if artifact in names:
                 break
         else:
-            print(f"Skipping run {run_id} on '{run['headBranch']}' ({run['createdAt']}): "
+            print(f"Skipping run {run_id} on '{branch}' ({created}): "
                   f"no live '{artifact}' artifact (has: {', '.join(names) or 'none'})")
             continue
-        print(f"Latest dispatched build with a live '{artifact}': run {run_id} on '{run['headBranch']}' "
-              f"({run['createdAt']})")
-        return run_id
+        print(f"Latest dispatched build with a live '{artifact}': run {run_id} on '{branch}' ({created})")
+        return str(run_id)
     raise SystemExit(
         f"No successful dispatched '{PR_CI_WORKFLOW}' run in the last {len(runs)} still has a live "
         f"'{artifact}' artifact. Dispatch the commcare-android workflow again, or pass --run."
@@ -162,14 +227,14 @@ def pick_apk(directory):
     return apks[0]
 
 
-def fetch(run_value, artifact, out_dir="apks", repo=DEFAULT_REPO):
+def fetch(run_value, artifact, out_dir="apks", repo=DEFAULT_REPO, branch=None):
     if not _ARTIFACT_RE.match(artifact or ""):
         raise SystemExit(f"Invalid artifact name '{artifact}'.")
     if run_value is None:
-        run_id = find_latest_run(repo, artifact)
+        run_id = find_latest_run(repo, artifact, branch=branch)
     else:
         repo, run_id = parse_run(run_value, repo)
-    describe_run(repo, run_id)
+    run_info = describe_run(repo, run_id)
     find_artifact(repo, run_id, artifact)
 
     with tempfile.TemporaryDirectory() as tmp:
@@ -184,6 +249,8 @@ def fetch(run_value, artifact, out_dir="apks", repo=DEFAULT_REPO):
         dest_dir.mkdir(parents=True, exist_ok=True)
         dest = dest_dir / f"commcare-android-run-{run_id}-{artifact}.apk"
         shutil.move(str(apk), dest)
+    info = apk_info.write_sidecar(dest, run_id=run_id, branch=run_info.get("headBranch"), artifact=artifact)
+    print(f"Version {info.get('versionName')} from run {run_id} on '{run_info.get('headBranch')}'")
     print(f"APK ready: {dest} ({dest.stat().st_size / 1_048_576:.1f} MB)")
     return dest
 
@@ -197,6 +264,9 @@ def main():
                             "the artifact.")
     parser.add_argument("--artifact", default=DEFAULT_ARTIFACT,
                         help=f"Artifact name to download (default {DEFAULT_ARTIFACT}).")
+    parser.add_argument("--branch", default="",
+                        help="With --latest: only consider runs on this commcare-android branch "
+                             "(blank = any branch).")
     parser.add_argument("--out-dir", default="apks")
     parser.add_argument("--resolve-only", action="store_true",
                         help="Only print which run would be used; download nothing.")
@@ -207,10 +277,10 @@ def main():
     if args.resolve_only:
         if not _ARTIFACT_RE.match(args.artifact or ""):
             sys.exit(f"Invalid artifact name '{args.artifact}'.")
-        run_id = find_latest_run(DEFAULT_REPO, args.artifact) if args.latest else parse_run(args.run)[1]
+        run_id = find_latest_run(DEFAULT_REPO, args.artifact, branch=args.branch or None) if args.latest else parse_run(args.run)[1]
         describe_run(DEFAULT_REPO, run_id)
         return
-    dest = fetch(None if args.latest else args.run, args.artifact, args.out_dir)
+    dest = fetch(None if args.latest else args.run, args.artifact, args.out_dir, branch=args.branch or None)
     if args.github_env:
         env_file = os.environ.get("GITHUB_ENV")
         if not env_file:
