@@ -32,6 +32,14 @@ on:
         description: "commcare-android GitHub release tag to test (e.g. commcare_2.64.0). Leave blank for latest. Ignored unless apk_source is 'GitHub Releases'."
         required: false
         default: ""
+      commcare_android_run:
+        description: "OPTIONAL - test an APK built by a dimagi/commcare-android GitHub Actions run (e.g. a customised build): paste the run id or run URL. Overrides apk_source and release_tag when set. Leave blank for the normal path."
+        required: false
+        default: ""
+      commcare_android_artifact:
+        description: "Artifact to take the APK from when commcare_android_run is set (default commcare-release-apk; others: ccc-staging-release-apk, commcare-qaAutomation-release-apk - the latter only exists for manually dispatched PR CI runs and expires after 3 days)."
+        required: false
+        default: "commcare-release-apk"
       apk_source:
         description: "APK to test. 'GitHub Releases' uses release_tag above (or latest). Any other option tests that committed resources/*.apk directly."
         required: false
@@ -39,6 +47,7 @@ on:
         default: "GitHub Releases"
         options:
           - "GitHub Releases"
+          - "Internal latest APK"
           - "resources/app-commcare-release-Android16.apk"
       android_version:
         description: "Android version to test on (maps to the Samsung Galaxy flagship BrowserStack has at that version). Ignored if 'devices' is set."
@@ -115,6 +124,25 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Fetch APK from commcare-android Actions (commcare_android_run set, or apk_source = Internal latest APK)
+        if: ${{ github.event.inputs.commcare_android_run != '' || github.event.inputs.apk_source == 'Internal latest APK' }}
+        env:
+          # commcare-android is public; the built-in token should be enough to read its
+          # artifacts. If GitHub refuses cross-repo artifact access, add a repo secret
+          # COMMCARE_ANDROID_READ_TOKEN (a token with read access) - it is preferred when set.
+          GH_TOKEN: ${{ secrets.COMMCARE_ANDROID_READ_TOKEN || github.token }}
+          RUN_INPUT: ${{ github.event.inputs.commcare_android_run }}
+          ARTIFACT_INPUT: ${{ github.event.inputs.commcare_android_artifact }}
+        run: |
+          ARTIFACT="${ARTIFACT_INPUT:-commcare-release-apk}"
+          if [ -n "$RUN_INPUT" ]; then
+            # an explicit commcare-android run id/URL always wins
+            python scripts/fetch_apk.py --run "$RUN_INPUT" --artifact "$ARTIFACT" --github-env
+          else
+            # apk_source = "Internal latest APK": newest dispatched dev build, any branch
+            python scripts/fetch_apk.py --latest --artifact "$ARTIFACT" --github-env
+          fi
+
       - name: Run non-core Maestro suite on BrowserStack
         env:
           BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
@@ -152,6 +180,8 @@ jobs:
           ARGS=(--flows-root flows_non_core --devices "$DEVICES" --build-name "QA-COMMCARE-MOBILE-NONCORE-${{ matrix.name }}" --retry-failed)
           for T in ${{ matrix.tags }}; do ARGS+=(--tag "$T"); done
           APK_SOURCE="${{ github.event.inputs.apk_source || 'GitHub Releases' }}"
+          # commcare_android_run (fetch step above) wins over apk_source/release_tag when set.
+          APK_SOURCE="${APK_OVERRIDE:-$APK_SOURCE}"
           if [ "$APK_SOURCE" != "GitHub Releases" ]; then
             ARGS+=(--apk "$APK_SOURCE")
           elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
