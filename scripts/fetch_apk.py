@@ -108,23 +108,41 @@ PR_CI_WORKFLOW_FILE = "commcare-android-pr-workflow.yml"
 PR_CI_WORKFLOW = "commcare-android PR CI"
 
 
-def _dispatched_runs(repo, scan, branch=None):
-    """Successful, manually dispatched PR CI runs as {id: created_at}, newest build per id.
+UNFILTERED_PAGES = 6  # x100 runs: reaches back ~a month even with many pull_request runs in between
 
-    Two independent REST listings are merged (with and without the server-side status filter)
-    because `gh run list` / the filtered listing was seen returning an INCOMPLETE set that omitted
-    the newest runs - both locally and in the Actions job - which silently selected a build from
-    weeks earlier. Run ids only ever increase, so the merged set is ordered by id, not by the
-    order the API happened to return."""
-    base = f"repos/{repo}/actions/workflows/{PR_CI_WORKFLOW_FILE}/runs?event=workflow_dispatch&per_page={scan}"
-    if branch:
-        base += f"&branch={branch}"
-    jq = r'.workflow_runs[] | select(.conclusion == "success") | "\(.id) \(.head_branch) \(.created_at)"'
+
+def _dispatched_runs(repo, scan, branch=None):
+    """Successful, manually dispatched PR CI runs as {id: (branch, created_at)}.
+
+    Three independent listings are merged, because the `event=workflow_dispatch` filtered listings
+    were seen returning a STALE set from inside Actions (and once locally) - missing every run newer
+    than ~2026-09-10 - which silently selected a weeks-old build; the same query with a `branch`
+    filter, which takes another path, was right. Sources:
+      A. event=workflow_dispatch & status=success      (server-side filters)
+      B. event=workflow_dispatch                        (server-side event filter only)
+      C. no event/status filter, paged, filtered locally (does not depend on the event index)
+    Run ids only ever increase, so the merged set is ordered by id, not by the order returned."""
+    base = f"repos/{repo}/actions/workflows/{PR_CI_WORKFLOW_FILE}/runs?per_page=%d" % scan
+    suffix = f"&branch={branch}" if branch else ""
+    jq = r'.workflow_runs[] | select(.conclusion == "success" and .event == "workflow_dispatch") | "\(.id) \(.head_branch) \(.created_at)"'
+    sources = {
+        "A": [base + "&event=workflow_dispatch&status=success" + suffix],
+        "B": [base + "&event=workflow_dispatch" + suffix],
+        "C": [f"repos/{repo}/actions/workflows/{PR_CI_WORKFLOW_FILE}/runs?per_page=100&page={n}" + suffix
+              for n in range(1, UNFILTERED_PAGES + 1)],
+    }
     found = {}
-    for query in (base + "&status=success", base):
-        for line in _gh("api", query, "--jq", jq).splitlines():
-            run_id, branch, created = line.split(" ", 2)
-            found[int(run_id)] = (branch, created)
+    for name, queries in sources.items():
+        ids = []
+        for query in queries:
+            lines = _gh("api", query, "--jq", jq).splitlines()
+            for line in lines:
+                run_id, run_branch, created = line.split(" ", 2)
+                found[int(run_id)] = (run_branch, created)
+                ids.append(int(run_id))
+            if not lines and name == "C":
+                pass  # an all-PR page is normal; keep paging
+        print(f"  listing {name}: {len(ids)} dispatched runs, newest {max(ids) if ids else 'none'}")
     return found
 
 
