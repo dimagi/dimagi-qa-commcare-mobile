@@ -183,8 +183,15 @@ tags:
     visible:
       id: "org.commcare.dalvik:id/apps_list_view"
     timeout: 15000
+# 2.65 (commcare-android a6f435d7a, "Move non-list views to listview header") moved
+# the banner/instructions/Install button INTO the ListView's header, so the middle
+# of apps_list_view - where tapping the container used to land on the app row - is
+# now blank space below the single row, and the app page never opened. Tap the app
+# row itself: R.id.app_name exists in app_title_view/single_app_view from 2.45.0
+# through 2.65 (checked per release tag), so this works on old and new layouts alike.
 - tapOn:
-    id: "org.commcare.dalvik:id/apps_list_view"
+    id: "org.commcare.dalvik:id/app_name"
+    index: 0
 - extendedWaitUntil:
     visible:
       id: "org.commcare.dalvik:id/uninstall_button"
@@ -381,10 +388,17 @@ tags:
 # Successful! Your information is up to date.", longer than the bare
 # "Sync Successful" this used to check. Wildcarded.
 - tapOn: "Sync with Server"
+# UPDATE (2026-10-07), confirmed live (2.65 qaAutomation run: the failure screen still
+# showed the "Communicating with Server / Updating phone data from server." dialog
+# with STOP when this 30s wait expired; the same assertion also failed on 2.64.0 in
+# the 2026-10-05 nightly): HQ's restore for the shared test user is sometimes slow, so
+# a 30s wait is a coin-flip - not a layout or APK-version problem. Waits up to 3 min;
+# "Sync Successful" is a short-lived toast, so this waits FOR it rather than for the
+# dialog to disappear (the toast could be gone by then). Same on every app version.
 - extendedWaitUntil:
     visible:
       text: "(?i).*Sync Successful.*"
-    timeout: 30000
+    timeout: 180000
 # "Reinstall and update 10" - negative check: already on latest (Test
 # Three), no further forced reinstall/update prompt.
 - assertNotVisible: "Choose Reinstall Method"

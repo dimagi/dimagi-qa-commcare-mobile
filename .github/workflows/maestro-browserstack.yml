@@ -55,6 +55,8 @@ on:
           - "GitHub Releases"
           - "Internal latest APK"
           - "resources/app-commcare-release-Android16.apk"
+          - "resources/app-commcare-qaAutomation.apk"
+          - "resources/app-cccStaging-qaAutomation.apk"
           - "resources/commcare_2.45_release.apk"
           - "resources/Mobile API Testing App-release.apk"
       android_version:
@@ -320,7 +322,7 @@ jobs:
         # failed. This coverage is additive/independent (a separate
         # BrowserStack session via a different script), so it should run
         # regardless of the Maestro step's outcome.
-        if: always() && contains(matrix.tags, 'updates_partial_failed')
+        if: ${{ !cancelled() && contains(matrix.tags, 'updates_partial_failed') }}
         env:
           BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
           BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
@@ -393,7 +395,7 @@ jobs:
       # group-c) so `--tag prompted_updates` ad-hoc runs still cover both
       # in that one job, same as before.
       - name: Run Appium suite on BrowserStack (prompted_updates scenario_01_optional_ccz_update)
-        if: always() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'prompted_updates')))
+        if: ${{ !cancelled() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'prompted_updates'))) }}
         env:
           BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
           BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
@@ -430,7 +432,7 @@ jobs:
           python scripts/run_appium_prompted_updates_suite.py "${ARGS[@]}"
 
       - name: Run Appium suite on BrowserStack (prompted_updates scenario_02_forced_ccz_update)
-        if: always() && (matrix.name == 'group-c' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'prompted_updates')))
+        if: ${{ !cancelled() && (matrix.name == 'group-c' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'prompted_updates'))) }}
         env:
           BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
           BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
@@ -498,7 +500,7 @@ jobs:
       # single-tag ad-hoc dispatch) matrix.tags containing the flows' own
       # updates_2_49_apk_prompt tag.
       - name: Run Maestro suite (Updates tab - CommCare APK update prompt, 1/2 optional)
-        if: always() && (matrix.name == 'group-a' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'updates_2_49')))
+        if: ${{ !cancelled() && (matrix.name == 'group-a' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'updates_2_49'))) }}
         env:
           BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
           BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
@@ -537,7 +539,7 @@ jobs:
           python scripts/run_suite.py "${ARGS[@]}"
 
       - name: Run Maestro suite (Updates tab - CommCare APK update prompt, 2/2 forced)
-        if: always() && (matrix.name == 'group-a' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'updates_2_49')))
+        if: ${{ !cancelled() && (matrix.name == 'group-a' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'updates_2_49'))) }}
         env:
           BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
           BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
@@ -590,7 +592,7 @@ jobs:
       # or (for a scoped single-tag ad-hoc dispatch) matrix.tags containing
       # requires_old_client_apk directly.
       - name: Run Maestro suite (CC Reinstall/Update Needed - old CommCare client)
-        if: always() && (matrix.name == 'group-c' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'requires_old_client_apk')))
+        if: ${{ !cancelled() && (matrix.name == 'group-c' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'requires_old_client_apk'))) }}
         env:
           BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
           BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
@@ -638,7 +640,7 @@ jobs:
       # this job, gated on group-c (recovery_measures' own group) or a
       # scoped recovery_measures tag dispatch.
       - name: Run Appium suite on BrowserStack (Recovery Measures - CCZ file picker)
-        if: always() && (matrix.name == 'group-c' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'recovery_measures')))
+        if: ${{ !cancelled() && (matrix.name == 'group-c' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'recovery_measures'))) }}
         env:
           BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
           BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
@@ -719,7 +721,7 @@ jobs:
       # regardless of an earlier one's outcome, then fails the step at the
       # end if any of them did.
       - name: Verify Form Submissions Submit-History checks (Markdown, Incomplete Forms 4, Repeat Groups 5, upload_test_2, Geoservice 2)
-        if: always() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'form_submissions')))
+        if: ${{ !cancelled() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'form_submissions'))) }}
         env:
           HQ_DOMAIN: qateam
           HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
@@ -759,7 +761,7 @@ jobs:
       # Appium step in this job, gated on group-b (Form Submissions' own
       # group) or a scoped form_submissions tag dispatch.
       - name: Run Appium suite on BrowserStack (Form Submissions - active/inactive/deactivated user login)
-        if: always() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'form_submissions')))
+        if: ${{ !cancelled() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'form_submissions'))) }}
         env:
           BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
           BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
@@ -836,7 +838,7 @@ jobs:
       # this job, gated on group-b (right_to_left_text's own group) or a
       # scoped tag dispatch.
       - name: Run Appium suite on BrowserStack (Right to Left Text - Home Screen 1, Home Screen 8, Case list 4, Question Types 1/3)
-        if: always() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'right_to_left_text')))
+        if: ${{ !cancelled() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'right_to_left_text'))) }}
         env:
           BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
           BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
@@ -903,7 +905,7 @@ jobs:
       # run's report; deliberately excluded from the exit-code-gating
       # "this_run_results" pattern other checks use.
       - name: Verify Graceful Session Pause precondition (cc-auto-form-save-on-pause)
-        if: always() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'form_submissions')))
+        if: ${{ !cancelled() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'form_submissions'))) }}
         continue-on-error: true
         env:
           HQ_DOMAIN: qateam
@@ -941,7 +943,7 @@ jobs:
       # in here. Gated on group-b (form_submissions' own group) or a scoped
       # tag dispatch, same as every other Appium step in this job.
       - name: Run Appium suite on BrowserStack (Form Submissions - Casesearch Checkbox 1/2)
-        if: always() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'form_submissions')))
+        if: ${{ !cancelled() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'form_submissions'))) }}
         env:
           BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
           BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
@@ -1027,7 +1029,7 @@ jobs:
       # Gated on group-b (case_filters' own group) or a scoped tag
       # dispatch, same as every other Appium step in this job.
       - name: Run Appium suite on BrowserStack (Case Filters - Case Search & Claim 1)
-        if: always() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'case_filters')))
+        if: ${{ !cancelled() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'case_filters'))) }}
         env:
           BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
           BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
@@ -1105,7 +1107,7 @@ jobs:
       # Gated on group-b (case_filters' own group) or a scoped tag
       # dispatch, same as every other Appium step in this job.
       - name: Run Appium suite on BrowserStack (Case Filters - Case Search & Claim 2)
-        if: always() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'case_filters')))
+        if: ${{ !cancelled() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'case_filters'))) }}
         env:
           BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
           BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
@@ -1152,7 +1154,7 @@ jobs:
       # other Appium step in this job, gated on group-a (multimedia's own
       # group) or a scoped multimedia tag dispatch.
       - name: Run Appium suite on BrowserStack (Multimedia - external file in forms)
-        if: always() && (matrix.name == 'group-a' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'multimedia')))
+        if: ${{ !cancelled() && (matrix.name == 'group-a' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'multimedia'))) }}
         env:
           BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
           BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
@@ -1213,7 +1215,7 @@ jobs:
       # pattern as every other Appium step in this job, gated on group-a
       # (multimedia's own group) or a scoped multimedia tag dispatch.
       - name: Run Appium suite on BrowserStack (Multimedia - MM1/MM2/MM3 install+repair)
-        if: always() && (matrix.name == 'group-a' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'multimedia')))
+        if: ${{ !cancelled() && (matrix.name == 'group-a' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'multimedia'))) }}
         env:
           BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
           BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
@@ -1266,7 +1268,7 @@ jobs:
       # real recent submission that 3 of its 4 questions (audio/image/sign)
       # reliably attach, video does not.
       - name: Verify Multimedia Submit-History checks (Photo Verification, Image Resize 27/28, Media 4)
-        if: always() && (matrix.name == 'group-a' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'multimedia')))
+        if: ${{ !cancelled() && (matrix.name == 'group-a' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'multimedia'))) }}
         env:
           HQ_DOMAIN: qateam
           HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
@@ -1292,7 +1294,7 @@ jobs:
       # scripts/run_support_menus_log_property_check.py's own module
       # docstring for the full citation.
       - name: Verify Support Menus 2 precondition (logenabled)
-        if: always() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'support_menus')))
+        if: ${{ !cancelled() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'support_menus'))) }}
         env:
           HQ_DOMAIN: qateam
           HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
@@ -1304,6 +1306,16 @@ jobs:
       # the full logical run, so it isn't meaningful on its own - the
       # merge-reports job below is the only place the real persistent trend
       # history gets read or written, from the properly COMBINED results.
+      # Safety net for a CANCELLED job: scripts/cancel_guard.py normally stops this job's
+      # BrowserStack builds from inside the process on SIGINT/SIGTERM; this stops any it
+      # recorded but could not (e.g. the process was SIGKILLed first). Only this job's builds.
+      - name: Stop BrowserStack builds if the job was cancelled
+        if: cancelled()
+        env:
+          BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
+          BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
+        run: python scripts/stop_run_builds.py
+
       - name: Upload HTML report
         if: always()
         uses: actions/upload-artifact@v4
@@ -1345,7 +1357,7 @@ jobs:
     # whole matrix (can't depend on just one matrix leg), removing the race
     # - a small latency cost for a fast, cheap check.
     needs: maestro-tests
-    if: always() && (github.event.inputs.tag == '' || github.event.inputs.tag == 'All' || github.event.inputs.tag == 'update')
+    if: ${{ !cancelled() && (github.event.inputs.tag == '' || github.event.inputs.tag == 'All' || github.event.inputs.tag == 'update') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
