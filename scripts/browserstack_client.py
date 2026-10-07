@@ -16,9 +16,13 @@ BROWSERSTACK_USERNAME/BROWSERSTACK_PASSWORD pair commcare-android's Espresso CI 
 already uses - BrowserStack's "Access Key" is that same value).
 """
 import os
+import sys
 import time
 
 import requests
+
+sys.path.insert(0, os.path.dirname(__file__))
+import cancel_guard
 
 API_BASE = "https://api-cloud.browserstack.com/app-automate/maestro/v2"
 
@@ -85,6 +89,7 @@ class BrowserStackClient:
         self.username = username or os.environ["BROWSERSTACK_USERNAME"]
         self.access_key = access_key or os.environ["BROWSERSTACK_ACCESS_KEY"]
         self.auth = (self.username, self.access_key)
+        cancel_guard.install()  # stop our builds if this job is cancelled
 
     def upload_app(self, apk_path, custom_id=None):
         data = {"custom_id": custom_id} if custom_id else {}
@@ -131,7 +136,11 @@ class BrowserStackClient:
         if extra_params:
             payload.update(extra_params)
         resp = _request_with_retry("post", f"{API_BASE}/android/build", auth=self.auth, json=payload)
-        return resp.json()  # includes build id
+        result = resp.json()  # includes build id
+        build_id = result.get("build_id") or result.get("id")
+        if build_id:
+            cancel_guard.register_build(build_id)
+        return result
 
     def get_build(self, build_id):
         resp = _request_with_retry("get", f"{API_BASE}/builds/{build_id}", auth=self.auth)
@@ -186,6 +195,7 @@ class BrowserStackClient:
                 continue
             status = build.get("status")
             if status not in ("running", "queued"):
+                cancel_guard.unregister_build(build_id)
                 return build
             if time.monotonic() > deadline:
                 raise TimeoutError(f"BrowserStack build {build_id} still '{status}' after {timeout_seconds}s")

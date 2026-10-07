@@ -210,6 +210,16 @@ jobs:
             { echo "## Measured load times"; echo; python scripts/extract_flow_timings.py; } >> "$GITHUB_STEP_SUMMARY"
           fi
 
+      # Safety net for a CANCELLED job: scripts/cancel_guard.py normally stops this job's
+      # BrowserStack builds from inside the process on SIGINT/SIGTERM; this stops any it
+      # recorded but could not (e.g. the process was SIGKILLed first). Only this job's builds.
+      - name: Stop BrowserStack builds if the job was cancelled
+        if: cancelled()
+        env:
+          BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
+          BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
+        run: python scripts/stop_run_builds.py
+
       - name: Upload HTML report
         if: always()
         uses: actions/upload-artifact@v4
