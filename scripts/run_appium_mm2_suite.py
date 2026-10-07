@@ -29,6 +29,7 @@ import time
 from dotenv import load_dotenv
 
 sys.path.insert(0, os.path.dirname(__file__))
+import apk_info
 import download_apk
 import hq_client as hq_client_module
 import report_generator
@@ -341,7 +342,7 @@ def main():
     apk_version_path = REPO_ROOT / "reports" / "apk_version.txt"
     if not apk_version_path.exists():
         apk_version_path.write_text(
-            apk_commcare_version or f"{pathlib.Path(apk_path).name} (custom)", encoding="utf-8",
+            apk_commcare_version or apk_info.describe_custom_apk(apk_path), encoding="utf-8",
         )
 
     # Exit code reflects only THIS invocation's own results, not the

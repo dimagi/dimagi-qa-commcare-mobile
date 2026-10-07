@@ -34,13 +34,26 @@ on:
         description: "commcare-android GitHub release tag to test (e.g. commcare_2.63.4). Leave blank for latest. Ignored unless apk_source below is left as 'GitHub Releases'."
         required: false
         default: ""
+      commcare_android_run:
+        description: "OPTIONAL - test an APK built by a dimagi/commcare-android GitHub Actions run (e.g. a customised build): paste the run id or run URL. Overrides apk_source and release_tag when set. Leave blank for the normal path."
+        required: false
+        default: ""
+      commcare_android_branch:
+        description: "OPTIONAL, only for apk_source = Internal latest APK: take the newest dev build from this commcare-android branch (e.g. commcare_2.65 or a feature branch). Leave blank for the newest build on ANY branch."
+        required: false
+        default: ""
+      commcare_android_artifact:
+        description: "Artifact to take the APK from when commcare_android_run is set (default commcare-release-apk; others: ccc-staging-release-apk, commcare-qaAutomation-release-apk - the latter only exists for manually dispatched PR CI runs and expires after 3 days)."
+        required: false
+        default: "commcare-release-apk"
       apk_source:
-        description: "APK to test. 'GitHub Releases' uses release_tag above (or latest if blank) - the normal path. Any other option tests that committed resources/*.apk file directly instead (e.g. a build not yet published as a release). NOTE: this list is a static snapshot - a newly-added resources/*.apk needs a matching option added here by hand, workflow_dispatch choices can't be generated from the repo at trigger time."
+        description: "APK to test. 'GitHub Releases' uses release_tag above (or latest if blank) - the normal path. 'Internal latest APK' tests the newest dev build from a successful manually dispatched commcare-android 'PR CI' run on ANY branch (before it is released). Any other option tests that committed resources/*.apk file directly instead (e.g. a build not yet published as a release). NOTE: this list is a static snapshot - a newly-added resources/*.apk needs a matching option added here by hand, workflow_dispatch choices can't be generated from the repo at trigger time."
         required: false
         type: choice
         default: "GitHub Releases"
         options:
           - "GitHub Releases"
+          - "Internal latest APK"
           - "resources/app-commcare-release-Android16.apk"
           - "resources/commcare_2.45_release.apk"
           - "resources/Mobile API Testing App-release.apk"
@@ -66,8 +79,8 @@ on:
         required: false
         default: ""
   schedule:
-    # Nightly at 03:00 UTC against whatever the latest commcare-android release is.
-    - cron: "0 3 * * *"
+    # Weekdays (Mon-Fri) at 00:30 UTC against whatever the latest commcare-android release is.
+    - cron: "30 0 * * 1-5"
 
 jobs:
   # Computes the matrix maestro-tests fans out over. A specific --tag pick
@@ -192,6 +205,28 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Fetch APK from commcare-android Actions (commcare_android_run set, or apk_source = Internal latest APK)
+        if: ${{ github.event.inputs.commcare_android_run != '' || github.event.inputs.apk_source == 'Internal latest APK' }}
+        env:
+          # commcare-android is public; the built-in token should be enough to read its
+          # artifacts. If GitHub refuses cross-repo artifact access, add a repo secret
+          # COMMCARE_ANDROID_READ_TOKEN (a token with read access) - it is preferred when set.
+          GH_TOKEN: ${{ secrets.COMMCARE_ANDROID_READ_TOKEN || github.token }}
+          RUN_INPUT: ${{ github.event.inputs.commcare_android_run }}
+          ARTIFACT_INPUT: ${{ github.event.inputs.commcare_android_artifact }}
+          BRANCH_INPUT: ${{ github.event.inputs.commcare_android_branch }}
+        run: |
+          ARTIFACT="${ARTIFACT_INPUT:-commcare-release-apk}"
+          if [ -n "$RUN_INPUT" ]; then
+            # an explicit commcare-android run id/URL always wins
+            python scripts/fetch_apk.py --run "$RUN_INPUT" --artifact "$ARTIFACT" --github-env
+          else
+            # apk_source = "Internal latest APK": newest dispatched dev build, any branch
+            BRANCH_ARGS=()
+            if [ -n "$BRANCH_INPUT" ]; then BRANCH_ARGS=(--branch "$BRANCH_INPUT"); fi
+            python scripts/fetch_apk.py --latest "${BRANCH_ARGS[@]}" --artifact "$ARTIFACT" --github-env
+          fi
+
       - name: Run Maestro suite on BrowserStack
         env:
           BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
@@ -243,6 +278,8 @@ jobs:
           # release) - matches scripts/run_suite.py's own --apk-over-
           # --release-tag precedence.
           APK_SOURCE="${{ github.event.inputs.apk_source || 'GitHub Releases' }}"
+          # commcare_android_run (fetch step above) wins over apk_source/release_tag when set.
+          APK_SOURCE="${APK_OVERRIDE:-$APK_SOURCE}"
           if [ "$APK_SOURCE" != "GitHub Releases" ]; then
             ARGS+=(--apk "$APK_SOURCE")
           elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
@@ -316,6 +353,8 @@ jobs:
           # Same apk_source precedence as the Maestro step above - the "new"
           # binary in the mid-session update swap.
           APK_SOURCE="${{ github.event.inputs.apk_source || 'GitHub Releases' }}"
+          # commcare_android_run (fetch step above) wins over apk_source/release_tag when set.
+          APK_SOURCE="${APK_OVERRIDE:-$APK_SOURCE}"
           if [ "$APK_SOURCE" != "GitHub Releases" ]; then
             ARGS+=(--apk "$APK_SOURCE")
           elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
@@ -381,6 +420,8 @@ jobs:
           fi
           ARGS=(--devices "$DEVICES" --scenario scenario_01_optional_ccz_update --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-prompted-updates-scenario-01")
           APK_SOURCE="${{ github.event.inputs.apk_source || 'GitHub Releases' }}"
+          # commcare_android_run (fetch step above) wins over apk_source/release_tag when set.
+          APK_SOURCE="${APK_OVERRIDE:-$APK_SOURCE}"
           if [ "$APK_SOURCE" != "GitHub Releases" ]; then
             ARGS+=(--apk "$APK_SOURCE")
           elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
@@ -414,6 +455,8 @@ jobs:
           fi
           ARGS=(--devices "$DEVICES" --scenario scenario_02_forced_ccz_update --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-prompted-updates-scenario-02")
           APK_SOURCE="${{ github.event.inputs.apk_source || 'GitHub Releases' }}"
+          # commcare_android_run (fetch step above) wins over apk_source/release_tag when set.
+          APK_SOURCE="${APK_OVERRIDE:-$APK_SOURCE}"
           if [ "$APK_SOURCE" != "GitHub Releases" ]; then
             ARGS+=(--apk "$APK_SOURCE")
           elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
@@ -484,6 +527,8 @@ jobs:
           fi
           ARGS=(--devices "$DEVICES" --flow flows/updates_2_49/prompted_update_scenario_01_ill_update_later.yaml --hq-setup hq_setup/updates_2_49/setup_02_commcare_version_plus_one.json --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-apk-update-prompt-1-optional")
           APK_SOURCE="${{ github.event.inputs.apk_source || 'GitHub Releases' }}"
+          # commcare_android_run (fetch step above) wins over apk_source/release_tag when set.
+          APK_SOURCE="${APK_OVERRIDE:-$APK_SOURCE}"
           if [ "$APK_SOURCE" != "GitHub Releases" ]; then
             ARGS+=(--apk "$APK_SOURCE")
           elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
@@ -521,6 +566,8 @@ jobs:
           fi
           ARGS=(--devices "$DEVICES" --flow flows/updates_2_49/prompted_update_scenario_02_forced_commcare_update.yaml --hq-setup hq_setup/updates_2_49/prompted_update_scenario_02_forced.json --hq-teardown hq_setup/updates_2_49/prompted_update_scenario_teardown.json --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-apk-update-prompt-2-forced")
           APK_SOURCE="${{ github.event.inputs.apk_source || 'GitHub Releases' }}"
+          # commcare_android_run (fetch step above) wins over apk_source/release_tag when set.
+          APK_SOURCE="${APK_OVERRIDE:-$APK_SOURCE}"
           if [ "$APK_SOURCE" != "GitHub Releases" ]; then
             ARGS+=(--apk "$APK_SOURCE")
           elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
@@ -617,6 +664,8 @@ jobs:
           fi
           ARGS=(--devices "$DEVICES" --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-appium-offline-ccz")
           APK_SOURCE="${{ github.event.inputs.apk_source || 'GitHub Releases' }}"
+          # commcare_android_run (fetch step above) wins over apk_source/release_tag when set.
+          APK_SOURCE="${APK_OVERRIDE:-$APK_SOURCE}"
           if [ "$APK_SOURCE" != "GitHub Releases" ]; then
             ARGS+=(--apk "$APK_SOURCE")
           elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
@@ -736,6 +785,8 @@ jobs:
           fi
           ARGS=(--devices "$DEVICES" --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-appium-user-activation")
           APK_SOURCE="${{ github.event.inputs.apk_source || 'GitHub Releases' }}"
+          # commcare_android_run (fetch step above) wins over apk_source/release_tag when set.
+          APK_SOURCE="${APK_OVERRIDE:-$APK_SOURCE}"
           if [ "$APK_SOURCE" != "GitHub Releases" ]; then
             ARGS+=(--apk "$APK_SOURCE")
           elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
@@ -811,6 +862,8 @@ jobs:
           fi
           ARGS=(--devices "$DEVICES" --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-appium-rtl")
           APK_SOURCE="${{ github.event.inputs.apk_source || 'GitHub Releases' }}"
+          # commcare_android_run (fetch step above) wins over apk_source/release_tag when set.
+          APK_SOURCE="${APK_OVERRIDE:-$APK_SOURCE}"
           if [ "$APK_SOURCE" != "GitHub Releases" ]; then
             ARGS+=(--apk "$APK_SOURCE")
           elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
@@ -917,6 +970,8 @@ jobs:
           fi
           ARGS=(--devices "$DEVICES" --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-appium-casesearch-checkbox")
           APK_SOURCE="${{ github.event.inputs.apk_source || 'GitHub Releases' }}"
+          # commcare_android_run (fetch step above) wins over apk_source/release_tag when set.
+          APK_SOURCE="${APK_OVERRIDE:-$APK_SOURCE}"
           if [ "$APK_SOURCE" != "GitHub Releases" ]; then
             ARGS+=(--apk "$APK_SOURCE")
           elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
@@ -1001,6 +1056,8 @@ jobs:
           fi
           ARGS=(--devices "$DEVICES" --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-appium-case-search-claim")
           APK_SOURCE="${{ github.event.inputs.apk_source || 'GitHub Releases' }}"
+          # commcare_android_run (fetch step above) wins over apk_source/release_tag when set.
+          APK_SOURCE="${APK_OVERRIDE:-$APK_SOURCE}"
           if [ "$APK_SOURCE" != "GitHub Releases" ]; then
             ARGS+=(--apk "$APK_SOURCE")
           elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
@@ -1077,6 +1134,8 @@ jobs:
           fi
           ARGS=(--devices "$DEVICES" --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-appium-case-search-claim-2")
           APK_SOURCE="${{ github.event.inputs.apk_source || 'GitHub Releases' }}"
+          # commcare_android_run (fetch step above) wins over apk_source/release_tag when set.
+          APK_SOURCE="${APK_OVERRIDE:-$APK_SOURCE}"
           if [ "$APK_SOURCE" != "GitHub Releases" ]; then
             ARGS+=(--apk "$APK_SOURCE")
           elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
@@ -1119,6 +1178,8 @@ jobs:
           fi
           ARGS=(--devices "$DEVICES" --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-appium-multimedia")
           APK_SOURCE="${{ github.event.inputs.apk_source || 'GitHub Releases' }}"
+          # commcare_android_run (fetch step above) wins over apk_source/release_tag when set.
+          APK_SOURCE="${APK_OVERRIDE:-$APK_SOURCE}"
           if [ "$APK_SOURCE" != "GitHub Releases" ]; then
             ARGS+=(--apk "$APK_SOURCE")
           elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
@@ -1178,6 +1239,8 @@ jobs:
           fi
           ARGS=(--devices "$DEVICES" --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-appium-mm1-mm2-mm3")
           APK_SOURCE="${{ github.event.inputs.apk_source || 'GitHub Releases' }}"
+          # commcare_android_run (fetch step above) wins over apk_source/release_tag when set.
+          APK_SOURCE="${APK_OVERRIDE:-$APK_SOURCE}"
           if [ "$APK_SOURCE" != "GitHub Releases" ]; then
             ARGS+=(--apk "$APK_SOURCE")
           elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
@@ -1392,4 +1455,8 @@ jobs:
           # matches every other RUN_*/env var here in reading the raw
           # workflow input directly rather than a resolved value.
           ANDROID_VERSION: ${{ github.event.inputs.android_version || '16.0' }}
+          # So the report can say "CANCELLED" / "INCOMPLETE" instead of posting a green
+          # card for a run whose groups were stopped or never reported.
+          MATRIX_RESULT: ${{ needs.maestro-tests.result }}
+          MATRIX_JSON: ${{ needs.prepare.outputs.matrix }}
         run: python scripts/slack_notify.py

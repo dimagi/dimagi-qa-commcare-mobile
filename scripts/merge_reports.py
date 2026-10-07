@@ -46,10 +46,14 @@ def main():
         # artifact's apk_version.txt (written by run_suite.py) speaks for the
         # whole run - carried forward so slack_notify.py can read it from the
         # merged reports/ dir, same as history.json.
-        if apk_version is None:
-            version_path = d / "apk_version.txt"
-            if version_path.exists():
-                apk_version = version_path.read_text(encoding="utf-8").strip()
+        # An HQ-API-only check (update-content-check etc.) has no device or APK and writes an
+        # "N/A (HQ API only, no device)" placeholder - never let that speak for the run when a
+        # real test group wrote an actual version/description.
+        version_path = d / "apk_version.txt"
+        if version_path.exists():
+            candidate = version_path.read_text(encoding="utf-8").strip()
+            if candidate and (apk_version is None or (apk_version.startswith("N/A") and not candidate.startswith("N/A"))):
+                apk_version = candidate
 
     if not all_results:
         raise SystemExit("No results found in any artifact directory - nothing to merge.")

@@ -25,6 +25,7 @@ import yaml
 from dotenv import load_dotenv
 
 sys.path.insert(0, os.path.dirname(__file__))
+import apk_info
 import download_apk
 import hq_client as hq_client_module
 import report_generator
@@ -755,7 +756,7 @@ def main():
         # the notification still shows SOMETHING recognizable.
         REPORTS_DIR.mkdir(exist_ok=True)
         (REPORTS_DIR / "apk_version.txt").write_text(
-            f"{pathlib.Path(apk_path).name} (custom)", encoding="utf-8",
+            apk_info.describe_custom_apk(apk_path), encoding="utf-8",
         )
 
     try:
