@@ -1361,7 +1361,10 @@ jobs:
     # whole matrix (can't depend on just one matrix leg), removing the race
     # - a small latency cost for a fast, cheap check.
     needs: maestro-tests
-    if: ${{ !cancelled() && (github.event.inputs.tag == '' || github.event.inputs.tag == 'All' || github.event.inputs.tag == 'update') }}
+    # Keep `always() &&` HERE (not `!cancelled() &&`): with the latter this job was never created in run
+    # 37625535703 (group-b had failed), so update/check_for_new_build was missing and the run reported 153
+    # results instead of 154. A cancelled run posts nothing to Slack anyway (see slack_notify.py).
+    if: always() && (github.event.inputs.tag == '' || github.event.inputs.tag == 'All' || github.event.inputs.tag == 'update')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
