@@ -27,9 +27,20 @@ env:
     env:
       USERNAME: ${CC_TEST_USERNAME}
       PASSWORD: ${CC_TEST_PASSWORD}
-- extendedWaitUntil:
-    notVisible: "Communicating with Server"
-    timeout: 120000
+# The post-login sync dialog can open on top of the PIN dialog AFTER a single
+# "sync gone" check has already passed (confirmed live, CI run 37325239305:
+# screenshot shows "Communicating with Server" covering "Create a PIN?"), so
+# keep waiting the sync out until the PIN dialog itself is readable.
+- repeat:
+    times: 6
+    while:
+      notVisible: "Create a PIN?"
+    commands:
+      - extendedWaitUntil:
+          notVisible: "Communicating with Server"
+          timeout: 120000
+      - waitForAnimationToEnd:
+          timeout: 5000
 - extendedWaitUntil:
     visible: "Create a PIN?"
     timeout: 20000

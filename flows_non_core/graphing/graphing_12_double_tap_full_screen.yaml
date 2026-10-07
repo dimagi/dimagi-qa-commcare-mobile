@@ -38,7 +38,17 @@ tags:
 - extendedWaitUntil:
     visible: "BOTTOM"
     timeout: 15000
-- doubleTapOn: "BOTTOM"
+# A double tap inside the WebView graph doesn't always register on the first
+# try (confirmed live, CI run 37325239305: still on the detail screen after
+# one double tap), so retry until the full-screen view (no detail tabs) opens.
+- repeat:
+    times: 3
+    while:
+      visible: "Graph 1"
+    commands:
+      - doubleTapOn: "BOTTOM"
+      - waitForAnimationToEnd:
+          timeout: 4000
 - extendedWaitUntil:
     notVisible: "Graph 1"
     timeout: 15000
@@ -55,7 +65,17 @@ tags:
       text: "Pan & Zoom"
     direction: DOWN
     timeout: 15000
-- doubleTapOn: "Pan & Zoom"
+# A double tap inside the WebView graph doesn't always register on the first
+# try (confirmed live, CI run 37325239305: still on the detail screen after
+# one double tap), so retry until the full-screen view (no detail tabs) opens.
+- repeat:
+    times: 3
+    while:
+      visible: "Graph 1"
+    commands:
+      - doubleTapOn: "Pan & Zoom"
+      - waitForAnimationToEnd:
+          timeout: 4000
 - extendedWaitUntil:
     notVisible: "Graph 1"
     timeout: 15000

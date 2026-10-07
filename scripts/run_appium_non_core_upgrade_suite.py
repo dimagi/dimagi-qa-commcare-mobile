@@ -19,6 +19,9 @@ Scenarios (Master Mobile Plan (2026)):
       login on the upgraded client (the sheet's two timing rows, after an
       upgrade rather than on a fresh install).
 
+A dev/PR APK (versionCode 1) is repackaged with the old one so the upgrade can
+install, exactly as scripts/run_appium_suite.py does (apk_info.repackage_for_upgrade).
+
 Results merge into reports/latest_results.json the same way
 scripts/run_appium_suite.py does.
 
@@ -36,6 +39,7 @@ import time
 from dotenv import load_dotenv
 
 sys.path.insert(0, os.path.dirname(__file__))
+import apk_info
 import appium_helpers as h
 import appium_scenarios as s
 import download_apk
@@ -43,7 +47,8 @@ import hq_client as hq_client_module
 import report_generator
 from app_registry import APP_REGISTRY
 from appium_browserstack_client import AppiumBrowserStackClient
-from run_appium_suite import _save_failure_evidence, _set_browserstack_session_status, _split_device
+from run_appium_suite import (_save_failure_evidence, _set_browserstack_session_status, _split_device,
+                              swap_not_possible_reason)
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 OLD_APK_PATH = REPO_ROOT / "resources" / "commcare_2.45_release.apk"
@@ -134,10 +139,12 @@ def run_performance_upgrade(driver, bs, new_app_url, username, password, app_cod
     return s._run_steps(steps)
 
 
-def _run(bs, name, old_app_url, new_app_url, device, os_version, build_name, fn):
+def _run(bs, name, old_app_url, new_app_url, device, os_version, build_name, fn, skip_reason=None):
     workflow, stem = FLOW_STEM[name]
     driver, result, start = None, None, time.monotonic()
     base = dict(name=f"{workflow}/{stem}", workflow=workflow, device=f"{device}-{os_version}")
+    if skip_reason:
+        return report_generator.TestResult(status="skipped", error=skip_reason, failed_step=skip_reason, **base)
     try:
         driver = bs.start_session(old_app_url, device, os_version, build_name=build_name,
                                   session_name=stem, mid_session_apps=[new_app_url])
@@ -187,9 +194,24 @@ def main():
         apk_path = f"apks/{asset['name']}"
         download_apk.download(asset["browser_download_url"], apk_path, expected_size=asset["size"])
 
+    # Same as scripts/run_appium_suite.py: a dev/PR build (versionCode 1, e.g. the 2.65
+    # qaAutomation APK) can't install over the 2.45 binary, so repackage the pair (both re-signed
+    # with one throwaway key, new versionCode = old + 1 - see apk_info.repackage_for_upgrade);
+    # if that isn't possible, report the scenarios as skipped with the reason.
+    old_apk_to_use, new_apk_to_use = str(OLD_APK_PATH), apk_path
+    skip_reason = swap_not_possible_reason(OLD_APK_PATH, apk_path)
+    if skip_reason:
+        try:
+            old_apk_to_use, new_apk_to_use, how = apk_info.repackage_for_upgrade(
+                OLD_APK_PATH, apk_path, REPO_ROOT / "reports" / "repackaged_apks_non_core")
+            print(f"Repackaged the APK pair for the in-place upgrade: {how}")
+            skip_reason = None
+        except Exception as exc:  # noqa: BLE001 - tools missing / signing failed: skip, don't fail
+            skip_reason += f" (Repackaging the pair for the test was not possible: {exc})"
+
     bs = AppiumBrowserStackClient()
-    old_app_url = bs.upload_app(str(OLD_APK_PATH))["app_url"]
-    new_app_url = bs.upload_app(apk_path)["app_url"]
+    old_app_url = bs.upload_app(str(old_apk_to_use))["app_url"]
+    new_app_url = bs.upload_app(str(new_apk_to_use))["app_url"]
     password = os.environ["CC_TEST_PASSWORD"]
 
     perf_timings = {}
@@ -203,7 +225,8 @@ def main():
     results = []
     for name in args.scenarios or sorted(FLOW_STEM):
         print(f"Running {name} (Appium, CommCare 2.45 -> release) ...")
-        r = _run(bs, name, old_app_url, new_app_url, device, os_version, args.build_name, fns[name])
+        r = _run(bs, name, old_app_url, new_app_url, device, os_version, args.build_name, fns[name],
+                 skip_reason=skip_reason)
         print(f"  {name}: {r.status}" + (f" - {r.failed_step}" if r.status == "failed" else f" {r.error}"))
         results.append(r)
 

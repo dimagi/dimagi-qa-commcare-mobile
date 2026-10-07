@@ -905,7 +905,12 @@ def _dispatch_and_report(args, apk_path, apk_commcare_version, prior_build_by_ap
 
         failed = [r for r in test_results if r.status == "failed"]
         if args.retry_failed and failed:
-            retry_files = report_generator.match_flow_files(failed, flow_files, FLOWS_DIR)
+            # Only this run's own flows: common/ subflows can come from the core tree even
+            # when FLOWS_DIR is flows_non_core (see CORE_COMMON_DIR), so relative_to(FLOWS_DIR)
+            # would raise for them - confirmed live, non-core CI run 37325239305 crashed here
+            # and lost group-a's whole report. run_all_builds re-adds common/ to every build.
+            retry_files = report_generator.match_flow_files(
+                failed, [f for f in flow_files if f.parent.name != "common"], FLOWS_DIR)
             if not retry_files:
                 print("No flow files matched the failed test names - skipping retry "
                       "(see report_generator.match_flow_files' name-matching caveat).")
