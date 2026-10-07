@@ -54,6 +54,7 @@ on:
           - "Internal latest APK"
           - "resources/app-commcare-release-Android16.apk"
           - "resources/app-commcare-qaAutomation.apk"
+          - "resources/app-cccStaging-qaAutomation.apk"
       android_version:
         description: "Android version to test on (maps to the Samsung Galaxy flagship BrowserStack has at that version). Ignored if 'devices' is set."
         required: false

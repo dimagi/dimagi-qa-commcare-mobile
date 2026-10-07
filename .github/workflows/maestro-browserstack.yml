@@ -56,6 +56,7 @@ on:
           - "Internal latest APK"
           - "resources/app-commcare-release-Android16.apk"
           - "resources/app-commcare-qaAutomation.apk"
+          - "resources/app-cccStaging-qaAutomation.apk"
           - "resources/commcare_2.45_release.apk"
           - "resources/Mobile API Testing App-release.apk"
       android_version:
