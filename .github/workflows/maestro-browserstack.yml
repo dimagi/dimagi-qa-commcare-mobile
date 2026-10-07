@@ -527,7 +527,7 @@ jobs:
           if [ -z "$DEVICES" ]; then
             DEVICES="${ANDROID_DEVICE_MAP[$ANDROID_VERSION]}-$ANDROID_VERSION"
           fi
-          ARGS=(--devices "$DEVICES" --flow flows/updates_2_49/prompted_update_scenario_01_ill_update_later.yaml --hq-setup hq_setup/updates_2_49/setup_02_commcare_version_plus_one.json --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-apk-update-prompt-1-optional")
+          ARGS=(--devices "$DEVICES" --flow flows/updates_2_49/prompted_update_scenario_01_ill_update_later.yaml --retry-failed --hq-setup hq_setup/updates_2_49/setup_02_commcare_version_plus_one.json --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-apk-update-prompt-1-optional")
           APK_SOURCE="${{ github.event.inputs.apk_source || 'GitHub Releases' }}"
           # commcare_android_run (fetch step above) wins over apk_source/release_tag when set.
           APK_SOURCE="${APK_OVERRIDE:-$APK_SOURCE}"
@@ -566,7 +566,7 @@ jobs:
           if [ -z "$DEVICES" ]; then
             DEVICES="${ANDROID_DEVICE_MAP[$ANDROID_VERSION]}-$ANDROID_VERSION"
           fi
-          ARGS=(--devices "$DEVICES" --flow flows/updates_2_49/prompted_update_scenario_02_forced_commcare_update.yaml --hq-setup hq_setup/updates_2_49/prompted_update_scenario_02_forced.json --hq-teardown hq_setup/updates_2_49/prompted_update_scenario_teardown.json --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-apk-update-prompt-2-forced")
+          ARGS=(--devices "$DEVICES" --flow flows/updates_2_49/prompted_update_scenario_02_forced_commcare_update.yaml --retry-failed --hq-setup hq_setup/updates_2_49/prompted_update_scenario_02_forced.json --hq-teardown hq_setup/updates_2_49/prompted_update_scenario_teardown.json --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-apk-update-prompt-2-forced")
           APK_SOURCE="${{ github.event.inputs.apk_source || 'GitHub Releases' }}"
           # commcare_android_run (fetch step above) wins over apk_source/release_tag when set.
           APK_SOURCE="${APK_OVERRIDE:-$APK_SOURCE}"
@@ -619,7 +619,7 @@ jobs:
           if [ -z "$DEVICES" ]; then
             DEVICES="${ANDROID_DEVICE_MAP[$ANDROID_VERSION]}-$ANDROID_VERSION"
           fi
-          python scripts/run_suite.py --devices "$DEVICES" --tag requires_old_client_apk \
+          python scripts/run_suite.py --devices "$DEVICES" --tag requires_old_client_apk --retry-failed \
             --apk resources/commcare_2.45_release.apk \
             --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-old-client-recovery-measures"
 
@@ -761,7 +761,9 @@ jobs:
       # Appium step in this job, gated on group-b (Form Submissions' own
       # group) or a scoped form_submissions tag dispatch.
       - name: Run Appium suite on BrowserStack (Form Submissions - active/inactive/deactivated user login)
-        if: ${{ !cancelled() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'form_submissions'))) }}
+        # Moved from group-b (2026-10-07): group-b ran ~20 min longer than a/c because it carried the
+        # most Appium suites (50 min vs ~20); this ~6 min step now runs in group-c to even the groups out.
+        if: ${{ !cancelled() && (matrix.name == 'group-c' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'form_submissions'))) }}
         env:
           BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
           BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
@@ -794,7 +796,7 @@ jobs:
           elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
             ARGS+=(--release-tag "${{ github.event.inputs.release_tag }}")
           fi
-          python scripts/run_appium_user_activation_suite.py "${ARGS[@]}"
+          python scripts/run_with_rerun.py scripts/run_appium_user_activation_suite.py "${ARGS[@]}"
 
       # Master Mobile Plan (2026) > Right to Left Text > "Home Screen 8"
       # (row 23) + "Case list 4" (row 36). Both were Not automatable because
@@ -838,7 +840,9 @@ jobs:
       # this job, gated on group-b (right_to_left_text's own group) or a
       # scoped tag dispatch.
       - name: Run Appium suite on BrowserStack (Right to Left Text - Home Screen 1, Home Screen 8, Case list 4, Question Types 1/3)
-        if: ${{ !cancelled() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'right_to_left_text'))) }}
+        # Moved from group-b (2026-10-07): group-b ran ~20 min longer than a/c because it carried the
+        # most Appium suites (50 min vs ~20); this ~8 min step now runs in group-a to even the groups out.
+        if: ${{ !cancelled() && (matrix.name == 'group-a' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'right_to_left_text'))) }}
         env:
           BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
           BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
@@ -871,7 +875,7 @@ jobs:
           elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
             ARGS+=(--release-tag "${{ github.event.inputs.release_tag }}")
           fi
-          python scripts/run_appium_rtl_suite.py "${ARGS[@]}"
+          python scripts/run_with_rerun.py scripts/run_appium_rtl_suite.py "${ARGS[@]}"
 
       # Master Mobile Plan (2026) > Form Submissions > "Graceful Session
       # Pause" (row 57) - the row's own PRECONDITION (custom property
@@ -979,7 +983,7 @@ jobs:
           elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
             ARGS+=(--release-tag "${{ github.event.inputs.release_tag }}")
           fi
-          python scripts/run_casesearch_checkbox_suite.py "${ARGS[@]}"
+          python scripts/run_with_rerun.py scripts/run_casesearch_checkbox_suite.py "${ARGS[@]}"
 
       # Master Mobile Plan (2026) > Case Filters > "Case Search & Claim 1"
       # (row 19) - previously Not automatable per coverage_matrix.csv's own
@@ -1065,7 +1069,7 @@ jobs:
           elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
             ARGS+=(--release-tag "${{ github.event.inputs.release_tag }}")
           fi
-          python scripts/run_case_search_claim_suite.py "${ARGS[@]}"
+          python scripts/run_with_rerun.py scripts/run_case_search_claim_suite.py "${ARGS[@]}"
 
       # Master Mobile Plan (2026) > Case Filters > "Case Search & Claim 2"
       # (row 20) - "Date Widget - Single Date". Same app as row 19 above
@@ -1143,7 +1147,7 @@ jobs:
           elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
             ARGS+=(--release-tag "${{ github.event.inputs.release_tag }}")
           fi
-          python scripts/run_case_search_claim_2_suite.py "${ARGS[@]}"
+          python scripts/run_with_rerun.py scripts/run_case_search_claim_2_suite.py "${ARGS[@]}"
 
       # Runs Multimedia's "External File in Forms" - the one Multimedia row
       # blocked by the same class of gap the Recovery Measures CCZ-picker
@@ -1248,7 +1252,7 @@ jobs:
           elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
             ARGS+=(--release-tag "${{ github.event.inputs.release_tag }}")
           fi
-          python scripts/run_appium_mm2_suite.py "${ARGS[@]}"
+          python scripts/run_with_rerun.py scripts/run_appium_mm2_suite.py "${ARGS[@]}"
 
       # Master Mobile Plan (2026) > Multimedia > "Photo Verification" (row
       # 47) + "Image Resize 27/28" (rows 41-42) - HQ-only Submit-History
