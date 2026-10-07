@@ -130,12 +130,47 @@ def _set_browserstack_session_status(driver, result):
         pass
 
 
+def swap_not_possible_reason(old_apk_path, new_apk_path):
+    """Why the mid-session binary swap CAN'T work for this pair of APKs, or None if it can.
+
+    These scenarios install the NEW apk over the running OLD 2.45 one and expect the login screen
+    to come back on the new binary. Android only upgrades in place when the new versionCode is
+    HIGHER than the installed one; a dev/PR build from commcare-android (for example the 2.65
+    qaAutomation and PR-CI APKs) carries versionCode 1, so the install is rejected, the OLD app
+    simply keeps running, and the scenario times out waiting for a login screen that never
+    appears (seen live 2026-10-07: the failure screenshot still showed the old app's
+    "Update to version 71 & log out" screen). That is the build under test, not an app defect,
+    so it is reported as skipped with the reason instead of failed. Release builds always have a
+    higher versionCode, so they are unaffected. An unreadable manifest returns None (run as before)."""
+    try:
+        old_vc = apk_info.read_manifest_attrs(old_apk_path)["versionCode"]
+        new_vc = apk_info.read_manifest_attrs(new_apk_path)["versionCode"]
+    except Exception:
+        return None
+    if old_vc is None or new_vc is None or new_vc > old_vc:
+        return None
+    return (f"Skipped: the APK under test has versionCode {new_vc}, not higher than the old binary's "
+            f"{old_vc} ({pathlib.Path(old_apk_path).name}), so Android cannot upgrade it in place and "
+            f"the mid-session binary swap cannot run. Dev/PR builds use versionCode 1; test this "
+            f"scenario with a release APK.")
+
+
 def _run_one_scenario(bs, name, old_app_url, new_app_url, device, os_version, build_name, env, fn,
-                       network_profile=None):
+                       network_profile=None, skip_reason=None):
     driver = None
     result = None
     start = time.monotonic()
     stem = FLOW_STEM[name]
+    if skip_reason:
+        return report_generator.TestResult(
+            name=f"updates_partial_failed/{stem}",
+            workflow="updates_partial_failed",
+            status="skipped",
+            duration_ms=0,
+            device=f"{device}-{os_version}",
+            error=skip_reason,
+            failed_step=skip_reason,
+        )
     try:
         driver = bs.start_session(
             old_app_url, device, os_version,
@@ -344,6 +379,10 @@ def main():
     # practical, CI-reasonable completion time (unlike 3g-umts-good).
     network_profiles = {"scenario_2": "3.5g-hspa-plus-good"}
 
+    skip_reason = swap_not_possible_reason(OLD_APK_PATH, apk_path)
+    if skip_reason:
+        print(skip_reason)
+
     results = []
     for name in scenarios_to_run:
         print(f"Running {name} (Appium, mid-session binary swap) ...")
@@ -351,8 +390,9 @@ def main():
             bs, name, old_app_url, new_app_url, device, os_version, args.build_name,
             os.environ, scenario_fns[name],
             network_profile=network_profiles.get(name),
+            skip_reason=skip_reason,
         )
-        print(f"  {name}: {result.status}" + (f" - {result.failed_step}" if result.status == "failed" else ""))
+        print(f"  {name}: {result.status}" + (f" - {result.failed_step}" if result.status in ("failed", "skipped") else ""))
         results.append(result)
 
     # RETRY-FAILED (2026-08-28), per direct user instruction: the Maestro
