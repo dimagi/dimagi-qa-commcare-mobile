@@ -309,11 +309,26 @@ def main():
     linked_app_code = linked_app_hq_client.get_app_install_code(
         linked_app_id, saved_app_id=linked_app_v2_build_id, release_first=False)
 
+    # A dev/PR build (versionCode 1) can't be installed over the 2.45 binary, so the mid-session
+    # swap would be rejected by Android. Repackage the PAIR so the upgrade is possible: re-sign
+    # both with one throwaway key and give the new one versionCode = old + 1 (app code untouched,
+    # see apk_info.repackage_for_upgrade). Only if that can't be done are the scenarios skipped.
+    old_apk_to_use, new_apk_to_use = str(OLD_APK_PATH), apk_path
+    skip_reason = swap_not_possible_reason(OLD_APK_PATH, apk_path)
+    if skip_reason:
+        try:
+            old_apk_to_use, new_apk_to_use, how = apk_info.repackage_for_upgrade(
+                OLD_APK_PATH, apk_path, REPO_ROOT / "reports" / "repackaged_apks")
+            print(f"Repackaged the APK pair for the in-place upgrade: {how}")
+            skip_reason = None
+        except Exception as exc:  # noqa: BLE001 - tools missing / signing failed: fall back to skipping
+            skip_reason += f" (Repackaging the pair for the test was not possible: {exc})"
+
     bs = AppiumBrowserStackClient()
-    print(f"Uploading old APK ({OLD_APK_PATH.name}) to BrowserStack ...")
-    old_app_url = bs.upload_app(str(OLD_APK_PATH))["app_url"]
-    print(f"Uploading new APK ({apk_path}) to BrowserStack ...")
-    new_app_url = bs.upload_app(apk_path)["app_url"]
+    print(f"Uploading old APK ({pathlib.Path(old_apk_to_use).name}) to BrowserStack ...")
+    old_app_url = bs.upload_app(old_apk_to_use)["app_url"]
+    print(f"Uploading new APK ({new_apk_to_use}) to BrowserStack ...")
+    new_app_url = bs.upload_app(new_apk_to_use)["app_url"]
 
     cc_username = os.environ["CC_TEST_USERNAME"]
     cc_password = os.environ["CC_TEST_PASSWORD"]
@@ -379,7 +394,6 @@ def main():
     # practical, CI-reasonable completion time (unlike 3g-umts-good).
     network_profiles = {"scenario_2": "3.5g-hspa-plus-good"}
 
-    skip_reason = swap_not_possible_reason(OLD_APK_PATH, apk_path)
     if skip_reason:
         print(skip_reason)
 
