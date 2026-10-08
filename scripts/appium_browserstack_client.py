@@ -39,6 +39,7 @@ from urllib3.exceptions import MaxRetryError as URLLibMaxRetryError
 
 sys.path.insert(0, os.path.dirname(__file__))
 from browserstack_client import _request_with_retry
+import cancel_guard
 
 UPLOAD_API_BASE = "https://api-cloud.browserstack.com/app-automate"
 APPIUM_HUB_URL = "https://hub.browserstack.com/wd/hub"
@@ -73,6 +74,7 @@ class AppiumBrowserStackClient:
         self.username = username or os.environ["BROWSERSTACK_USERNAME"]
         self.access_key = access_key or os.environ["BROWSERSTACK_ACCESS_KEY"]
         self.auth = (self.username, self.access_key)
+        cancel_guard.install()  # quit our Appium sessions if this job is cancelled
 
     def upload_app(self, apk_path, custom_id=None):
         # UPDATE (2026-08-25), confirmed live (twice in one session): a
@@ -245,6 +247,7 @@ class AppiumBrowserStackClient:
         # start instead - reasserts portrait in case the capability alone
         # wasn't enough.
         driver.orientation = "PORTRAIT"
+        cancel_guard.register_driver(driver)
         return driver
 
     @staticmethod

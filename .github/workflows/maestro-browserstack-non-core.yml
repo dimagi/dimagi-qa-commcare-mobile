@@ -20,13 +20,16 @@ on:
           - "All"
           - advanced_settings
           - case_list_optimization
+          - database_change
           - developer_options
           - graphing
           - mapbox
           - performance_tests
+          - personal_id
           - printing
           - sd_card_dump
           - text_to_speech
+          - third_party_scanner
           - wifi_direct
       release_tag:
         description: "commcare-android GitHub release tag to test (e.g. commcare_2.64.0). Leave blank for latest. Ignored unless apk_source is 'GitHub Releases'."
@@ -53,6 +56,8 @@ on:
           - "GitHub Releases"
           - "Internal latest APK"
           - "resources/app-commcare-release-Android16.apk"
+          - "resources/app-commcare-qaAutomation.apk"
+          - "resources/app-cccStaging-qaAutomation.apk"
       android_version:
         description: "Android version to test on (maps to the Samsung Galaxy flagship BrowserStack has at that version). Ignored if 'devices' is set."
         required: false
@@ -71,7 +76,7 @@ on:
         required: false
         default: ""
   # Weekly, Saturdays 01:00 UTC, against the latest commcare-android release.
-  # A full non-core run takes ~70 min on its 2 parallel sessions (see the
+  # A full non-core run takes ~85-90 min on its 2 parallel sessions (see the
   # prepare job), so it's done well before the core suite's 03:00 UTC run.
   schedule:
     - cron: "0 1 * * 6"
@@ -90,20 +95,24 @@ jobs:
           if [ -z "$TAG" ] || [ "$TAG" = "All" ]; then
             # 2 parallel BrowserStack sessions (the plan allows 5; the core
             # suite's nightly run uses 3, so both fit even if they overlap).
-            # Split by each tag's real measured test time from the first
-            # live runs (2026-10-02, Galaxy S26 / Android 16), largest
-            # first into the lighter group:
-            #   group-a: advanced_settings 36.6 + text_to_speech 9.8 +
-            #            graphing ~8.5 + printing 6.1           = ~61 min
+            # Split by each tag's real measured test time from the live runs
+            # (2026-10-02, Galaxy S26 / Android 16; the 2nd-round flows -
+            # Graphing 7-22, CP1, Database Change, Personal ID, Third Party
+            # Scanner, Print from Detail 3 - estimated at ~4 min each until
+            # a CI run measures them):
+            #   group-a: advanced_settings ~41 + text_to_speech 9.8 +
+            #            graphing ~26                         = ~77 min
             #   group-b: case_list_optimization 31.9 + developer_options
-            #            10.7 + mapbox 7.0 + performance_tests 3.3 +
-            #            wifi_direct 3.1 + sd_card_dump 2.8      = ~59 min
-            # (~2h10m end to end on one session; ~70 min on two, counting
-            # BrowserStack's per-build upload/queue overhead.) Rebalance from
-            # the run report's durations if tags grow.
+            #            10.7 + mapbox 7.0 + printing ~9 + performance_tests
+            #            3.3 + wifi_direct 3.1 + sd_card_dump 2.8 +
+            #            database_change ~4 + personal_id ~2 +
+            #            third_party_scanner ~4               = ~78 min
+            # (~85-90 min wall clock on two sessions, counting BrowserStack's
+            # per-build upload/queue overhead.) Rebalance from the run
+            # report's durations if tags grow.
             MATRIX='{"include":[
-              {"name":"group-a","tags":"advanced_settings text_to_speech graphing printing"},
-              {"name":"group-b","tags":"case_list_optimization developer_options mapbox performance_tests wifi_direct sd_card_dump"}
+              {"name":"group-a","tags":"advanced_settings text_to_speech graphing"},
+              {"name":"group-b","tags":"case_list_optimization developer_options mapbox printing performance_tests wifi_direct sd_card_dump database_change personal_id third_party_scanner"}
             ]}'
           else
             MATRIX="{\"include\":[{\"name\":\"single\",\"tags\":\"$TAG\"}]}"
@@ -209,6 +218,16 @@ jobs:
           if [ -f reports/latest_results.json ]; then
             { echo "## Measured load times"; echo; python scripts/extract_flow_timings.py; } >> "$GITHUB_STEP_SUMMARY"
           fi
+
+      # Safety net for a CANCELLED job: scripts/cancel_guard.py normally stops this job's
+      # BrowserStack builds from inside the process on SIGINT/SIGTERM; this stops any it
+      # recorded but could not (e.g. the process was SIGKILLed first). Only this job's builds.
+      - name: Stop BrowserStack builds if the job was cancelled
+        if: cancelled()
+        env:
+          BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
+          BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
+        run: python scripts/stop_run_builds.py
 
       - name: Upload HTML report
         if: always()

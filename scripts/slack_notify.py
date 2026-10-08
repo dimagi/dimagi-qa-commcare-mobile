@@ -160,27 +160,6 @@ def missing_groups():
     return missing, len(expected)
 
 
-def build_cancelled_message(run_url):
-    workflow = os.environ.get("GITHUB_WORKFLOW", "Maestro BrowserStack QA")
-    event = os.environ.get("GITHUB_EVENT_NAME", "manual")
-    event_label = _EVENT_LABELS.get(event, event.replace("_", " ").upper())
-    tag = (os.environ.get("RUN_TAG") or "ALL").upper()
-    line = (f"Triggered by *{os.environ.get('GITHUB_ACTOR', '?')}* · on branch "
-            f"*{os.environ.get('GITHUB_REF_NAME', '?')}*")
-    if os.environ.get("RUN_DURATION"):
-        line += f" · stopped after *{os.environ['RUN_DURATION']}*"
-    lines = [
-        f":no_entry: *[{tag}] {workflow} Run #{os.environ.get('GITHUB_RUN_NUMBER', '?')} was CANCELLED "
-        f"({event_label} event)*",
-        line,
-        "_No pass rate reported: the test groups were stopped before they finished, and any partial "
-        "numbers would not represent the suite._",
-    ]
-    if run_url:
-        lines += ["", f"<{run_url}|:link: View run>"]
-    return "\n".join(lines)
-
-
 def build_message(counts, failed_results, report_artifact_url, run_url, missing=(), expected=0):
     workflow = os.environ.get("GITHUB_WORKFLOW", "Maestro BrowserStack QA")
     event = os.environ.get("GITHUB_EVENT_NAME", "manual")
@@ -267,10 +246,9 @@ def main():
 
     if os.environ.get("MATRIX_RESULT") == "cancelled":
         # The test groups were stopped (e.g. the run was cancelled to free BrowserStack slots).
-        # Whatever little was merged (often just the HQ-only update-content-check) is not a result.
-        _slack_post("chat.postMessage", token,
-                    json={"channel": channel_id, "text": build_cancelled_message(_gh_run_url())})
-        print("Run was cancelled - posted a cancelled notice instead of results.")
+        # Whatever little was merged (often just the HQ-only update-content-check) is not a result,
+        # and a "cancelled" card is just noise - post nothing.
+        print("Run was cancelled/aborted - not posting anything to Slack.")
         return
 
     results_path = REPORTS_DIR / "latest_results.json"

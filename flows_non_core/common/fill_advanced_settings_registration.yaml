@@ -1,0 +1,62 @@
+appId: org.commcare.dalvik
+---
+# Non-core helper: fill and submit the Advanced Settings app's already-open
+# Case List > Registration Form. Param: CASE_NAME.
+# Questions (from the app's released CCZ): name (text, required), city
+# (select1 from the "City" lookup table, required), state (optional).
+# The city choices come from a lookup table we can't read without an HQ API
+# key, so the first choice under the "City" label is picked by position.
+# nav_btn_next / nav_btn_finish ids: same as flows/common/submit_only_form.yaml.
+#
+# Confirmed live (2026-10-02, custom_properties_08 on BrowserStack): a bare
+# inputText after opening this form typed nothing - the Name field (an
+# id-less EditText, StringWidget.getAnswerLayout()) wasn't focused - and the
+# following hideKeyboard then acted as a back press and opened "Exit Form?".
+# So the field is tapped first (it's the first element under its label),
+# and the typed value is checked the same self-verifying way
+# flows/common/login.yaml does, with no hideKeyboard.
+- extendedWaitUntil:
+    visible:
+      text: "Name.*"
+    timeout: 15000
+- repeat:
+    times: 3
+    while:
+      notVisible:
+        text: '^\Q${CASE_NAME}\E$'
+    commands:
+      - tapOn:
+          below:
+            text: "Name.*"
+          index: 0
+      - tapOn:
+          text: "Skip"
+          optional: true
+      - eraseText
+      - inputText: "${CASE_NAME}"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_next"
+- extendedWaitUntil:
+    visible:
+      text: "City.*"
+    timeout: 10000
+- tapOn:
+    text: ".+"
+    below:
+      text: "City.*"
+    index: 0
+- repeat:
+    times: 5
+    while:
+      notVisible:
+        id: "org.commcare.dalvik:id/nav_btn_finish"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/nav_btn_next"
+          optional: true
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"
+    optional: true
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000

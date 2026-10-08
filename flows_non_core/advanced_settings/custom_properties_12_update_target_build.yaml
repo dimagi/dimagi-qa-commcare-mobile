@@ -1,0 +1,15 @@
+appId: org.commcare.dalvik
+tags:
+  - advanced_settings
+  - partial
+  - needs_dedicated_runner
+---
+# Master Mobile Plan (2026) > Advanced Settings > Custom Properties 12.
+# cc-update-target = "build": the update must go to the newest build even though it is still "In Test".
+# Run ONLY via scripts/run_targeted_updates_check.py --scenario cp12: it
+# prepares the Targeted Updates App on HQ, passes APP_CODE_TARGETED_BASE /
+# EXPECTED_UPDATE / EXPECTED_VERSION, and restores the app afterwards (see
+# ../common/targeted_update_check.yaml). Excluded from plain tag runs by the
+# needs_dedicated_runner tag.
+- runFlow:
+    file: ../common/targeted_update_check.yaml

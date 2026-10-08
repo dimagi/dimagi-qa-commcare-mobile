@@ -1,0 +1,16 @@
+appId: org.commcare.dalvik
+tags:
+  - advanced_settings
+  - automatable
+---
+# Master Mobile Plan (2026) > Advanced Settings > Custom Properties 6
+# (cc-hide-issue-report=yes). Same Advanced screen
+# flows/support_menus/menu_01_report_problem.yaml opens - there, "Report
+# Problem" is present; here it must be gone. "CommCare > Advanced" is the
+# screen title that flow already asserts.
+- runFlow:
+    file: ../common/login_advanced_settings.yaml
+- tapOn: "More options"
+- tapOn: "Advanced"
+- assertVisible: "CommCare > Advanced"
+- assertNotVisible: "Report Problem"

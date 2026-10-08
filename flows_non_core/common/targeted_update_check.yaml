@@ -1,0 +1,64 @@
+appId: org.commcare.dalvik
+---
+# Non-core helper for Master Mobile Plan (2026) > Advanced Settings >
+# Custom Properties 11-14
+# (cc-update-target = release / build / save, pre-update-sync-needed) on the
+# "Targeted Updates App". NOT runnable on its own: scripts/run_targeted_
+# updates_check.py sets the custom property on HQ, cuts and releases the
+# base build, creates the newer state each row needs (a newer released
+# build, an "In Test" build, or just an unsaved draft change), then runs
+# the matching custom_properties_1N_*.yaml flow (which runs this) with:
+#   APP_CODE_TARGETED_BASE - install code for that base build
+#   EXPECTED_UPDATE        - what Update App must offer: "Update to version
+#                            <N> & log out" (updates.staged.version) for
+#                            11-13, or "Sync to update"
+#                            (updates.staged.version.sync.required) for 14
+#   EXPECTED_VERSION       - the app version About CommCare must show after
+#                            the update (11-13); empty for 14
+# and restores the app's settings afterwards.
+# Partial: CP13's "an auto-generated version was published" (HQ release
+# history) is checked by the runner, not on the device.
+- runFlow:
+    file: install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_TARGETED_BASE}
+- runFlow:
+    file: login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- runFlow:
+    file: dismiss_pin_prompt_if_shown.yaml
+- tapOn: "More options"
+- tapOn: "Update App"
+- tapOn:
+    text: "Update to the Latest App Version"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      text: "${EXPECTED_UPDATE}"
+    timeout: 90000
+- runFlow:
+    when:
+      true: ${EXPECTED_VERSION != ""}
+    commands:
+      - tapOn:
+          text: "${EXPECTED_UPDATE}"
+      - extendedWaitUntil:
+          visible:
+            id: "org.commcare.dalvik:id/edit_username"
+          timeout: 120000
+      - runFlow:
+          file: login.yaml
+          env:
+            USERNAME: ${CC_TEST_USERNAME}
+            PASSWORD: ${CC_TEST_PASSWORD}
+      - runFlow:
+          file: dismiss_pin_prompt_if_shown.yaml
+      - tapOn: "More options"
+      - tapOn: "About CommCare"
+      - extendedWaitUntil:
+          visible:
+            text: "(?s).*[^0-9]${EXPECTED_VERSION}([^0-9].*)?"
+          timeout: 10000
+      - tapOn: "OK"

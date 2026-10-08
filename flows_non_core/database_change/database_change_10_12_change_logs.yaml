@@ -1,0 +1,59 @@
+appId: org.commcare.dalvik
+tags:
+  - database_change
+  - partial
+---
+# Master Mobile Plan (2026) > Database Change > Database Change 10, 11, 12
+# (the Data Change Logs rows), on one device and one CommCare build.
+#   11. Install the SECOND most recent Basic Tests build (pinned
+#       APP_CODE_BASIC_TESTS_PREV, see scripts/app_registry.py) -> logged.
+#   12. Update the app to the current build -> logged.
+#   10. Login screen menu > "Go To App Manager" (login.menu.app.manager) >
+#       menu > "Advanced" > "Data Change Logs" (menu.data.change.logs) lists
+#       the records. Messages come from app/src/org/commcare/logging/
+#       DataChangeLog.kt: "CommCare installed", "App installed",
+#       "App updated" (commcare-android, read-only).
+# Partial: Database Change 10's "CommCare Updated" record needs a CommCare
+# APK upgrade (old APK, then the release) - same mid-session APK swap as the
+# Database 7/9 rows, not done here; this flow sees "CommCare installed".
+# The update uses the core suite's flows/common/update_app_via_menu.yaml.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_BASIC_TESTS_PREV}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+
+# 12 - update to the current build (logs you out when it applies).
+- runFlow:
+    file: ../common/update_app_via_menu.yaml
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/edit_username"
+    timeout: 120000
+
+# 10 - read the Data Change Logs from the App Manager.
+- tapOn: "More options"
+- tapOn: "Go To App Manager"
+- tapOn: "More options"
+- tapOn: "Advanced"
+- scrollUntilVisible:
+    element:
+      text: "Data Change Logs"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Data Change Logs"
+- extendedWaitUntil:
+    visible:
+      text: "(?s).*App installed.*"
+    timeout: 15000
+- assertVisible:
+    text: "(?s).*App updated.*"
+- assertVisible:
+    text: "(?s).*CommCare installed.*"

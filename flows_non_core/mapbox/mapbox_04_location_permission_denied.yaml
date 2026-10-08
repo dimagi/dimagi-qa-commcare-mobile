@@ -1,0 +1,65 @@
+appId: org.commcare.dalvik
+tags:
+  - mapbox
+  - partial
+---
+# Master Mobile Plan (2026) > Mapbox > Mapbox 4 (GPS on, location permission
+# denied for CommCare). Maestro's launchApp grants every permission by
+# default; relaunching with permissions: {location: deny} takes it away
+# without the Android Settings app. Recording a location must then make
+# CommCare ask for it (permission.location.message, "In order to record
+# location, CommCare needs permission to use your device location.", or the
+# system dialog straight away); allowing it must let the capture finish.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_MAPBOX_TESTS}
+- launchApp:
+    appId: org.commcare.dalvik
+    stopApp: true
+    permissions:
+      location: deny
+# Confirmed live (2026-10-02, Android 16): with location denied, CommCare
+# asks for it straight away on the login screen (system "Allow CommCare to
+# access this device's location?" dialog). Refuse it here so the permission
+# is still denied when the GPS question is reached.
+- extendedWaitUntil:
+    visible:
+      text: "(?i)allow commcare to access this device.s location.*"
+    timeout: 15000
+- tapOn: "(?i)don.t allow"
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+- tapOn: "Start"
+- tapOn: "Capture Location"
+- tapOn: "Registration Form"
+- extendedWaitUntil:
+    visible: "Name"
+    timeout: 15000
+- inputText: "Maestro Map Permission"
+- repeat:
+    times: 4
+    while:
+      notVisible: "GPS Normal"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/nav_btn_next"
+- tapOn: "Record Location"
+- extendedWaitUntil:
+    visible:
+      text: "(?i).*(needs permission to use your device location|allow .*location|while using the app).*"
+    timeout: 15000
+- tapOn:
+    text: "(?i)ok|continue"
+    optional: true
+- tapOn:
+    text: "(?i).*while using the app.*"
+- extendedWaitUntil:
+    visible: "Location Found!"
+    timeout: 65000

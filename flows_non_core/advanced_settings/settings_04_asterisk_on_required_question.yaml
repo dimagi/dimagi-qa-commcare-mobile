@@ -1,0 +1,19 @@
+appId: org.commcare.dalvik
+tags:
+  - advanced_settings
+  - automatable
+---
+# Master Mobile Plan (2026) > Advanced Settings > Settings 4. The app's
+# profile has cc-label-required-questions-with-asterisk=yes and Registration
+# Form's name/city are required="true()" (both from its released CCZ).
+# QuestionWidget.setTextFromPrompt (commcare-android, read-only) appends
+# " *" to a required question's label text.
+- runFlow:
+    file: ../common/login_advanced_settings.yaml
+- tapOn: "Start"
+- tapOn: "Case List"
+- tapOn: "Registration Form"
+- extendedWaitUntil:
+    visible:
+      text: 'Name \*'
+    timeout: 15000

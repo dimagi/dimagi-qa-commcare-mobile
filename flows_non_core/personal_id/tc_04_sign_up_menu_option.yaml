@@ -1,0 +1,21 @@
+appId: org.commcare.dalvik
+tags:
+  - personal_id
+  - automatable
+---
+# Master Mobile Plan (2026) > Personal ID > TC_04 - the only row of this tab
+# that needs no SMS OTP or fingerprint enrollment. The login screen's options
+# menu offers "Sign up for PersonalID" (R.string.personalid_signup) whenever
+# no PersonalID account is signed in on this device and the device passes
+# PersonalID's compatibility check (LoginActivity.onPrepareOptionsMenu,
+# commcare-android read-only). install_app_by_code.yaml ends on the login
+# screen of a freshly cleared install, so nobody is signed in.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_BASIC_TESTS}
+- tapOn: "More options"
+- extendedWaitUntil:
+    visible: "Sign up for PersonalID"
+    timeout: 10000
+- back

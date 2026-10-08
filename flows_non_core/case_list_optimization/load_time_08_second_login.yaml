@@ -1,0 +1,134 @@
+appId: org.commcare.dalvik
+tags:
+  - case_list_optimization
+  - automatable
+env:
+  # Loud-failure ceiling only - the sheet records times but sets no limit.
+  # Replace with the owner's agreed budget once there is one.
+  LOAD_BUDGET_MS: "60000"
+---
+# Master Mobile Plan (2026) > Case List Optimization and Cache > Load time-8.
+# "Load time when user logs in to the app for 2nd time": log in, log out
+# (flows/common/logout.yaml), log in again, then time every optimization
+# menu's case list. Menu names from the app's released CCZ.
+- runFlow:
+    file: ../common/login_case_list_opt.yaml
+- runFlow:
+    file: ../common/logout.yaml
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_CASELIST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- runFlow:
+    file: ../common/dismiss_pin_prompt_if_shown.yaml
+- runFlow:
+    file: ../common/open_case_list_menu.yaml
+    env:
+      MENU: "case list optimization disabled"
+      FORM: "Followup"
+# Timed steps stay top-level so their timestamps land in the command log
+# (see open_case_list_menu.yaml); scripts/extract_flow_timings.py reports
+# the start_timer -> stop_timer gap under the assertTrue label below.
+- runScript:
+    file: ../common/assets/start_timer.js
+- tapOn: "Followup"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/screen_entity_select_list"
+    timeout: 180000
+- runScript:
+    file: ../common/assets/stop_timer.js
+- assertTrue:
+    condition: ${output.elapsedMs < Number(LOAD_BUDGET_MS)}
+    label: "TIMING Load time-8 (case list optimization disabled)"
+- runFlow:
+    file: ../common/back_to_home.yaml
+- runFlow:
+    file: ../common/open_case_list_menu.yaml
+    env:
+      MENU: "case list optimization enabled- cache"
+      FORM: "Followup"
+# Timed steps stay top-level so their timestamps land in the command log
+# (see open_case_list_menu.yaml); scripts/extract_flow_timings.py reports
+# the start_timer -> stop_timer gap under the assertTrue label below.
+- runScript:
+    file: ../common/assets/start_timer.js
+- tapOn: "Followup"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/screen_entity_select_list"
+    timeout: 180000
+- runScript:
+    file: ../common/assets/stop_timer.js
+- assertTrue:
+    condition: ${output.elapsedMs < Number(LOAD_BUDGET_MS)}
+    label: "TIMING Load time-8 (case list optimization enabled- cache)"
+- runFlow:
+    file: ../common/back_to_home.yaml
+- runFlow:
+    file: ../common/open_case_list_menu.yaml
+    env:
+      MENU: "Case List - case list optimization enabled - lazy load"
+      FORM: "Followup"
+# Timed steps stay top-level so their timestamps land in the command log
+# (see open_case_list_menu.yaml); scripts/extract_flow_timings.py reports
+# the start_timer -> stop_timer gap under the assertTrue label below.
+- runScript:
+    file: ../common/assets/start_timer.js
+- tapOn: "Followup"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/screen_entity_select_list"
+    timeout: 180000
+- runScript:
+    file: ../common/assets/stop_timer.js
+- assertTrue:
+    condition: ${output.elapsedMs < Number(LOAD_BUDGET_MS)}
+    label: "TIMING Load time-8 (Case List - case list optimization enabled - lazy load)"
+- runFlow:
+    file: ../common/back_to_home.yaml
+- runFlow:
+    file: ../common/open_case_list_menu.yaml
+    env:
+      MENU: "Case List optimization enabled- cache and lazy load enabled"
+      FORM: "Followup"
+# Timed steps stay top-level so their timestamps land in the command log
+# (see open_case_list_menu.yaml); scripts/extract_flow_timings.py reports
+# the start_timer -> stop_timer gap under the assertTrue label below.
+- runScript:
+    file: ../common/assets/start_timer.js
+- tapOn: "Followup"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/screen_entity_select_list"
+    timeout: 180000
+- runScript:
+    file: ../common/assets/stop_timer.js
+- assertTrue:
+    condition: ${output.elapsedMs < Number(LOAD_BUDGET_MS)}
+    label: "TIMING Load time-8 (Case List optimization enabled- cache and lazy load enabled)"
+- runFlow:
+    file: ../common/back_to_home.yaml
+- runFlow:
+    file: ../common/open_case_list_menu.yaml
+    env:
+      MENU: "Case List optimization enabled - All mix"
+      FORM: "Followup Form"
+# Timed steps stay top-level so their timestamps land in the command log
+# (see open_case_list_menu.yaml); scripts/extract_flow_timings.py reports
+# the start_timer -> stop_timer gap under the assertTrue label below.
+- runScript:
+    file: ../common/assets/start_timer.js
+- tapOn: "Followup Form"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/screen_entity_select_list"
+    timeout: 180000
+- runScript:
+    file: ../common/assets/stop_timer.js
+- assertTrue:
+    condition: ${output.elapsedMs < Number(LOAD_BUDGET_MS)}
+    label: "TIMING Load time-8 (Case List optimization enabled - All mix)"
+- runFlow:
+    file: ../common/back_to_home.yaml
