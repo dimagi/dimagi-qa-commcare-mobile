@@ -246,9 +246,9 @@ def main():
 
     if os.environ.get("MATRIX_RESULT") == "cancelled":
         # The test groups were stopped (e.g. the run was cancelled to free BrowserStack slots).
-        # Whatever little was merged is not a result, and per the team a cancelled run is not
-        # posted to Slack at all - the GitHub run page still shows it.
-        print("Run was cancelled - not posting to Slack.")
+        # Whatever little was merged (often just the HQ-only update-content-check) is not a result,
+        # and a "cancelled" card is just noise - post nothing.
+        print("Run was cancelled/aborted - not posting anything to Slack.")
         return
 
     results_path = REPORTS_DIR / "latest_results.json"
