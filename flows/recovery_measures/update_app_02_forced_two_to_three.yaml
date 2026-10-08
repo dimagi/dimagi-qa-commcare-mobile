@@ -144,12 +144,32 @@ tags:
     commands:
       - waitForAnimationToEnd:
           timeout: 3000
-      - runFlow: ../common/logout.yaml
+      # UPDATE (2026-10-08), confirmed live (full run 37663036314, group-c, failed AGAIN on the
+      # retry): this loop runs whenever edit_username is not visible at the instant it is
+      # checked, but that is not only "the measure never fired and we are on the Home screen":
+      # it is also true mid-transition (recovery/progress screen, app relaunching to login). The
+      # unconditional logout.yaml then tapped "Log out of CommCare" on a screen that has no such
+      # menu - "Element not found" - while the failure hierarchy shows the device on the normal
+      # login screen a moment later. So only log out + log in when the Home screen is really
+      # showing (nsv_home_screen, the same element logout.yaml swipes); on any other screen
+      # just hold ~10s so the transition can finish, then the loop re-checks edit_username.
       - runFlow:
-          file: ../common/login.yaml
-          env:
-            USERNAME: ${CC_TEST_USERNAME}
-            PASSWORD: ${CC_TEST_PASSWORD}
+          when:
+            visible:
+              id: "org.commcare.dalvik:id/nsv_home_screen"
+          commands:
+            - runFlow: ../common/logout.yaml
+            - runFlow:
+                file: ../common/login.yaml
+                env:
+                  USERNAME: ${CC_TEST_USERNAME}
+                  PASSWORD: ${CC_TEST_PASSWORD}
+      - runFlow:
+          when:
+            notVisible:
+              id: "org.commcare.dalvik:id/nsv_home_screen"
+          commands:
+            - evalScript: ${ (function(){ var end = Date.now() + 10000; while (Date.now() < end) {} })() }
 - assertVisible:
     id: "org.commcare.dalvik:id/edit_username"
 # Update 5 (part 2) - log back in and verify the app updated to Test Three
