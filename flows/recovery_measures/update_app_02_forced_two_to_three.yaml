@@ -180,9 +180,12 @@ tags:
     env:
       USERNAME: ${CC_TEST_USERNAME}
       PASSWORD: ${CC_TEST_PASSWORD}
+# UPDATE (2026-10-08): 20s was too tight for the Home screen after a re-login in this flow (HQ
+# restore is sometimes slow; local re-runs landed back on the login screen at this wait).
+# Waits up to 2 minutes - version-independent, and no slower when the Home screen appears quickly.
 - extendedWaitUntil:
     visible: "Start"
-    timeout: 20000
+    timeout: 120000
 - runFlow: ../common/check_app_version_via_about.yaml
 # Update 6 - negative check: submit the only form, sync, and ensure no
 # further forced update - per the real steps "Submit the only form on the
@@ -192,9 +195,12 @@ tags:
 - assertNotVisible:
     text: "(?i).*update.*required.*"
 - runFlow: ../common/submit_only_form.yaml
+# UPDATE (2026-10-08): 20s was too tight for the Home screen after a re-login in this flow (HQ
+# restore is sometimes slow; local re-runs landed back on the login screen at this wait).
+# Waits up to 2 minutes - version-independent, and no slower when the Home screen appears quickly.
 - extendedWaitUntil:
     visible: "Start"
-    timeout: 20000
+    timeout: 120000
 - assertNotVisible:
     text: "(?i).*recovery (procedures|measures).*initiated.*"
 - assertNotVisible:
