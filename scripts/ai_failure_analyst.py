@@ -9,7 +9,8 @@ follow-up message by slack_notify.py). Same idea as the AI failure analysts in d
 dimagi-qa-sureadhere, adapted to this repo's Maestro / Appium results, which are JSON rather than
 JUnit XML.
 
-Evidence sent per failed test (kept small - gpt-4o-mini, ~3 KB):
+Evidence sent per failed test (kept small, ~3 KB; gpt-4o-mini for an OpenAI key, claude-haiku-4-5 for an
+Anthropic 'sk-ant-' key - the provider is picked from the key itself):
   * test name, workflow, device, APK version, the failed step / error from the result
   * from BrowserStack's Maestro command log (when the result has one): the failing command, its
     error message, the visible on-screen text/ids at that moment (the accessibility hierarchy
@@ -21,7 +22,7 @@ the workflow: no OPENAI_API_KEY, no openai package, no failures, or any API erro
 
 Usage (from the merge-reports job, after merge_reports.py):
     python scripts/ai_failure_analyst.py
-Needs OPENAI_API_KEY (repo secret); BROWSERSTACK_USERNAME/BROWSERSTACK_ACCESS_KEY are optional and
+Needs the OPENAI_API_KEY repo secret (an Anthropic 'sk-ant-' key stored there also works) or an ANTHROPIC_API_KEY secret; BROWSERSTACK_USERNAME/BROWSERSTACK_ACCESS_KEY are optional and
 only used to fetch the command-log evidence.
 """
 import json
@@ -34,7 +35,8 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 REPORTS_DIR = REPO_ROOT / "reports"
 RESULTS_PATH = REPORTS_DIR / "latest_results.json"
 REPORT_PATH = REPORTS_DIR / "ai_failure_report.md"
-MODEL = "gpt-4o-mini"
+MODEL = "gpt-4o-mini"                       # OpenAI keys
+ANTHROPIC_MODEL = "claude-haiku-4-5-20251001"  # Anthropic keys (sk-ant-...)
 MAX_FAILURES_ANALYSED = 20          # bounds cost/time on a bad run; the rest are listed unanalysed
 SLACK_MESSAGE_LIMIT = 2800
 
@@ -195,19 +197,68 @@ def build_prompt(result, apk_version=""):
 
 
 # ----------------------------------------------------------------------- analysis
+class AnthropicClient:
+    """Minimal Anthropic Messages API client (plain `requests`, no extra dependency) exposing the two
+    calls this script uses in the shape of the OpenAI client, so the rest of the code is provider-agnostic:
+    client.chat.completions.create(...) and client.models.retrieve(...)."""
+    API = "https://api.anthropic.com/v1"
+    model = ANTHROPIC_MODEL
+
+    def __init__(self, api_key):
+        self._headers = {"x-api-key": api_key, "anthropic-version": "2023-06-01", "content-type": "application/json"}
+        outer = self
+
+        class _Completions:
+            @staticmethod
+            def create(model=None, max_tokens=400, messages=()):
+                import types
+                import requests
+                system = "\n\n".join(m["content"] for m in messages if m["role"] == "system")
+                convo = [m for m in messages if m["role"] != "system"]
+                resp = requests.post(f"{outer.API}/messages", headers=outer._headers, timeout=60,
+                                     json={"model": model or outer.model, "max_tokens": max_tokens,
+                                           "system": system, "messages": convo})
+                resp.raise_for_status()
+                text = "".join(b.get("text", "") for b in resp.json().get("content", []) if b.get("type") == "text")
+                return types.SimpleNamespace(choices=[types.SimpleNamespace(message=types.SimpleNamespace(content=text))])
+
+        class _Models:
+            @staticmethod
+            def retrieve(model):
+                import requests
+                requests.get(f"{outer.API}/models/{model}", headers=outer._headers, timeout=30).raise_for_status()
+
+        self.chat = type("Chat", (), {"completions": _Completions})()
+        self.models = _Models()
+
+
+def resolve_provider():
+    """(provider, key): an ANTHROPIC_API_KEY if set, else OPENAI_API_KEY; the provider is decided by the
+    key itself - 'sk-ant-...' is an Anthropic key even when it was saved under the OPENAI_API_KEY secret."""
+    key = (os.environ.get("ANTHROPIC_API_KEY", "").strip() or os.environ.get("OPENAI_API_KEY", "").strip())
+    return ("anthropic" if key.startswith("sk-ant-") else "openai"), key
+
+
+def make_client(provider, key):
+    if provider == "anthropic":
+        return AnthropicClient(key)
+    from openai import OpenAI
+    return OpenAI(api_key=key)
+
+
 def key_status():
-    """Print whether OPENAI_API_KEY reached this step, in a way that is safe to leave in a public-ish
-    log: presence, length, the 'sk-' style prefix and a short SHA-256 fingerprint (not reversible), so
-    the key can be matched against the one used in other repos by hashing the key you hold:
-        printf %s "$KEY" | sha256sum | cut -c1-8
-    Returns the key or "" if it is missing."""
+    """Print whether an API key reached this step, in a way that is safe to leave in a log: presence,
+    length, which provider the prefix implies and a short SHA-256 fingerprint (not reversible), so it can
+    be matched against the key you hold:   printf %s "$KEY" | sha256sum | cut -c1-8
+    Returns the key or "" if there is none."""
     import hashlib
-    key = os.environ.get("OPENAI_API_KEY", "").strip()
+    provider, key = resolve_provider()
     if not key:
-        print("[ai_failure_analyst] OPENAI_API_KEY: MISSING - the step's env value is empty. Is the secret set "
-              "as a repository Actions secret, and was it added BEFORE this run started?")
+        print("[ai_failure_analyst] API key: MISSING - OPENAI_API_KEY / ANTHROPIC_API_KEY are empty in this step. "
+              "Is the secret set as a repository Actions secret, and was it added BEFORE this run started?")
         return ""
-    print(f"[ai_failure_analyst] OPENAI_API_KEY: present, {len(key)} chars, starts with '{key[:3]}', "
+    print(f"[ai_failure_analyst] API key: present, {len(key)} chars, starts with '{key[:6]}', looks like an "
+          f"{provider.upper()} key (model {ANTHROPIC_MODEL if provider == 'anthropic' else MODEL}), "
           f"sha256 fingerprint {hashlib.sha256(key.encode()).hexdigest()[:8]}")
     return key
 
@@ -216,19 +267,20 @@ def check_key(client):
     """One cheap request to confirm OpenAI accepts the key (run when there are no failures to analyse,
     so every run's log says whether the key works). Never raises."""
     try:
-        client.models.retrieve(MODEL)
-        print(f"[ai_failure_analyst] OpenAI accepted the key (model {MODEL} reachable).")
+        model = getattr(client, "model", MODEL)
+        client.models.retrieve(model)
+        print(f"[ai_failure_analyst] The provider accepted the key (model {model} reachable).")
         return True
     except Exception as exc:  # noqa: BLE001
         # only the error class and HTTP status: OpenAI's message echoes the key's first/last characters
-        print(f"::warning::OpenAI did not accept the key / request failed: {type(exc).__name__} "
-              f"(HTTP {getattr(exc, 'status_code', '?')})")
+        print(f"::warning::The provider did not accept the key / request failed: {type(exc).__name__} "
+              f"(HTTP {getattr(exc, 'status_code', None) or getattr(getattr(exc, 'response', None), 'status_code', '?')})")
         return False
 
 
 def analyse_one(client, prompt):
     response = client.chat.completions.create(
-        model=MODEL, max_tokens=400,
+        model=getattr(client, "model", MODEL), max_tokens=400,
         messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}],
     )
     return response.choices[0].message.content.strip()
@@ -242,21 +294,19 @@ def analyse(results_path=RESULTS_PATH, client=None):
         print("[ai_failure_analyst] No failed tests - nothing to analyse.")
         if client is None and api_key:
             try:
-                from openai import OpenAI
-                check_key(OpenAI(api_key=api_key))
+                check_key(make_client(*resolve_provider()))
             except ImportError:
                 print("[ai_failure_analyst] openai package not installed.")
         return 0
     if client is None:
         if not api_key:
-            print("[ai_failure_analyst] OPENAI_API_KEY not set - skipping analysis.")
+            print("[ai_failure_analyst] No API key - skipping analysis.")
             return 0
         try:
-            from openai import OpenAI
+            client = make_client(*resolve_provider())
         except ImportError:
             print("[ai_failure_analyst] openai package not installed - skipping analysis.")
             return 0
-        client = OpenAI(api_key=api_key)
 
     version_file = REPORTS_DIR / "apk_version.txt"
     apk_version = version_file.read_text(encoding="utf-8").strip() if version_file.exists() else ""
