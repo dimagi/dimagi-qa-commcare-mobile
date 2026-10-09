@@ -195,6 +195,37 @@ def build_prompt(result, apk_version=""):
 
 
 # ----------------------------------------------------------------------- analysis
+def key_status():
+    """Print whether OPENAI_API_KEY reached this step, in a way that is safe to leave in a public-ish
+    log: presence, length, the 'sk-' style prefix and a short SHA-256 fingerprint (not reversible), so
+    the key can be matched against the one used in other repos by hashing the key you hold:
+        printf %s "$KEY" | sha256sum | cut -c1-8
+    Returns the key or "" if it is missing."""
+    import hashlib
+    key = os.environ.get("OPENAI_API_KEY", "").strip()
+    if not key:
+        print("[ai_failure_analyst] OPENAI_API_KEY: MISSING - the step's env value is empty. Is the secret set "
+              "as a repository Actions secret, and was it added BEFORE this run started?")
+        return ""
+    print(f"[ai_failure_analyst] OPENAI_API_KEY: present, {len(key)} chars, starts with '{key[:3]}', "
+          f"sha256 fingerprint {hashlib.sha256(key.encode()).hexdigest()[:8]}")
+    return key
+
+
+def check_key(client):
+    """One cheap request to confirm OpenAI accepts the key (run when there are no failures to analyse,
+    so every run's log says whether the key works). Never raises."""
+    try:
+        client.models.retrieve(MODEL)
+        print(f"[ai_failure_analyst] OpenAI accepted the key (model {MODEL} reachable).")
+        return True
+    except Exception as exc:  # noqa: BLE001
+        # only the error class and HTTP status: OpenAI's message echoes the key's first/last characters
+        print(f"::warning::OpenAI did not accept the key / request failed: {type(exc).__name__} "
+              f"(HTTP {getattr(exc, 'status_code', '?')})")
+        return False
+
+
 def analyse_one(client, prompt):
     response = client.chat.completions.create(
         model=MODEL, max_tokens=400,
@@ -206,11 +237,17 @@ def analyse_one(client, prompt):
 def analyse(results_path=RESULTS_PATH, client=None):
     """Write reports/ai_failure_report.md. Returns the number of failures found."""
     failures = load_failures(results_path)
+    api_key = key_status() if client is None else "(injected client)"
     if not failures:
         print("[ai_failure_analyst] No failed tests - nothing to analyse.")
+        if client is None and api_key:
+            try:
+                from openai import OpenAI
+                check_key(OpenAI(api_key=api_key))
+            except ImportError:
+                print("[ai_failure_analyst] openai package not installed.")
         return 0
     if client is None:
-        api_key = os.environ.get("OPENAI_API_KEY", "").strip()
         if not api_key:
             print("[ai_failure_analyst] OPENAI_API_KEY not set - skipping analysis.")
             return 0
