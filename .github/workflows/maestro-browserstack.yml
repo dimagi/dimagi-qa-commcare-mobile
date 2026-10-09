@@ -59,6 +59,15 @@ on:
           - "resources/app-cccStaging-qaAutomation.apk"
           - "resources/commcare_2.45_release.apk"
           - "resources/Mobile API Testing App-release.apk"
+      slack_channel:
+        description: "Slack channel for the report. auto = scheduled runs and manual runs on main go to the main channel; runs on any other branch go to the branch test channel. Pick 'branch test channel' to run on main WITHOUT posting to the main channel."
+        required: false
+        default: "auto"
+        type: choice
+        options:
+          - auto
+          - main channel
+          - branch test channel
       android_version:
         description: "Android version to test on (maps to a Samsung Galaxy flagship BrowserStack has real devices for at that version). Ignored if 'devices' below is also set."
         required: false
@@ -1489,11 +1498,53 @@ jobs:
             echo "text=${minutes}m" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Post Slack notification
+      # Which Slack channel gets this run's report (and the AI analysis thread). Same scheme as
+      # dimagi-qa-sureadhere: scheduled runs and manual runs on main -> the main channel
+      # (SLACK_CHANNEL_ID); manual runs on any other branch -> the branch test channel
+      # (SLACK_CHANNEL_ID_BRANCH_TEST). A manual run can override this with the slack_channel input,
+      # e.g. to run on main without posting to the main channel.
+      - name: Set slack channel
         if: always()
+        id: configure_slack
+        uses: actions/github-script@v7
+        env:
+          CC_EVENT: ${{ github.event_name }}
+          CC_REF: ${{ github.ref_name }}
+          CC_CHOICE: ${{ github.event.inputs.slack_channel }}
+          MAIN_CHANNEL: ${{ secrets.SLACK_CHANNEL_ID }}
+          BRANCH_CHANNEL: ${{ secrets.SLACK_CHANNEL_ID_BRANCH_TEST }}
+        with:
+          result-encoding: string
+          script: |
+            const {CC_EVENT, CC_REF, CC_CHOICE, MAIN_CHANNEL, BRANCH_CHANNEL} = process.env
+            const choice = CC_CHOICE || 'auto'
+            const ids = {main: MAIN_CHANNEL, branch: BRANCH_CHANNEL}
+            const names = {main: 'SLACK_CHANNEL_ID', branch: 'SLACK_CHANNEL_ID_BRANCH_TEST'}
+            let target
+            if (CC_EVENT === 'schedule') {
+              target = 'main'
+            } else if (CC_EVENT === 'workflow_dispatch') {
+              if (choice === 'main channel') target = 'main'
+              else if (choice === 'branch test channel') target = 'branch'
+              else target = CC_REF === 'main' ? 'main' : 'branch'
+            } else {
+              target = 'branch'  // anything else (PR, push/merge) is branch-channel traffic
+            }
+            if (!ids[target]) {
+              // Never drop a report over a missing secret; never fall back INTO the main channel
+              // from a branch run.
+              const fallback = target === 'main' ? ['branch'].find(t => ids[t]) : undefined
+              core.warning(`${names[target]} is not set -- ` + (fallback ? `posting to ${names[fallback]} instead` : 'not posting to Slack'))
+              target = fallback
+            }
+            console.log(`event=${CC_EVENT} ref=${CC_REF} slack_channel=${choice} -> ${target || 'no'} channel`)
+            return target ? ids[target] : ''
+
+      - name: Post Slack notification
+        if: ${{ always() && steps.configure_slack.outputs.result != '' }}
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
-          SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
+          SLACK_CHANNEL_ID: ${{ steps.configure_slack.outputs.result }}
           REPORT_ARTIFACT_URL: ${{ steps.upload_report.outputs.artifact-url }}
           RUN_TAG: ${{ github.event.inputs.tag }}
           RUN_DURATION: ${{ steps.duration.outputs.text }}
