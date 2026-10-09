@@ -1428,6 +1428,20 @@ jobs:
       - name: Merge matrix job reports
         run: python scripts/merge_reports.py artifacts/*/
 
+      # AI failure analysis (same idea as dimagi-qa / dimagi-qa-sureadhere): sends each FAILED test, with
+      # BrowserStack's failure evidence and the flow, to OpenAI and writes reports/ai_failure_report.md
+      # (uploaded with the merged report). slack_notify.py then replies with it IN THE THREAD of the run's
+      # Slack message. Needs the OPENAI_API_KEY repo secret; skips quietly without it, and can never fail
+      # the workflow (continue-on-error). Not run for cancelled runs.
+      - name: AI failure analysis
+        if: ${{ needs.maestro-tests.result != 'cancelled' }}
+        continue-on-error: true
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
+          BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
+        run: python scripts/ai_failure_analyst.py
+
       - name: Save report history
         if: always()
         uses: actions/cache/save@v4
