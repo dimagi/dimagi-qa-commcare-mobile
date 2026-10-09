@@ -11,3 +11,5 @@ matplotlib>=3.8
 # classic REST endpoint directly instead), but pinning here still avoids
 # the same class of surprise for anything else that isn't as defensive.
 Appium-Python-Client==6.0.0
+# AI failure analyst (scripts/ai_failure_analyst.py); optional at runtime - it skips if missing
+openai>=1.0

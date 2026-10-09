@@ -55,8 +55,19 @@ on:
           - "GitHub Releases"
           - "Internal latest APK"
           - "resources/app-commcare-release-Android16.apk"
+          - "resources/app-commcare-qaAutomation.apk"
+          - "resources/app-cccStaging-qaAutomation.apk"
           - "resources/commcare_2.45_release.apk"
           - "resources/Mobile API Testing App-release.apk"
+      slack_channel:
+        description: "Slack channel for the report. auto = scheduled runs and manual runs on main go to the main channel; runs on any other branch go to the branch test channel. Pick 'branch test channel' to run on main WITHOUT posting to the main channel."
+        required: false
+        default: "auto"
+        type: choice
+        options:
+          - auto
+          - main channel
+          - branch test channel
       android_version:
         description: "Android version to test on (maps to a Samsung Galaxy flagship BrowserStack has real devices for at that version). Ignored if 'devices' below is also set."
         required: false
@@ -320,7 +331,7 @@ jobs:
         # failed. This coverage is additive/independent (a separate
         # BrowserStack session via a different script), so it should run
         # regardless of the Maestro step's outcome.
-        if: always() && contains(matrix.tags, 'updates_partial_failed')
+        if: ${{ !cancelled() && contains(matrix.tags, 'updates_partial_failed') }}
         env:
           BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
           BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
@@ -393,7 +404,7 @@ jobs:
       # group-c) so `--tag prompted_updates` ad-hoc runs still cover both
       # in that one job, same as before.
       - name: Run Appium suite on BrowserStack (prompted_updates scenario_01_optional_ccz_update)
-        if: always() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'prompted_updates')))
+        if: ${{ !cancelled() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'prompted_updates'))) }}
         env:
           BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
           BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
@@ -430,7 +441,7 @@ jobs:
           python scripts/run_appium_prompted_updates_suite.py "${ARGS[@]}"
 
       - name: Run Appium suite on BrowserStack (prompted_updates scenario_02_forced_ccz_update)
-        if: always() && (matrix.name == 'group-c' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'prompted_updates')))
+        if: ${{ !cancelled() && (matrix.name == 'group-c' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'prompted_updates'))) }}
         env:
           BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
           BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
@@ -498,7 +509,7 @@ jobs:
       # single-tag ad-hoc dispatch) matrix.tags containing the flows' own
       # updates_2_49_apk_prompt tag.
       - name: Run Maestro suite (Updates tab - CommCare APK update prompt, 1/2 optional)
-        if: always() && (matrix.name == 'group-a' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'updates_2_49')))
+        if: ${{ !cancelled() && (matrix.name == 'group-a' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'updates_2_49'))) }}
         env:
           BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
           BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
@@ -525,7 +536,7 @@ jobs:
           if [ -z "$DEVICES" ]; then
             DEVICES="${ANDROID_DEVICE_MAP[$ANDROID_VERSION]}-$ANDROID_VERSION"
           fi
-          ARGS=(--devices "$DEVICES" --flow flows/updates_2_49/prompted_update_scenario_01_ill_update_later.yaml --hq-setup hq_setup/updates_2_49/setup_02_commcare_version_plus_one.json --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-apk-update-prompt-1-optional")
+          ARGS=(--devices "$DEVICES" --flow flows/updates_2_49/prompted_update_scenario_01_ill_update_later.yaml --retry-failed --hq-setup hq_setup/updates_2_49/setup_02_commcare_version_plus_one.json --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-apk-update-prompt-1-optional")
           APK_SOURCE="${{ github.event.inputs.apk_source || 'GitHub Releases' }}"
           # commcare_android_run (fetch step above) wins over apk_source/release_tag when set.
           APK_SOURCE="${APK_OVERRIDE:-$APK_SOURCE}"
@@ -537,7 +548,7 @@ jobs:
           python scripts/run_suite.py "${ARGS[@]}"
 
       - name: Run Maestro suite (Updates tab - CommCare APK update prompt, 2/2 forced)
-        if: always() && (matrix.name == 'group-a' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'updates_2_49')))
+        if: ${{ !cancelled() && (matrix.name == 'group-a' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'updates_2_49'))) }}
         env:
           BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
           BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
@@ -564,7 +575,7 @@ jobs:
           if [ -z "$DEVICES" ]; then
             DEVICES="${ANDROID_DEVICE_MAP[$ANDROID_VERSION]}-$ANDROID_VERSION"
           fi
-          ARGS=(--devices "$DEVICES" --flow flows/updates_2_49/prompted_update_scenario_02_forced_commcare_update.yaml --hq-setup hq_setup/updates_2_49/prompted_update_scenario_02_forced.json --hq-teardown hq_setup/updates_2_49/prompted_update_scenario_teardown.json --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-apk-update-prompt-2-forced")
+          ARGS=(--devices "$DEVICES" --flow flows/updates_2_49/prompted_update_scenario_02_forced_commcare_update.yaml --retry-failed --hq-setup hq_setup/updates_2_49/prompted_update_scenario_02_forced.json --hq-teardown hq_setup/updates_2_49/prompted_update_scenario_teardown.json --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-apk-update-prompt-2-forced")
           APK_SOURCE="${{ github.event.inputs.apk_source || 'GitHub Releases' }}"
           # commcare_android_run (fetch step above) wins over apk_source/release_tag when set.
           APK_SOURCE="${APK_OVERRIDE:-$APK_SOURCE}"
@@ -590,7 +601,7 @@ jobs:
       # or (for a scoped single-tag ad-hoc dispatch) matrix.tags containing
       # requires_old_client_apk directly.
       - name: Run Maestro suite (CC Reinstall/Update Needed - old CommCare client)
-        if: always() && (matrix.name == 'group-c' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'requires_old_client_apk')))
+        if: ${{ !cancelled() && (matrix.name == 'group-c' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'requires_old_client_apk'))) }}
         env:
           BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
           BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
@@ -617,7 +628,7 @@ jobs:
           if [ -z "$DEVICES" ]; then
             DEVICES="${ANDROID_DEVICE_MAP[$ANDROID_VERSION]}-$ANDROID_VERSION"
           fi
-          python scripts/run_suite.py --devices "$DEVICES" --tag requires_old_client_apk \
+          python scripts/run_suite.py --devices "$DEVICES" --tag requires_old_client_apk --retry-failed \
             --apk resources/commcare_2.45_release.apk \
             --build-name "QA-COMMCARE-MOBILE-${{ matrix.name }}-old-client-recovery-measures"
 
@@ -638,7 +649,7 @@ jobs:
       # this job, gated on group-c (recovery_measures' own group) or a
       # scoped recovery_measures tag dispatch.
       - name: Run Appium suite on BrowserStack (Recovery Measures - CCZ file picker)
-        if: always() && (matrix.name == 'group-c' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'recovery_measures')))
+        if: ${{ !cancelled() && (matrix.name == 'group-c' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'recovery_measures'))) }}
         env:
           BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
           BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
@@ -719,7 +730,7 @@ jobs:
       # regardless of an earlier one's outcome, then fails the step at the
       # end if any of them did.
       - name: Verify Form Submissions Submit-History checks (Markdown, Incomplete Forms 4, Repeat Groups 5, upload_test_2, Geoservice 2)
-        if: always() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'form_submissions')))
+        if: ${{ !cancelled() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'form_submissions'))) }}
         env:
           HQ_DOMAIN: qateam
           HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
@@ -759,7 +770,9 @@ jobs:
       # Appium step in this job, gated on group-b (Form Submissions' own
       # group) or a scoped form_submissions tag dispatch.
       - name: Run Appium suite on BrowserStack (Form Submissions - active/inactive/deactivated user login)
-        if: always() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'form_submissions')))
+        # Moved from group-b (2026-10-07): group-b ran ~20 min longer than a/c because it carried the
+        # most Appium suites (50 min vs ~20); this ~6 min step now runs in group-c to even the groups out.
+        if: ${{ !cancelled() && (matrix.name == 'group-c' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'form_submissions'))) }}
         env:
           BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
           BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
@@ -792,7 +805,7 @@ jobs:
           elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
             ARGS+=(--release-tag "${{ github.event.inputs.release_tag }}")
           fi
-          python scripts/run_appium_user_activation_suite.py "${ARGS[@]}"
+          python scripts/run_with_rerun.py scripts/run_appium_user_activation_suite.py "${ARGS[@]}"
 
       # Master Mobile Plan (2026) > Right to Left Text > "Home Screen 8"
       # (row 23) + "Case list 4" (row 36). Both were Not automatable because
@@ -836,7 +849,9 @@ jobs:
       # this job, gated on group-b (right_to_left_text's own group) or a
       # scoped tag dispatch.
       - name: Run Appium suite on BrowserStack (Right to Left Text - Home Screen 1, Home Screen 8, Case list 4, Question Types 1/3)
-        if: always() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'right_to_left_text')))
+        # Moved from group-b (2026-10-07): group-b ran ~20 min longer than a/c because it carried the
+        # most Appium suites (50 min vs ~20); this ~8 min step now runs in group-a to even the groups out.
+        if: ${{ !cancelled() && (matrix.name == 'group-a' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'right_to_left_text'))) }}
         env:
           BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
           BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
@@ -869,7 +884,7 @@ jobs:
           elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
             ARGS+=(--release-tag "${{ github.event.inputs.release_tag }}")
           fi
-          python scripts/run_appium_rtl_suite.py "${ARGS[@]}"
+          python scripts/run_with_rerun.py scripts/run_appium_rtl_suite.py "${ARGS[@]}"
 
       # Master Mobile Plan (2026) > Form Submissions > "Graceful Session
       # Pause" (row 57) - the row's own PRECONDITION (custom property
@@ -903,7 +918,7 @@ jobs:
       # run's report; deliberately excluded from the exit-code-gating
       # "this_run_results" pattern other checks use.
       - name: Verify Graceful Session Pause precondition (cc-auto-form-save-on-pause)
-        if: always() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'form_submissions')))
+        if: ${{ !cancelled() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'form_submissions'))) }}
         continue-on-error: true
         env:
           HQ_DOMAIN: qateam
@@ -941,7 +956,7 @@ jobs:
       # in here. Gated on group-b (form_submissions' own group) or a scoped
       # tag dispatch, same as every other Appium step in this job.
       - name: Run Appium suite on BrowserStack (Form Submissions - Casesearch Checkbox 1/2)
-        if: always() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'form_submissions')))
+        if: ${{ !cancelled() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'form_submissions'))) }}
         env:
           BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
           BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
@@ -977,7 +992,7 @@ jobs:
           elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
             ARGS+=(--release-tag "${{ github.event.inputs.release_tag }}")
           fi
-          python scripts/run_casesearch_checkbox_suite.py "${ARGS[@]}"
+          python scripts/run_with_rerun.py scripts/run_casesearch_checkbox_suite.py "${ARGS[@]}"
 
       # Master Mobile Plan (2026) > Case Filters > "Case Search & Claim 1"
       # (row 19) - previously Not automatable per coverage_matrix.csv's own
@@ -1027,7 +1042,7 @@ jobs:
       # Gated on group-b (case_filters' own group) or a scoped tag
       # dispatch, same as every other Appium step in this job.
       - name: Run Appium suite on BrowserStack (Case Filters - Case Search & Claim 1)
-        if: always() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'case_filters')))
+        if: ${{ !cancelled() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'case_filters'))) }}
         env:
           BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
           BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
@@ -1063,7 +1078,7 @@ jobs:
           elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
             ARGS+=(--release-tag "${{ github.event.inputs.release_tag }}")
           fi
-          python scripts/run_case_search_claim_suite.py "${ARGS[@]}"
+          python scripts/run_with_rerun.py scripts/run_case_search_claim_suite.py "${ARGS[@]}"
 
       # Master Mobile Plan (2026) > Case Filters > "Case Search & Claim 2"
       # (row 20) - "Date Widget - Single Date". Same app as row 19 above
@@ -1105,7 +1120,7 @@ jobs:
       # Gated on group-b (case_filters' own group) or a scoped tag
       # dispatch, same as every other Appium step in this job.
       - name: Run Appium suite on BrowserStack (Case Filters - Case Search & Claim 2)
-        if: always() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'case_filters')))
+        if: ${{ !cancelled() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'case_filters'))) }}
         env:
           BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
           BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
@@ -1141,7 +1156,7 @@ jobs:
           elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
             ARGS+=(--release-tag "${{ github.event.inputs.release_tag }}")
           fi
-          python scripts/run_case_search_claim_2_suite.py "${ARGS[@]}"
+          python scripts/run_with_rerun.py scripts/run_case_search_claim_2_suite.py "${ARGS[@]}"
 
       # Runs Multimedia's "External File in Forms" - the one Multimedia row
       # blocked by the same class of gap the Recovery Measures CCZ-picker
@@ -1152,7 +1167,7 @@ jobs:
       # other Appium step in this job, gated on group-a (multimedia's own
       # group) or a scoped multimedia tag dispatch.
       - name: Run Appium suite on BrowserStack (Multimedia - external file in forms)
-        if: always() && (matrix.name == 'group-a' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'multimedia')))
+        if: ${{ !cancelled() && (matrix.name == 'group-a' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'multimedia'))) }}
         env:
           BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
           BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
@@ -1213,7 +1228,7 @@ jobs:
       # pattern as every other Appium step in this job, gated on group-a
       # (multimedia's own group) or a scoped multimedia tag dispatch.
       - name: Run Appium suite on BrowserStack (Multimedia - MM1/MM2/MM3 install+repair)
-        if: always() && (matrix.name == 'group-a' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'multimedia')))
+        if: ${{ !cancelled() && (matrix.name == 'group-a' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'multimedia'))) }}
         env:
           BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
           BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
@@ -1246,7 +1261,7 @@ jobs:
           elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
             ARGS+=(--release-tag "${{ github.event.inputs.release_tag }}")
           fi
-          python scripts/run_appium_mm2_suite.py "${ARGS[@]}"
+          python scripts/run_with_rerun.py scripts/run_appium_mm2_suite.py "${ARGS[@]}"
 
       # Master Mobile Plan (2026) > Multimedia > "Photo Verification" (row
       # 47) + "Image Resize 27/28" (rows 41-42) - HQ-only Submit-History
@@ -1266,7 +1281,7 @@ jobs:
       # real recent submission that 3 of its 4 questions (audio/image/sign)
       # reliably attach, video does not.
       - name: Verify Multimedia Submit-History checks (Photo Verification, Image Resize 27/28, Media 4)
-        if: always() && (matrix.name == 'group-a' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'multimedia')))
+        if: ${{ !cancelled() && (matrix.name == 'group-a' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'multimedia'))) }}
         env:
           HQ_DOMAIN: qateam
           HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
@@ -1292,7 +1307,7 @@ jobs:
       # scripts/run_support_menus_log_property_check.py's own module
       # docstring for the full citation.
       - name: Verify Support Menus 2 precondition (logenabled)
-        if: always() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'support_menus')))
+        if: ${{ !cancelled() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'support_menus'))) }}
         env:
           HQ_DOMAIN: qateam
           HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
@@ -1304,6 +1319,16 @@ jobs:
       # the full logical run, so it isn't meaningful on its own - the
       # merge-reports job below is the only place the real persistent trend
       # history gets read or written, from the properly COMBINED results.
+      # Safety net for a CANCELLED job: scripts/cancel_guard.py normally stops this job's
+      # BrowserStack builds from inside the process on SIGINT/SIGTERM; this stops any it
+      # recorded but could not (e.g. the process was SIGKILLed first). Only this job's builds.
+      - name: Stop BrowserStack builds if the job was cancelled
+        if: cancelled()
+        env:
+          BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
+          BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
+        run: python scripts/stop_run_builds.py
+
       - name: Upload HTML report
         if: always()
         uses: actions/upload-artifact@v4
@@ -1345,6 +1370,9 @@ jobs:
     # whole matrix (can't depend on just one matrix leg), removing the race
     # - a small latency cost for a fast, cheap check.
     needs: maestro-tests
+    # Keep `always() &&` HERE (not `!cancelled() &&`): with the latter this job was never created in run
+    # 37625535703 (group-b had failed), so update/check_for_new_build was missing and the run reported 153
+    # results instead of 154. A cancelled run posts nothing to Slack anyway (see slack_notify.py).
     if: always() && (github.event.inputs.tag == '' || github.event.inputs.tag == 'All' || github.event.inputs.tag == 'update')
     runs-on: ubuntu-latest
     steps:
@@ -1409,6 +1437,34 @@ jobs:
       - name: Merge matrix job reports
         run: python scripts/merge_reports.py artifacts/*/
 
+      # AI failure analysis (same idea as dimagi-qa / dimagi-qa-sureadhere): sends each FAILED test, with
+      # BrowserStack's failure evidence and the flow, to OpenAI and writes reports/ai_failure_report.md
+      # (uploaded with the merged report). slack_notify.py then replies with it IN THE THREAD of the run's
+      # Slack message. Needs the OPENAI_API_KEY repo secret; skips quietly without it, and can never fail
+      # the workflow (continue-on-error). Not run for cancelled runs.
+      - name: AI failure analysis
+        if: ${{ needs.maestro-tests.result != 'cancelled' }}
+        continue-on-error: true
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}      # an Anthropic 'sk-ant-' key saved here is detected too
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
+          BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
+          # Values scripts/ai_failure_analyst.py REDACTS from everything it sends to OpenAI:
+          CC_TEST_USERNAME: ${{ secrets.CC_TEST_USERNAME }}
+          CC_TEST_PASSWORD: ${{ secrets.CC_TEST_PASSWORD }}
+          CC_TEST2_USERNAME: ${{ secrets.CC_TEST2_USERNAME }}
+          CC_TEST2_PASSWORD: ${{ secrets.CC_TEST2_PASSWORD }}
+          CC_CASELIST_USERNAME: ${{ secrets.CC_CASELIST_USERNAME }}
+          CC_LARGE_APP_USERNAME: ${{ secrets.CC_LARGE_APP_USERNAME }}
+          HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
+          HQ_WEB_USER_PASSWORD: ${{ secrets.HQ_WEB_USER_PASSWORD }}
+          HQ_MOBILE_WORKER_USERNAME: ${{ secrets.HQ_MOBILE_WORKER_USERNAME }}
+          HQ_MOBILE_WORKER_PASSWORD: ${{ secrets.HQ_MOBILE_WORKER_PASSWORD }}
+          HQ_API_USERNAME: ${{ secrets.HQ_API_USERNAME }}
+          HQ_API_PASSWORD: ${{ secrets.HQ_API_PASSWORD }}
+        run: python scripts/ai_failure_analyst.py
+
       - name: Save report history
         if: always()
         uses: actions/cache/save@v4
@@ -1442,11 +1498,53 @@ jobs:
             echo "text=${minutes}m" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Post Slack notification
+      # Which Slack channel gets this run's report (and the AI analysis thread). Same scheme as
+      # dimagi-qa-sureadhere: scheduled runs and manual runs on main -> the main channel
+      # (SLACK_CHANNEL_ID); manual runs on any other branch -> the branch test channel
+      # (SLACK_CHANNEL_ID_BRANCH_TEST). A manual run can override this with the slack_channel input,
+      # e.g. to run on main without posting to the main channel.
+      - name: Set slack channel
         if: always()
+        id: configure_slack
+        uses: actions/github-script@v7
+        env:
+          CC_EVENT: ${{ github.event_name }}
+          CC_REF: ${{ github.ref_name }}
+          CC_CHOICE: ${{ github.event.inputs.slack_channel }}
+          MAIN_CHANNEL: ${{ secrets.SLACK_CHANNEL_ID }}
+          BRANCH_CHANNEL: ${{ secrets.SLACK_CHANNEL_ID_BRANCH_TEST }}
+        with:
+          result-encoding: string
+          script: |
+            const {CC_EVENT, CC_REF, CC_CHOICE, MAIN_CHANNEL, BRANCH_CHANNEL} = process.env
+            const choice = CC_CHOICE || 'auto'
+            const ids = {main: MAIN_CHANNEL, branch: BRANCH_CHANNEL}
+            const names = {main: 'SLACK_CHANNEL_ID', branch: 'SLACK_CHANNEL_ID_BRANCH_TEST'}
+            let target
+            if (CC_EVENT === 'schedule') {
+              target = 'main'
+            } else if (CC_EVENT === 'workflow_dispatch') {
+              if (choice === 'main channel') target = 'main'
+              else if (choice === 'branch test channel') target = 'branch'
+              else target = CC_REF === 'main' ? 'main' : 'branch'
+            } else {
+              target = 'branch'  // anything else (PR, push/merge) is branch-channel traffic
+            }
+            if (!ids[target]) {
+              // Never drop a report over a missing secret; never fall back INTO the main channel
+              // from a branch run.
+              const fallback = target === 'main' ? ['branch'].find(t => ids[t]) : undefined
+              core.warning(`${names[target]} is not set -- ` + (fallback ? `posting to ${names[fallback]} instead` : 'not posting to Slack'))
+              target = fallback
+            }
+            console.log(`event=${CC_EVENT} ref=${CC_REF} slack_channel=${choice} -> ${target || 'no'} channel`)
+            return target ? ids[target] : ''
+
+      - name: Post Slack notification
+        if: ${{ always() && steps.configure_slack.outputs.result != '' }}
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
-          SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
+          SLACK_CHANNEL_ID: ${{ steps.configure_slack.outputs.result }}
           REPORT_ARTIFACT_URL: ${{ steps.upload_report.outputs.artifact-url }}
           RUN_TAG: ${{ github.event.inputs.tag }}
           RUN_DURATION: ${{ steps.duration.outputs.text }}

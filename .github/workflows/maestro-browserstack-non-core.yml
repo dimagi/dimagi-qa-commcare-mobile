@@ -53,6 +53,17 @@ on:
           - "GitHub Releases"
           - "Internal latest APK"
           - "resources/app-commcare-release-Android16.apk"
+          - "resources/app-commcare-qaAutomation.apk"
+          - "resources/app-cccStaging-qaAutomation.apk"
+      slack_channel:
+        description: "Slack channel for the report. auto = scheduled runs and manual runs on main go to the main channel; runs on any other branch go to the branch test channel. Pick 'branch test channel' to run on main WITHOUT posting to the main channel."
+        required: false
+        default: "auto"
+        type: choice
+        options:
+          - auto
+          - main channel
+          - branch test channel
       android_version:
         description: "Android version to test on (maps to the Samsung Galaxy flagship BrowserStack has at that version). Ignored if 'devices' is set."
         required: false
@@ -210,6 +221,16 @@ jobs:
             { echo "## Measured load times"; echo; python scripts/extract_flow_timings.py; } >> "$GITHUB_STEP_SUMMARY"
           fi
 
+      # Safety net for a CANCELLED job: scripts/cancel_guard.py normally stops this job's
+      # BrowserStack builds from inside the process on SIGINT/SIGTERM; this stops any it
+      # recorded but could not (e.g. the process was SIGKILLed first). Only this job's builds.
+      - name: Stop BrowserStack builds if the job was cancelled
+        if: cancelled()
+        env:
+          BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
+          BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
+        run: python scripts/stop_run_builds.py
+
       - name: Upload HTML report
         if: always()
         uses: actions/upload-artifact@v4
@@ -250,6 +271,34 @@ jobs:
       - name: Merge reports
         run: python scripts/merge_reports.py artifacts/*/
 
+      # AI failure analysis (same idea as dimagi-qa / dimagi-qa-sureadhere): sends each FAILED test, with
+      # BrowserStack's failure evidence and the flow, to OpenAI and writes reports/ai_failure_report.md
+      # (uploaded with the merged report). slack_notify.py then replies with it IN THE THREAD of the run's
+      # Slack message. Needs the OPENAI_API_KEY repo secret; skips quietly without it, and can never fail
+      # the workflow (continue-on-error). Not run for cancelled runs.
+      - name: AI failure analysis
+        if: ${{ needs.maestro-tests.result != 'cancelled' }}
+        continue-on-error: true
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}      # an Anthropic 'sk-ant-' key saved here is detected too
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
+          BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
+          # Values scripts/ai_failure_analyst.py REDACTS from everything it sends to OpenAI:
+          CC_TEST_USERNAME: ${{ secrets.CC_TEST_USERNAME }}
+          CC_TEST_PASSWORD: ${{ secrets.CC_TEST_PASSWORD }}
+          CC_TEST2_USERNAME: ${{ secrets.CC_TEST2_USERNAME }}
+          CC_TEST2_PASSWORD: ${{ secrets.CC_TEST2_PASSWORD }}
+          CC_CASELIST_USERNAME: ${{ secrets.CC_CASELIST_USERNAME }}
+          CC_LARGE_APP_USERNAME: ${{ secrets.CC_LARGE_APP_USERNAME }}
+          HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
+          HQ_WEB_USER_PASSWORD: ${{ secrets.HQ_WEB_USER_PASSWORD }}
+          HQ_MOBILE_WORKER_USERNAME: ${{ secrets.HQ_MOBILE_WORKER_USERNAME }}
+          HQ_MOBILE_WORKER_PASSWORD: ${{ secrets.HQ_MOBILE_WORKER_PASSWORD }}
+          HQ_API_USERNAME: ${{ secrets.HQ_API_USERNAME }}
+          HQ_API_PASSWORD: ${{ secrets.HQ_API_PASSWORD }}
+        run: python scripts/ai_failure_analyst.py
+
       - name: Save report history
         if: always()
         uses: actions/cache/save@v4
@@ -282,11 +331,53 @@ jobs:
       # Same Slack channel as the core suite; the post's header carries this
       # workflow's own name ("... (Non-Core)", via GITHUB_WORKFLOW in
       # slack_notify.py), so the two are easy to tell apart.
-      - name: Post Slack notification
+      # Which Slack channel gets this run's report (and the AI analysis thread). Same scheme as
+      # dimagi-qa-sureadhere: scheduled runs and manual runs on main -> the main channel
+      # (SLACK_CHANNEL_ID); manual runs on any other branch -> the branch test channel
+      # (SLACK_CHANNEL_ID_BRANCH_TEST). A manual run can override this with the slack_channel input,
+      # e.g. to run on main without posting to the main channel.
+      - name: Set slack channel
         if: always()
+        id: configure_slack
+        uses: actions/github-script@v7
+        env:
+          CC_EVENT: ${{ github.event_name }}
+          CC_REF: ${{ github.ref_name }}
+          CC_CHOICE: ${{ github.event.inputs.slack_channel }}
+          MAIN_CHANNEL: ${{ secrets.SLACK_CHANNEL_ID }}
+          BRANCH_CHANNEL: ${{ secrets.SLACK_CHANNEL_ID_BRANCH_TEST }}
+        with:
+          result-encoding: string
+          script: |
+            const {CC_EVENT, CC_REF, CC_CHOICE, MAIN_CHANNEL, BRANCH_CHANNEL} = process.env
+            const choice = CC_CHOICE || 'auto'
+            const ids = {main: MAIN_CHANNEL, branch: BRANCH_CHANNEL}
+            const names = {main: 'SLACK_CHANNEL_ID', branch: 'SLACK_CHANNEL_ID_BRANCH_TEST'}
+            let target
+            if (CC_EVENT === 'schedule') {
+              target = 'main'
+            } else if (CC_EVENT === 'workflow_dispatch') {
+              if (choice === 'main channel') target = 'main'
+              else if (choice === 'branch test channel') target = 'branch'
+              else target = CC_REF === 'main' ? 'main' : 'branch'
+            } else {
+              target = 'branch'  // anything else (PR, push/merge) is branch-channel traffic
+            }
+            if (!ids[target]) {
+              // Never drop a report over a missing secret; never fall back INTO the main channel
+              // from a branch run.
+              const fallback = target === 'main' ? ['branch'].find(t => ids[t]) : undefined
+              core.warning(`${names[target]} is not set -- ` + (fallback ? `posting to ${names[fallback]} instead` : 'not posting to Slack'))
+              target = fallback
+            }
+            console.log(`event=${CC_EVENT} ref=${CC_REF} slack_channel=${choice} -> ${target || 'no'} channel`)
+            return target ? ids[target] : ''
+
+      - name: Post Slack notification
+        if: ${{ always() && steps.configure_slack.outputs.result != '' }}
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
-          SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
+          SLACK_CHANNEL_ID: ${{ steps.configure_slack.outputs.result }}
           REPORT_ARTIFACT_URL: ${{ steps.upload_report.outputs.artifact-url }}
           RUN_TAG: ${{ github.event.inputs.tag }}
           RUN_DURATION: ${{ steps.duration.outputs.text }}

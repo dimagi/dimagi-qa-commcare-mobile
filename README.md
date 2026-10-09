@@ -25,8 +25,14 @@ scripts/
   hq_client.py          CommCareHQ session client for build-release/settings actions
   browserstack_client.py  BrowserStack App Automate Maestro API wrapper
   report_generator.py   Builds the HTML run report (KPIs, donut, trend) - see below
-  slack_notify.py       Posts the run summary + chart to Slack - see below
+  slack_notify.py       Posts the run summary + chart to Slack (and the AI analysis thread) - see below
   run_suite.py          Orchestrates all of the above
+  run_appium_*_suite.py Appium scenarios (binary-swap upgrades, RTL, user activation, case search, ...)
+  run_with_rerun.py     Reruns an Appium suite once on failure; fail-then-pass is reported as "rerun"
+  fetch_apk.py          Downloads a dev APK from a dimagi/commcare-android Actions run (read-only there)
+  apk_info.py           Reads an APK's version for reports; repackages APK pairs for the upgrade scenarios
+  cancel_guard.py, stop_run_builds.py   Stop BrowserStack builds when a job is cancelled - see below
+  ai_failure_analyst.py Explains each failed test with an LLM and replies in the run's Slack thread
 coverage/coverage_matrix.csv   Every test case's automatability classification
 reports/                Generated HTML reports (gitignored) + history.json (tracked)
 .github/workflows/maestro-browserstack.yml   CI entry point
@@ -62,6 +68,33 @@ python scripts/run_suite.py --flow flows/install/install_04_see_apps_menu_item_v
 `run_suite.py` downloads the latest `commcare-android` release APK
 automatically if `--apk` isn't given (see the naming-drift caveat in
 `scripts/download_apk.py` - asset names aren't consistent release to release).
+
+## Choosing the APK to test (CI)
+
+The **Maestro BrowserStack QA** workflow's *Run workflow* form picks the APK:
+
+| `apk_source` | What is tested |
+|---|---|
+| `GitHub Releases` (default) | The latest `commcare-android` release APK, or the one named by `release_tag`. Scheduled runs always use this. |
+| `Internal latest APK` | The newest dev build from a successful, manually dispatched `commcare-android PR CI` run on **any branch** (the branch changes every build). Type a branch in `commcare_android_branch` to restrict it. The chosen run, branch and commit are printed in the job log. |
+| `resources/*.apk` | A committed APK, e.g. `app-commcare-qaAutomation.apk` (the 2.65 prod dev build) or `app-cccStaging-qaAutomation.apk` (staging, experimental). The list is static: a new `resources/*.apk` needs a matching option added to the workflow by hand (`*.apk` is gitignored, so add it with `git add -f`). |
+
+`commcare_android_run` (a run id or URL) overrides all of the above, and `commcare_android_artifact`
+(default `commcare-release-apk`) picks which artifact of that run to use. `scripts/fetch_apk.py` does the
+download and only ever **reads** from `dimagi/commcare-android` - it cannot dispatch or cancel anything
+there. `qaAutomation` artifacts expire after 3 days.
+
+Reports name a custom APK by its real version: `2.65 · master · run 37269114433 (custom)`.
+
+**Dev builds and the upgrade scenarios.** Dev/PR builds carry `versionCode 1`, lower than the 2.45 binary the
+Appium binary-swap scenarios (`updates_partial_failed` scenario 1/2/5) upgrade *from*, so Android would
+reject the in-place install. `apk_info.repackage_for_upgrade` re-signs both APKs with a throwaway key and
+sets the new one's versionCode just above the old one's (app code untouched); release APKs are used as-is.
+If the Android build-tools aren't available the scenarios are reported as skipped, not failed.
+
+**Layouts across versions.** Flows are written once to work on the GitHub-release layout and the dev
+build's - e.g. the App Manager flows tap the app row (`app_name`, present from 2.45 through 2.65) instead
+of the middle of the list. There are no per-version conditions or duplicate flows.
 
 ## HTML report + trend
 
@@ -99,6 +132,12 @@ far, reported a testcase's `name` as exactly its `flows/<workflow>/<file>.yaml`
 path, but that's not documented as guaranteed anywhere, so `match_flow_files`
 falls back to matching by filename if that ever changes. Without
 `--retry-failed`, "Rerun" stays at 0.
+
+**Appium suites.** `run_with_rerun.py scripts/run_appium_<suite>.py ...` reruns a whole suite script once
+if it fails and reports a test that failed then passed as **Rerun**. It wraps the suites that run each
+scenario once (RTL, user activation, MM1/MM2/MM3, Case Search & Claim 1/2, case-search checkbox); the
+others retry their own failed scenarios. Reruns can hide a real failure and double the runtime of a
+genuinely broken suite - the same trade-off as `--retry-failed`.
 
 **Failure step detail is also best-effort.** BrowserStack doesn't publicly
 document the `maestro_commands` JSON shape, so `report_generator.fetch_failed_step`
@@ -141,6 +180,28 @@ won't post into a channel it hasn't been invited to, regardless of scopes.
 Both `SLACK_BOT_TOKEN` and `SLACK_CHANNEL_ID` are read as repo secrets in CI
 (see `.github/workflows/maestro-browserstack.yml`) or from `.env` locally.
 
+**Which channel.** A `slack_channel` input on the workflow (`auto` / `main channel` / `branch test channel`)
+decides, as in dimagi-qa-sureadhere. With `auto`: scheduled runs and manual runs on `main` post to the
+main channel (`SLACK_CHANNEL_ID`); manual runs on any other branch post to the branch test channel
+(`SLACK_CHANNEL_ID_BRANCH_TEST`). Choose `branch test channel` to run on `main` without posting to the main
+channel. A missing branch secret never falls back into the main channel.
+
+**Cancelled and incomplete runs.** A cancelled run posts nothing. If a test group never reported results
+(e.g. its job crashed) the card gets a warning icon and an "INCOMPLETE RUN - only N of M groups reported"
+line instead of a green check.
+
+**AI failure analysis.** When tests failed, `scripts/ai_failure_analyst.py` (a step in the `merge-reports`
+job) sends each failed test - the failed step/error, BrowserStack's evidence (failing command, on-screen
+text, last steps) and the flow YAML - to a model and writes `reports/ai_failure_report.md` into the
+report artifact. `slack_notify.py` then replies **in the thread** of the run's message with it, labelled
+AI-generated. Account names, passwords and email addresses are redacted before anything is sent. The
+provider is picked from the key: an `sk-ant-` key (from `ANTHROPIC_API_KEY`, else `OPENAI_API_KEY`) uses
+Anthropic, any other key uses OpenAI. Needs one of those repo secrets; without it the step logs
+"MISSING" and does nothing, and it can never fail the workflow. Every run logs whether the key arrived
+and whether the provider accepted it. The thread reply also needs the bot's channel-history scope
+(`channels:history`, or `groups:history` for a private channel); without it nothing is posted and the
+report stays in the artifact.
+
 **One message per run.** Earlier versions of this script also uploaded the
 HTML report to Slack directly, which needed a *separate* bare file-share
 post before the main message (Slack only makes an uploaded file's permalink
@@ -156,6 +217,16 @@ To preview without posting for real, run `scripts/report_generator.render_chart_
 and `scripts/slack_notify.build_message` directly against a saved
 `history.json`/`results.json` - `slack_notify.py`'s `main()` is the only
 part that actually talks to Slack.
+
+## Cancelling a run
+
+Cancelling a job stops its BrowserStack builds, and the group's remaining test steps do not start:
+the chunk steps use `!cancelled() && ...` (they still run after a *failure*, not after a cancel).
+`scripts/cancel_guard.py` records every build and Appium session a process starts and, on the cancel
+signal (GitHub gives a cancelled step about 10 s), stops them in parallel via BrowserStack's
+`POST /app-automate/maestro/builds/<id>/stop`. A `Stop BrowserStack builds if the job was cancelled` step
+(`scripts/stop_run_builds.py`) is the safety net for builds the process couldn't stop itself. A
+**force-cancel** skips all of that - stop any leftover builds by hand in that case.
 
 ## What's actually implemented vs. documented-only
 

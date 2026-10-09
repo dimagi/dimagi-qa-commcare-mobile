@@ -160,25 +160,48 @@ def missing_groups():
     return missing, len(expected)
 
 
-def build_cancelled_message(run_url):
-    workflow = os.environ.get("GITHUB_WORKFLOW", "Maestro BrowserStack QA")
-    event = os.environ.get("GITHUB_EVENT_NAME", "manual")
-    event_label = _EVENT_LABELS.get(event, event.replace("_", " ").upper())
-    tag = (os.environ.get("RUN_TAG") or "ALL").upper()
-    line = (f"Triggered by *{os.environ.get('GITHUB_ACTOR', '?')}* · on branch "
-            f"*{os.environ.get('GITHUB_REF_NAME', '?')}*")
-    if os.environ.get("RUN_DURATION"):
-        line += f" · stopped after *{os.environ['RUN_DURATION']}*"
-    lines = [
-        f":no_entry: *[{tag}] {workflow} Run #{os.environ.get('GITHUB_RUN_NUMBER', '?')} was CANCELLED "
-        f"({event_label} event)*",
-        line,
-        "_No pass rate reported: the test groups were stopped before they finished, and any partial "
-        "numbers would not represent the suite._",
-    ]
-    if run_url:
-        lines += ["", f"<{run_url}|:link: View run>"]
-    return "\n".join(lines)
+def find_parent_ts(token, channel_id, marker, attempts=4):
+    """ts of the message just posted for this run, so the AI analysis can be threaded under it.
+    Same approach as the sibling repos' Slack steps: look through the channel's recent history for a
+    message from the last 5 minutes whose text carries the run marker (files.completeUploadExternal
+    does not return the message ts). Needs the bot's history scope; returns None if unavailable."""
+    import time
+    for attempt in range(attempts):
+        time.sleep(2 + attempt * 2)  # Slack indexes the new message a moment after the upload completes
+        try:
+            history = _slack_get("conversations.history", token, params={"channel": channel_id, "limit": 15})
+            now = time.time()
+            for msg in history.get("messages", []):
+                if now - float(msg.get("ts", 0)) < 300 and marker in (msg.get("text", "") or ""):
+                    return msg["ts"]
+        except Exception as exc:  # noqa: BLE001
+            print(f"Could not read channel history for the AI analysis thread: {exc}")
+            return None
+    return None
+
+
+def _slack_get(method, token, **kwargs):
+    resp = requests.get(f"{SLACK_API}/{method}", headers={"Authorization": f"Bearer {token}"}, **kwargs)
+    resp.raise_for_status()
+    data = resp.json()
+    if not data.get("ok"):
+        raise RuntimeError(f"Slack API {method} failed: {data.get('error')}")
+    return data
+
+
+def post_ai_analysis(token, channel_id):
+    """After the run's card is posted: reply in its thread with reports/ai_failure_report.md, if the
+    AI failure analyst produced one. Best effort - never raises."""
+    try:
+        import ai_failure_analyst
+        if not ai_failure_analyst.REPORT_PATH.exists():
+            return
+        run_number = os.environ.get("GITHUB_RUN_NUMBER", "")
+        marker = f"Run #{run_number}" if run_number else "Test Summary"
+        thread_ts = find_parent_ts(token, channel_id, marker)
+        ai_failure_analyst.post_to_slack(token, channel_id, thread_ts=thread_ts, run_label=marker)
+    except Exception as exc:  # noqa: BLE001
+        print(f"AI analysis Slack post skipped: {type(exc).__name__}: {exc}")
 
 
 def build_message(counts, failed_results, report_artifact_url, run_url, missing=(), expected=0):
@@ -267,10 +290,9 @@ def main():
 
     if os.environ.get("MATRIX_RESULT") == "cancelled":
         # The test groups were stopped (e.g. the run was cancelled to free BrowserStack slots).
-        # Whatever little was merged (often just the HQ-only update-content-check) is not a result.
-        _slack_post("chat.postMessage", token,
-                    json={"channel": channel_id, "text": build_cancelled_message(_gh_run_url())})
-        print("Run was cancelled - posted a cancelled notice instead of results.")
+        # Whatever little was merged (often just the HQ-only update-content-check) is not a result,
+        # and a "cancelled" card is just noise - post nothing.
+        print("Run was cancelled/aborted - not posting anything to Slack.")
         return
 
     results_path = REPORTS_DIR / "latest_results.json"
@@ -328,6 +350,8 @@ def main():
         # upload_files()'s own header) - this is what keeps it to a single
         # Slack message instead of one per file.
         upload_files(token, channel_id, files_to_upload, initial_comment=message)
+
+    post_ai_analysis(token, channel_id)
 
     print("Posted Slack notification.")
 
