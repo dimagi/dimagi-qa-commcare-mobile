@@ -152,7 +152,8 @@ tags:
       # menu - "Element not found" - while the failure hierarchy shows the device on the normal
       # login screen a moment later. So only log out + log in when the Home screen is really
       # showing (nsv_home_screen, the same element logout.yaml swipes); on any other screen
-      # just hold ~10s so the transition can finish, then the loop re-checks edit_username.
+      # wait (up to 30s) for either end state - the login screen or the Home screen - so the transition
+      # can finish, then the loop re-checks edit_username.
       - runFlow:
           when:
             visible:
@@ -169,7 +170,10 @@ tags:
             notVisible:
               id: "org.commcare.dalvik:id/nsv_home_screen"
           commands:
-            - evalScript: ${ (function(){ var end = Date.now() + 10000; while (Date.now() < end) {} })() }
+            - extendedWaitUntil:
+                visible:
+                  id: "org.commcare.dalvik:id/(edit_username|nsv_home_screen)"
+                timeout: 30000
 - assertVisible:
     id: "org.commcare.dalvik:id/edit_username"
 # Update 5 (part 2) - log back in and verify the app updated to Test Three
