@@ -336,8 +336,13 @@ def slack_text(report_path=REPORT_PATH):
     if not path.exists():
         return ""
     text = path.read_text(encoding="utf-8").strip()
+    # The Slack message already opens with its own "AI Failure Analysis" header, so drop the report's
+    # title line, and drop the "---" separators (Slack does not render them as rules).
+    text = re.sub(r"\A#\s*AI Failure Analysis\s*\n", "", text)
+    text = re.sub(r"^\s*---\s*$", "", text, flags=re.M)
     text = re.sub(r"^#+\s*(.+)$", r"*\1*", text, flags=re.M)   # markdown headings -> a bold line
     text = re.sub(r"\*\*(.+?)\*\*", r"*\1*", text)             # **bold** -> Slack *bold*
+    text = re.sub(r"\n{3,}", "\n\n", text).strip()             # tidy the gaps those removals leave
     if len(text) > SLACK_MESSAGE_LIMIT:
         text = text[:SLACK_MESSAGE_LIMIT] + "\n... [truncated - see ai_failure_report.md in the run's report artifact]"
     return text
