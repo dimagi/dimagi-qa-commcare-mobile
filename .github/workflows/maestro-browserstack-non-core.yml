@@ -274,6 +274,19 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
           BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
+          # Values scripts/ai_failure_analyst.py REDACTS from everything it sends to OpenAI:
+          CC_TEST_USERNAME: ${{ secrets.CC_TEST_USERNAME }}
+          CC_TEST_PASSWORD: ${{ secrets.CC_TEST_PASSWORD }}
+          CC_TEST2_USERNAME: ${{ secrets.CC_TEST2_USERNAME }}
+          CC_TEST2_PASSWORD: ${{ secrets.CC_TEST2_PASSWORD }}
+          CC_CASELIST_USERNAME: ${{ secrets.CC_CASELIST_USERNAME }}
+          CC_LARGE_APP_USERNAME: ${{ secrets.CC_LARGE_APP_USERNAME }}
+          HQ_WEB_USER_EMAIL: ${{ secrets.HQ_WEB_USER_EMAIL }}
+          HQ_WEB_USER_PASSWORD: ${{ secrets.HQ_WEB_USER_PASSWORD }}
+          HQ_MOBILE_WORKER_USERNAME: ${{ secrets.HQ_MOBILE_WORKER_USERNAME }}
+          HQ_MOBILE_WORKER_PASSWORD: ${{ secrets.HQ_MOBILE_WORKER_PASSWORD }}
+          HQ_API_USERNAME: ${{ secrets.HQ_API_USERNAME }}
+          HQ_API_PASSWORD: ${{ secrets.HQ_API_PASSWORD }}
         run: python scripts/ai_failure_analyst.py
 
       - name: Save report history

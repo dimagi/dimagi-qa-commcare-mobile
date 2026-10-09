@@ -159,6 +159,26 @@ def command_log_evidence(result, max_chars=2500):
         return ""
 
 
+# Environment variables whose VALUES (test accounts, HQ logins) must never reach OpenAI. Each value
+# is replaced with a <NAME> placeholder wherever it appears in the evidence or the flow text.
+SENSITIVE_ENV_VARS = (
+    "CC_TEST_USERNAME", "CC_TEST_PASSWORD", "CC_TEST2_USERNAME", "CC_TEST2_PASSWORD",
+    "CC_CASELIST_USERNAME", "CC_LARGE_APP_USERNAME", "HQ_WEB_USER_EMAIL", "HQ_WEB_USER_PASSWORD",
+    "HQ_MOBILE_WORKER_USERNAME", "HQ_MOBILE_WORKER_PASSWORD", "HQ_API_USERNAME", "HQ_API_PASSWORD",
+)
+_EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
+
+
+def redact(text):
+    """Remove account names/passwords (from the SENSITIVE_ENV_VARS above) and any email address from
+    text that is about to be sent to OpenAI. Longest values first so one value can't clip another."""
+    values = sorted(((os.environ.get(n, "").strip(), n) for n in SENSITIVE_ENV_VARS), key=lambda v: -len(v[0]))
+    for value, name in values:
+        if len(value) >= 3:
+            text = text.replace(value, f"<{name}>")
+    return _EMAIL_RE.sub("<email>", text)
+
+
 def build_prompt(result, apk_version=""):
     name = result["name"]
     parts = [f"Test: {name}",
@@ -171,7 +191,7 @@ def build_prompt(result, apk_version=""):
     source = flow_source(name)
     if source:
         parts.append("Flow YAML (comments stripped):\n```yaml\n" + source + "\n```")
-    return "\n\n".join(parts)
+    return redact("\n\n".join(parts))
 
 
 # ----------------------------------------------------------------------- analysis
@@ -238,22 +258,27 @@ def slack_text(report_path=REPORT_PATH):
 
 def post_to_slack(token, channel_id, thread_ts=None, run_label="", report_path=REPORT_PATH):
     """Post the analysis as a reply in the run's Slack thread (thread_ts = the run message's ts), like
-    the AI failure analysts in dimagi-qa / dimagi-qa-sureadhere. Without a thread_ts it posts a normal
-    message in the channel carrying `run_label`, so the analysis is never lost. Never raises."""
+    the AI failure analysts in dimagi-qa / dimagi-qa-sureadhere. If the run's message can't be found
+    (e.g. the bot lacks the channel-history scope) NOTHING is posted - a standalone model-written
+    message in the shared channel would be noise - and the report stays in the run's artifact.
+    Never raises."""
     text = slack_text(report_path)
     if not text:
         return False
+    if not thread_ts:
+        print(f"::warning::AI failure analysis not posted to Slack: could not find the {run_label or 'run'} "
+              f"message to reply under (the bot needs the conversations.history scope). The report is in "
+              f"the run's report artifact (ai_failure_report.md).")
+        return False
     import requests
-    header = ":robot_face: *AI Failure Analysis*" + (f" - {run_label}" if run_label and not thread_ts else "")
-    payload = {"channel": channel_id, "text": f"{header}\n\n{text}", "mrkdwn": True}
-    if thread_ts:
-        payload["thread_ts"] = thread_ts
+    header = (":robot_face: *AI Failure Analysis* _(AI-generated - it can be wrong; check the evidence "
+              "in the test report before acting on it)_")
+    payload = {"channel": channel_id, "text": f"{header}\n\n{text}", "mrkdwn": True, "thread_ts": thread_ts}
     try:
         resp = requests.post("https://slack.com/api/chat.postMessage",
                              headers={"Authorization": f"Bearer {token}"}, json=payload, timeout=15)
         ok = bool(resp.ok and resp.json().get("ok"))
-        where = "as a thread reply" if thread_ts else "as a channel message (parent message not found)"
-        print("[ai_failure_analyst] Slack analysis " + (f"posted {where}." if ok else f"post failed: {resp.text[:120]}"))
+        print("[ai_failure_analyst] Slack analysis " + ("posted as a thread reply." if ok else f"post failed: {resp.text[:120]}"))
         return ok
     except Exception as exc:  # noqa: BLE001 - reporting must never fail the workflow
         print(f"[ai_failure_analyst] Slack post failed (non-fatal): {type(exc).__name__}")

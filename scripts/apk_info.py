@@ -209,12 +209,14 @@ def _make_signer_args(work):
     runners), else a key + self-signed certificate made with the `cryptography` package."""
     keytool = find_build_tool("keytool")
     if keytool:
-        password = "qa-" + os.urandom(6).hex()
+        # throwaway key; the password goes through the environment (keytool -storepass:env /
+        # apksigner --ks-pass env:), not argv, so it never shows up in a process listing
+        os.environ["QA_REPACK_KS_PASS"] = "qa-" + os.urandom(6).hex()
         keystore = work / "qa-repack.keystore"
-        _run([keytool, "-genkeypair", "-keystore", str(keystore), "-storepass", password,
-              "-keypass", password, "-alias", "qa", "-keyalg", "RSA", "-keysize", "2048",
+        _run([keytool, "-genkeypair", "-keystore", str(keystore), "-storepass:env", "QA_REPACK_KS_PASS",
+              "-keypass:env", "QA_REPACK_KS_PASS", "-alias", "qa", "-keyalg", "RSA", "-keysize", "2048",
               "-validity", "3650", "-dname", "CN=QA upgrade-test repack"])
-        return ["--ks", str(keystore), "--ks-pass", f"pass:{password}", "--ks-key-alias", "qa"]
+        return ["--ks", str(keystore), "--ks-pass", "env:QA_REPACK_KS_PASS", "--ks-key-alias", "qa"]
     try:
         import datetime
         from cryptography import x509
