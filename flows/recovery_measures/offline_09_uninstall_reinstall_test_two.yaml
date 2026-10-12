@@ -62,8 +62,15 @@ tags:
     visible:
       id: "org.commcare.dalvik:id/apps_list_view"
     timeout: 15000
+# 2.65 (commcare-android a6f435d7a, "Move non-list views to listview header") moved
+# the banner/instructions/Install button INTO the ListView's header, so the middle
+# of apps_list_view - where tapping the container used to land on the app row - is
+# now blank space below the single row, and the app page never opened. Tap the app
+# row itself: R.id.app_name exists in app_title_view/single_app_view from 2.45.0
+# through 2.65 (checked per release tag), so this works on old and new layouts alike.
 - tapOn:
-    id: "org.commcare.dalvik:id/apps_list_view"
+    id: "org.commcare.dalvik:id/app_name"
+    index: 0
 - extendedWaitUntil:
     visible:
       id: "org.commcare.dalvik:id/uninstall_button"
