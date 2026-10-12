@@ -77,7 +77,7 @@ The **Maestro BrowserStack QA** workflow's *Run workflow* form picks the APK:
 |---|---|
 | `GitHub Releases` (default) | The latest `commcare-android` release APK, or the one named by `release_tag`. Scheduled runs always use this. |
 | `Internal latest APK` | The newest dev build from a successful, manually dispatched `commcare-android PR CI` run on **any branch** (the branch changes every build). Type a branch in `commcare_android_branch` to restrict it. The chosen run, branch and commit are printed in the job log. |
-| `resources/*.apk` | A committed APK, e.g. `app-commcare-qaAutomation.apk` (the 2.65 prod dev build) or `app-cccStaging-qaAutomation.apk` (staging, experimental). The list is static: a new `resources/*.apk` needs a matching option added to the workflow by hand (`*.apk` is gitignored, so add it with `git add -f`). |
+| `resources/*.apk` | A committed APK, e.g. `app-commcare-qaAutomation.apk` (the 2.65 prod dev build). The list is static: a new `resources/*.apk` needs a matching option added to the workflow by hand (`*.apk` is gitignored, so add it with `git add -f`). |
 
 `commcare_android_run` (a run id or URL) overrides all of the above, and `commcare_android_artifact`
 (default `commcare-release-apk`) picks which artifact of that run to use. `scripts/fetch_apk.py` does the

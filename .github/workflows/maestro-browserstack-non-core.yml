@@ -54,7 +54,6 @@ on:
           - "Internal latest APK"
           - "resources/app-commcare-release-Android16.apk"
           - "resources/app-commcare-qaAutomation.apk"
-          - "resources/app-cccStaging-qaAutomation.apk"
       slack_channel:
         description: "Slack channel for the report. auto = scheduled runs and manual runs on main go to the main channel; runs on any other branch go to the branch test channel. Pick 'branch test channel' to run on main WITHOUT posting to the main channel."
         required: false
