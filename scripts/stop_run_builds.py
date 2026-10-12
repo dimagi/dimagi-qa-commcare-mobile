@@ -40,8 +40,10 @@ def main():
         return
     print(f"Stopping {len(builds)} unfinished BrowserStack build(s) recorded by this job ...")
     for build_id in builds:
-        cancel_guard.stop_build(build_id)
-        cancel_guard.unregister_build(build_id)
+        # Only record the build as done when BrowserStack confirmed the stop (or that it had already
+        # finished) - a failed stop must stay visible in the registry, not be marked done.
+        if cancel_guard.stop_build(build_id):
+            cancel_guard.unregister_build(build_id)
 
 
 if __name__ == "__main__":
