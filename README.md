@@ -198,7 +198,9 @@ AI-generated. Account names, passwords and email addresses are redacted before a
 provider is picked from the key: an `sk-ant-` key (from `ANTHROPIC_API_KEY`, else `OPENAI_API_KEY`) uses
 Anthropic, any other key uses OpenAI. Needs one of those repo secrets; without it the step logs
 "MISSING" and does nothing, and it can never fail the workflow. Every run logs whether the key arrived
-and whether the provider accepted it. The thread reply also needs the bot's channel-history scope
+(only "present" and the provider - this repo is public, so nothing derived from the key is printed unless you set
+`AI_ANALYST_SHOW_KEY_FINGERPRINT=1` for a one-off debugging run) and whether the provider accepted it. Both
+providers are called over plain `requests`; there is no extra Python package. The thread reply also needs the bot's channel-history scope
 (`channels:history`, or `groups:history` for a private channel); without it nothing is posted and the
 report stays in the artifact.
 
