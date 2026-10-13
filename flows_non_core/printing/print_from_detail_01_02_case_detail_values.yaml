@@ -1,0 +1,66 @@
+appId: org.commcare.dalvik
+tags:
+  - printing
+  - partial
+---
+# Master Mobile Plan (2026) > Printing > Print from Detail 1-2.
+# Start > Case Tests > Update a Case, pick a case, and check its case detail
+# shows the Name / Status fields the sheet asks you to note. If the shared
+# test user has no Case Tests cases yet, one is created first via Create a
+# Case (same steps as flows/case_filters/fuzzy_search_01_03.yaml).
+#
+# Print from Detail 3-4 are blocked on app config, not tooling (confirmed
+# live 2026-10-02): CommCare only shows "Print Case Detail" when the detail
+# has a print template (EntityDetailActivity.java:251,
+# detail.isPrintEnabled()), and no case detail in the current [Master] Basic
+# Tests build defines one (checked in its released CCZ's suite.xml). Once
+# someone adds a print template on HQ, add: More options > "Print Case
+# Detail" (menu.print.detail) and wait for the system print UI, same as
+# form_printing_01_04.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_BASIC_TESTS}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+- tapOn: "Start"
+- tapOn: "Case Tests"
+- tapOn: "Update a Case"
+- runFlow:
+    when:
+      notVisible:
+        id: "org.commcare.dalvik:id/screen_entity_select_list"
+    commands:
+      - back
+      - tapOn: "Create a Case"
+      - inputText: "Maestro Print Case"
+      - tapOn:
+          id: "org.commcare.dalvik:id/nav_btn_next"
+      - tapOn: "Confirm - Please create this case."
+      - tapOn:
+          id: "org.commcare.dalvik:id/nav_btn_finish"
+          optional: true
+      - extendedWaitUntil:
+          visible: "Start"
+          timeout: 15000
+      - tapOn: "Start"
+      - tapOn: "Case Tests"
+      - tapOn: "Update a Case"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/screen_entity_select_list"
+    timeout: 15000
+- tapOn:
+    id: "org.commcare.dalvik:id/screen_entity_select_list"
+- extendedWaitUntil:
+    visible: "Name"
+    timeout: 15000
+- assertVisible: "Status"
+- assertVisible:
+    text: "(?i)continue"

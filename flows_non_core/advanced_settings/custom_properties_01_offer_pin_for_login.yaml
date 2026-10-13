@@ -1,0 +1,125 @@
+appId: org.commcare.dalvik
+tags:
+  - advanced_settings
+  - automatable
+env:
+  # Throwaway 4-digit PIN for this flow only. It lives on this fresh,
+  # cleared app install and is gone at the next install.
+  TEST_PIN: "1357"
+---
+# Master Mobile Plan (2026) > Advanced Settings > Custom Properties 1
+# (cc-offer-pin-for-login=yes on the Advanced Settings app).
+#   1-3. Log in: the "Create a PIN?" offer appears.
+#   4-5. "No, and don't ask again", log out, log back in: no offer.
+#   6-7. More options > "Set My PIN" (home.menu.pin.set), confirm with the
+#        password (pin.auth.prompt.password), set a PIN, log out.
+#   8.   Log in with that PIN.
+# Dialog texts are the pin.* strings in android_translatable_strings.txt, the
+# same ones the core suite's flows/common/*pin* helpers use. The PIN dialog
+# can sit under the post-login auto-sync dialog on this app (see
+# common/dismiss_pin_prompt_if_shown.yaml), so the sync is waited out first.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_ADVANCED_SETTINGS}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+# The post-login sync dialog can open on top of the PIN dialog AFTER a single
+# "sync gone" check has already passed (confirmed live, CI run 37325239305:
+# screenshot shows "Communicating with Server" covering "Create a PIN?"), so
+# keep waiting the sync out until the PIN dialog itself is readable.
+- repeat:
+    times: 6
+    while:
+      notVisible: "Create a PIN?"
+    commands:
+      - extendedWaitUntil:
+          notVisible: "Communicating with Server"
+          timeout: 120000
+      - waitForAnimationToEnd:
+          timeout: 5000
+- extendedWaitUntil:
+    visible: "Create a PIN?"
+    timeout: 20000
+- runFlow:
+    file: ../common/dismiss_pin_prompt_dont_ask_again.yaml
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+
+# 4-5: no offer after logging back in.
+- runFlow:
+    file: ../common/logout.yaml
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- extendedWaitUntil:
+    notVisible: "Communicating with Server"
+    timeout: 120000
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+- assertNotVisible: "Create a PIN?"
+
+# 6-7: set a PIN from the menu.
+- tapOn: "More options"
+- tapOn: "Set My PIN"
+- extendedWaitUntil:
+    visible: "Enter your password"
+    timeout: 10000
+# The password prompt is PinAuthenticationActivity (layout pin_auth_view.xml),
+# whose field is R.id.password_entry, not pin_entry (confirmed live 2026-10-02).
+- tapOn:
+    id: "org.commcare.dalvik:id/password_entry"
+- inputText: "${CC_TEST_PASSWORD}"
+- tapOn:
+    id: "org.commcare.dalvik:id/pin_confirm_button"
+- extendedWaitUntil:
+    visible: "Enter a 4-digit PIN"
+    timeout: 10000
+- tapOn:
+    id: "org.commcare.dalvik:id/pin_entry"
+- inputText: "${TEST_PIN}"
+- tapOn:
+    id: "org.commcare.dalvik:id/pin_confirm_button"
+- assertVisible: "Re-Enter the PIN you chose"
+- tapOn:
+    id: "org.commcare.dalvik:id/pin_entry"
+- inputText: "${TEST_PIN}"
+- tapOn:
+    id: "org.commcare.dalvik:id/pin_confirm_button"
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 15000
+- runFlow:
+    file: ../common/logout.yaml
+
+# 8: log in with the PIN.
+# Inline rather than flows/common/login_with_pin.yaml: that helper types the
+# username without clearing the field, and CommCare keeps the last username
+# after logout, so it produced "test1test1" (confirmed live 2026-10-02). The
+# username is already filled in here, so only the PIN goes in.
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/edit_password"
+    timeout: 30000
+- assertVisible:
+    id: "org.commcare.dalvik:id/edit_username"
+    text: '^\Q${CC_TEST_USERNAME}\E$'
+- tapOn:
+    id: "org.commcare.dalvik:id/edit_password"
+- eraseText
+- inputText: "${TEST_PIN}"
+- tapOn:
+    id: "org.commcare.dalvik:id/login_button"
+- extendedWaitUntil:
+    notVisible: "Communicating with Server"
+    timeout: 120000
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 30000

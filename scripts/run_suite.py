@@ -35,6 +35,40 @@ from browserstack_client import BrowserStackClient
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 FLOWS_DIR = REPO_ROOT / "flows"
+# Selectable flow trees for --flows-root. "flows" is the core CommCare Mobile
+# suite (the Inventory sheet's "CommCare Mobile" tab); "flows_non_core" holds
+# the Master Mobile Plan tabs listed on the "CommCare Mobile - Non-Core" tab
+# instead, kept in a separate tree so a core run's tag/"All" selection can
+# never pick them up (and vice versa) - see flows_non_core/README.md.
+FLOWS_ROOTS = {
+    "flows": REPO_ROOT / "flows",
+    "flows_non_core": REPO_ROOT / "flows_non_core",
+}
+# Shared runFlow subflows (login, install_app_by_code, ...) always come from
+# the core tree's common/, whichever root is selected - non-core flows
+# reference them as ../common/<file>.yaml exactly like core flows do, and
+# build_flows_zip() places them at the zip's common/ either way. A non-core-
+# only helper can live in flows_non_core/common/; it's merged into the same
+# zip common/ folder (a filename clash with core common/ is an error).
+CORE_COMMON_DIR = REPO_ROOT / "flows" / "common"
+
+
+def common_dirs():
+    """The common/ subflow folders for the currently selected FLOWS_DIR."""
+    dirs = [CORE_COMMON_DIR]
+    own = FLOWS_DIR / "common"
+    if own != CORE_COMMON_DIR and own.is_dir():
+        dirs.append(own)
+    return dirs
+
+
+def common_flow_files():
+    files = [p for d in common_dirs() for p in d.glob("*.yaml")]
+    names = [p.name for p in files]
+    clashes = sorted({n for n in names if names.count(n) > 1})
+    if clashes:
+        raise SystemExit(f"common/ subflow name clash between {[str(d) for d in common_dirs()]}: {clashes}")
+    return files
 
 # Whitelist of vars flows may reference via ${VAR} - passed to BrowserStack's
 # setEnvVariables so it can do the substitution server-side (this isn't a
@@ -45,6 +79,9 @@ FLOW_ENV_VARS = [
     "HQ_DOMAIN",
     "HQ_MOBILE_WORKER_USERNAME", "HQ_MOBILE_WORKER_PASSWORD",
     "HQ_WEB_USER_EMAIL", "HQ_WEB_USER_PASSWORD",
+    # flows_non_core/ only: Case List Optimization and Performance Tests users
+    # (their password is the same as test1's, so they reuse CC_TEST_PASSWORD).
+    "CC_CASELIST_USERNAME", "CC_LARGE_APP_USERNAME",
 ]
 
 
@@ -124,6 +161,22 @@ def select_flow_files(tags=None, explicit_flows=None):
             # --tag not_automatable.
             if "not_automatable" in flow_tags and (not tags or "not_automatable" not in tags):
                 continue
+            # Same exclusion pattern: a flow that is written and correct but
+            # can't pass until something is fixed on HQ's side (app config /
+            # data, not the client or this repo) - e.g. flows_non_core/graphing/
+            # graphing_20_22 (the app's mobile reports fixture isn't restored
+            # to the test user). Run it on purpose with --flow or
+            # --tag blocked_app_config once the HQ side is fixed.
+            if "blocked_app_config" in flow_tags and (not tags or "blocked_app_config" not in tags):
+                continue
+            # Same exclusion pattern: a flow that only makes sense when a
+            # dedicated runner has prepared HQ state for it and passes it
+            # --env values (e.g. scripts/run_targeted_updates_check.py for
+            # flows_non_core/advanced_settings/custom_properties_11_14_*) -
+            # swept into a plain tag run it would just fail on a missing
+            # ${...} variable. Run it through its runner.
+            if "needs_dedicated_runner" in flow_tags and (not tags or "needs_dedicated_runner" not in tags):
+                continue
             if not tags:
                 selected.add(path)
                 continue
@@ -131,7 +184,7 @@ def select_flow_files(tags=None, explicit_flows=None):
                 selected.add(path)
 
     # common/ is always needed for runFlow references
-    for path in (FLOWS_DIR / "common").glob("*.yaml"):
+    for path in common_flow_files():
         selected.add(path)
     return sorted(selected)
 
@@ -168,7 +221,9 @@ def build_flows_zip(flow_files, out_dir):
     if staging.exists():
         shutil.rmtree(staging)
     for f in flow_files:
-        rel = f.relative_to(FLOWS_DIR)
+        # common/ subflows may come from the core tree even when FLOWS_DIR is
+        # flows_non_core (see CORE_COMMON_DIR) - always land them at common/.
+        rel = pathlib.Path("common", f.name) if f.parent.name == "common" else f.relative_to(FLOWS_DIR)
         dest = staging / rel
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(f, dest)
@@ -260,7 +315,7 @@ def run_all_builds(bs, flow_files, app_url, args, env_variables, other_app_urls,
     (synthesized as "failed" with a clear reason) rather than risking the
     open-ended retry/fallback chain that caused the 6-hour hang above."""
     non_common_files = [f for f in flow_files if f.parent.name != "common"]
-    common_files = list((FLOWS_DIR / "common").glob("*.yaml"))
+    common_files = common_flow_files()
     chunks = chunk_flows_by_execute_length(non_common_files, FLOWS_DIR)
 
     def synthesize_missing(files, reason):
@@ -621,7 +676,20 @@ def main():
                               "flows and merge the result - a test that passes on retry is reported as "
                               "'rerun' (flaky) instead of 'failed'. Relies on report_generator.match_flow_files' "
                               "name-matching heuristic - see its docstring caveat.")
+    parser.add_argument("--env", action="append", dest="extra_env", default=[], metavar="KEY=VALUE",
+                         help="Extra flow variable (repeatable), passed to BrowserStack alongside the "
+                              "FLOW_ENV_VARS / APP_CODE_* ones and overriding them - for a caller that "
+                              "prepares HQ state itself and must hand the flow a value only it knows "
+                              "(e.g. scripts/run_targeted_updates_check.py's install code for the build "
+                              "it just cut). Never use it for secrets that belong in FLOW_ENV_VARS.")
+    parser.add_argument("--flows-root", choices=sorted(FLOWS_ROOTS), default="flows",
+                         help="Which flow tree --tag/--flow selection runs against: the core suite "
+                              "(flows/, default) or the non-core one (flows_non_core/). Shared "
+                              "common/ subflows come from flows/common/ either way.")
     args = parser.parse_args()
+
+    global FLOWS_DIR
+    FLOWS_DIR = FLOWS_ROOTS[args.flows_root]
 
     load_dotenv(REPO_ROOT / ".env")
 
@@ -747,10 +815,62 @@ def _run_hq_teardown(hq_teardown_path, client, apk_commcare_version):
                   f"may need manual fixup on HQ: {exc}")
 
 
+_MAX_VERSION_TAG = re.compile(r"^commcare_max_(\d+)_(\d+)$")
+
+
+def _version_tuple(text):
+    match = re.match(r"^\s*(\d+)\.(\d+)", text or "")
+    return (int(match.group(1)), int(match.group(2))) if match else None
+
+
+def _apply_version_gate(flow_files, apk_path, apk_commcare_version, device):
+    """Skip flows whose feature no longer exists in the CommCare under test.
+
+    A flow tagged `commcare_max_<major>_<minor>` (e.g. commcare_max_2_64) only applies up to that
+    CommCare version; on a newer APK it is not dispatched and is reported as skipped with the
+    reason instead. Example: flows_non_core/advanced_settings/custom_properties_15_* - 2.65
+    deleted root-menu-as-home-screen (commcare-android 568e15b6d), but 2.64 is still the current
+    release. The version comes from the release tag, else the APK's own manifest; if neither is
+    readable, every flow runs as before. Returns (flow_files_to_run, skipped_results)."""
+    version = _version_tuple(apk_commcare_version)
+    if version is None:
+        try:
+            version = _version_tuple(apk_info.read_manifest_attrs(apk_path).get("versionName"))
+        except Exception:  # noqa: BLE001 - unreadable APK: gate nothing
+            version = None
+    if version is None:
+        return flow_files, []
+    kept, skipped = [], []
+    for f in flow_files:
+        if f.parent.name == "common":
+            kept.append(f)
+            continue
+        with open(f, encoding="utf-8") as fh:
+            tags = set((next(yaml.safe_load_all(fh)) or {}).get("tags") or [])
+        limits = [tuple(map(int, m.groups())) for m in map(_MAX_VERSION_TAG.match, tags) if m]
+        limit = min(limits) if limits else None
+        if limit and version > limit:
+            reason = (f"Skipped: only applies up to CommCare {limit[0]}.{limit[1]} (tag "
+                      f"commcare_max_{limit[0]}_{limit[1]}); the APK under test is "
+                      f"{version[0]}.{version[1]}. See the flow's header for what changed.")
+            print(f"  {f.relative_to(REPO_ROOT)}: {reason}")
+            skipped.append(report_generator.TestResult(
+                name=f"{f.parent.name}/{f.stem}", workflow=f.parent.name, status="skipped",
+                device=device, error=reason, failed_step=reason))
+        else:
+            kept.append(f)
+    return kept, skipped
+
+
 def _dispatch_and_report(args, apk_path, apk_commcare_version, prior_build_by_app_id):
     flow_files = select_flow_files(tags=args.tags, explicit_flows=args.flows)
     if not flow_files:
         raise SystemExit("No matching flow files found for the given --tag/--flow filters.")
+    flow_files, version_skipped = _apply_version_gate(flow_files, apk_path, apk_commcare_version, args.devices)
+    if not any(f.parent.name != "common" for f in flow_files):
+        print("Every selected flow is skipped for this CommCare version - nothing to dispatch.")
+        report_generator.generate_report(f"version-skipped-{int(time.time())}", version_skipped, enrich=False)
+        return
     print(f"Selected {len(flow_files)} flow file(s):")
     for f in flow_files:
         print(f"  {f.relative_to(REPO_ROOT)}")
@@ -818,6 +938,12 @@ def _dispatch_and_report(args, apk_path, apk_commcare_version, prior_build_by_ap
                 {k: _registry_entry(k) for k in unfiltered_keys},
             ))
 
+        for item in args.extra_env:
+            key, sep, value = item.partition("=")
+            if not sep or not key:
+                raise SystemExit(f"--env expects KEY=VALUE, got {item!r}")
+            env_variables[key] = value
+
         # See DEFAULT_WALL_CLOCK_BUDGET_SECONDS's own comment - computed once
         # here so it covers the WHOLE run (main pass + --retry-failed pass),
         # not reset per call.
@@ -831,7 +957,12 @@ def _dispatch_and_report(args, apk_path, apk_commcare_version, prior_build_by_ap
 
         failed = [r for r in test_results if r.status == "failed"]
         if args.retry_failed and failed:
-            retry_files = report_generator.match_flow_files(failed, flow_files, FLOWS_DIR)
+            # Only this run's own flows: common/ subflows can come from the core tree even
+            # when FLOWS_DIR is flows_non_core (see CORE_COMMON_DIR), so relative_to(FLOWS_DIR)
+            # would raise for them - confirmed live, non-core CI run 37325239305 crashed here
+            # and lost group-a's whole report. run_all_builds re-adds common/ to every build.
+            retry_files = report_generator.match_flow_files(
+                failed, [f for f in flow_files if f.parent.name != "common"], FLOWS_DIR)
             if not retry_files:
                 print("No flow files matched the failed test names - skipping retry "
                       "(see report_generator.match_flow_files' name-matching caveat).")
@@ -843,6 +974,9 @@ def _dispatch_and_report(args, apk_path, apk_commcare_version, prior_build_by_ap
                                                         build_name=retry_build_name, deadline=deadline)
                 if retry_test_results:
                     test_results = report_generator.merge_rerun(test_results, retry_test_results)
+
+        # Version-gated flows (see _apply_version_gate) show up as skipped, with the reason.
+        test_results = test_results + version_skipped
 
         # UPDATE (2026-08-25), confirmed live in CI (a real merged-report
         # run showing only 88 of the ~139 unique flows this exact dispatch

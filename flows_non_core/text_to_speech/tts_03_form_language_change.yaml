@@ -1,0 +1,37 @@
+appId: org.commcare.dalvik
+tags:
+  - text_to_speech
+  - partial
+---
+# Master Mobile Plan (2026) > Text to Speech > TTS 3. Inside the Text to
+# Speech form, switch the form's language to Hindi from the form's own
+# options menu; the label must change (English text "Hello, how are you?"
+# gone - the Hindi itext is "नमस्ते आप कैसे हैं?" in the app's CCZ, matched by
+# its absence rather than by the Devanagari text) and the TTS button must
+# still be there. Partial: we can't check the speech is actually Hindi.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_BASIC_TESTS}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+- runFlow:
+    file: ../common/enable_tts_and_open_tts_form.yaml
+- assertVisible: "Hello, how are you?"
+- tapOn: "More options"
+- tapOn: "Change Language"
+- runFlow:
+    file: ../common/pick_second_language.yaml
+- extendedWaitUntil:
+    notVisible: "Hello, how are you?"
+    timeout: 10000
+- assertVisible:
+    id: "org.commcare.dalvik:id/tts_button"
+- tapOn:
+    id: "org.commcare.dalvik:id/tts_button"

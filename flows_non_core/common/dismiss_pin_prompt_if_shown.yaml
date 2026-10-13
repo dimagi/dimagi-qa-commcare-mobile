@@ -1,0 +1,39 @@
+appId: org.commcare.dalvik
+---
+# Non-core helper: the Advanced Settings app sets cc-offer-pin-for-login=yes
+# (read from its HQ app source), so CommCare shows the "Create a PIN?" dialog
+# after a password login. Every Advanced Settings flow except
+# custom_properties_01 (which tests that dialog) clears it here first.
+# Strings: pin.dialog.* in android_translatable_strings.txt, same text as
+# flows/common/dismiss_pin_prompt_dont_ask_again.yaml (which asserts instead).
+#
+# Confirmed live (2026-10-02, BrowserStack build fdc6d9ec..., Galaxy S26 /
+# Android 16): the same app also has cc-autosync-freq=freq-daily, so straight
+# after login a "Communicating with Server / Updating phone data from
+# server." sync dialog opens ON TOP of the PIN dialog. One-shot optional
+# taps fired while the sync dialog still covered it, missed, and the
+# "Start" wait timed out with the PIN dialog still up. So: wait for the sync
+# dialog to go away first, then dismiss the PIN dialog in a bounded loop
+# that only stops once the home screen's "Start" is actually showing.
+- extendedWaitUntil:
+    notVisible: "Communicating with Server"
+    timeout: 120000
+- repeat:
+    times: 4
+    while:
+      notVisible: "Start"
+    commands:
+      - extendedWaitUntil:
+          notVisible: "Communicating with Server"
+          timeout: 60000
+      - tapOn:
+          text: "No, and don't ask again"
+          optional: true
+      - tapOn:
+          text: "OK"
+          optional: true
+      - waitForAnimationToEnd:
+          timeout: 3000
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000

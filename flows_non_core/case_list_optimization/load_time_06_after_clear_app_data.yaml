@@ -1,0 +1,41 @@
+appId: org.commcare.dalvik
+tags:
+  - case_list_optimization
+  - automatable
+env:
+  # Loud-failure ceiling only - the sheet records times but sets no limit.
+  # Replace with the owner's agreed budget once there is one.
+  LOAD_BUDGET_MS: "60000"
+---
+# Master Mobile Plan (2026) > Case List Optimization and Cache > Load time-6.
+# "Load time when user clears app data": install_app_by_code.yaml starts
+# with launchApp clearState: true (= Android "Clear data"), so this measures
+# the All mix case list's first load on a cleared app - reinstall, fresh
+# login and restore included before the timer starts. Earlier assessment
+# marked this blocked because Appium's terminateApp/clear-data calls are
+# unavailable on BrowserStack; Maestro's own clearState is what every core
+# flow already uses to install, so that limit doesn't apply here.
+- runFlow:
+    file: ../common/login_case_list_opt.yaml
+- runFlow:
+    file: ../common/open_case_list_menu.yaml
+    env:
+      MENU: "Case List optimization enabled - All mix"
+      FORM: "Followup Form"
+# Timed steps stay top-level so their timestamps land in the command log
+# (see open_case_list_menu.yaml); scripts/extract_flow_timings.py reports
+# the start_timer -> stop_timer gap under the assertTrue label below.
+- runScript:
+    file: ../common/assets/start_timer.js
+- tapOn: "Followup Form"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/screen_entity_select_list"
+    timeout: 180000
+- runScript:
+    file: ../common/assets/stop_timer.js
+- assertTrue:
+    condition: ${output.elapsedMs < Number(LOAD_BUDGET_MS)}
+    label: "TIMING Load time-6"
+- runFlow:
+    file: ../common/back_to_home.yaml

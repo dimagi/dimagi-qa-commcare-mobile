@@ -1,0 +1,66 @@
+appId: org.commcare.dalvik
+tags:
+  - third_party_scanner
+  - partial
+---
+# Master Mobile Plan (2026) > Third Party Scanner > rows 2 and 6 - the two
+# rows that don't need a third-party scanner app installed from the Play Store.
+#   Row 2: Settings > "Use intent callout for scanner" (cc-intent-callout-for-
+#          scanner, app/res/xml/main_preferences.xml) can be enabled.
+#   Row 6: with it disabled again, the Question Types barcode question's
+#          "Get Barcode" (intent.barcode.get) opens CommCare's own scanner.
+# WidgetUtils.createScanIntent (commcare-android, read-only) falls back to
+# the built-in ZXing scanner when no third-party app handles the scan intent,
+# so with none installed both settings open the same scanner - this flow
+# checks the setting toggles and that the scanner launches (leaves the form
+# list), not WHICH scanner it is. Partial: scanning a real barcode needs a
+# physical code in front of the camera.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_BASIC_TESTS}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+
+# Row 2 - enable, then (row 6) disable again.
+- tapOn: "More options"
+- tapOn: "Settings"
+- scrollUntilVisible:
+    element:
+      text: "Use intent callout for scanner"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "Use intent callout for scanner"
+- tapOn: "Enabled"
+- tapOn: "Use intent callout for scanner"
+- tapOn: "Disabled"
+- back
+
+# Row 6 - the barcode question opens the built-in scanner.
+- tapOn: "Start"
+- tapOn: "Basic Form Tests"
+- tapOn: "Question Types"
+- repeat:
+    times: 40
+    while:
+      notVisible: "Get Barcode"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/nav_btn_next"
+- tapOn: "Get Barcode"
+- tapOn:
+    text: "(?i)while using the app|allow"
+    optional: true
+- extendedWaitUntil:
+    notVisible: "Get Barcode"
+    timeout: 15000
+- back
+- extendedWaitUntil:
+    visible: "Get Barcode"
+    timeout: 15000

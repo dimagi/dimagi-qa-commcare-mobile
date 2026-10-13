@@ -1,0 +1,38 @@
+appId: org.commcare.dalvik
+tags:
+  - developer_options
+  - automatable
+---
+# Master Mobile Plan (2026) > Developer Options > DO4.
+# Mirrors DeveloperOptionsTests.testImageBelowText (commcare-android,
+# read-only): with the option Disabled, R.id.image isBelow the label. Sets
+# the option explicitly rather than relying on the default, so it doesn't
+# depend on DO3 having run first. See do_03 for where the label comes from.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_BASIC_TESTS}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+- runFlow:
+    file: ../common/set_developer_option.yaml
+    env:
+      OPTION_TITLE: "Image Above Question Text Enabled"
+      OPTION_VALUE: "Disabled"
+- tapOn: "Start"
+- tapOn: "Basic Form Tests"
+- tapOn: "Basic Form"
+- extendedWaitUntil:
+    visible:
+      text: "Enter a Name!.*"
+    timeout: 15000
+- assertVisible:
+    id: "org.commcare.dalvik:id/image"
+    below:
+      text: "Enter a Name!.*"

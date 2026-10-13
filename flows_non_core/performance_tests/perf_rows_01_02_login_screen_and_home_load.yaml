@@ -1,0 +1,57 @@
+appId: org.commcare.dalvik
+tags:
+  - performance_tests
+  - partial
+env:
+  # Loud-failure ceilings only - the sheet records times but sets no limit.
+  LOGIN_SCREEN_BUDGET_MS: "60000"
+  HOME_SCREEN_BUDGET_MS: "300000"
+---
+# Master Mobile Plan (2026) > Performance Tests > timing rows 1-2 on "Large
+# App" (35 forms, big case list - from its released CCZ), as the sheet's
+# "large" user (CC_LARGE_APP_USERNAME; same password as test1, CC_TEST_PASSWORD).
+#   Row 1: cold start (stopApp + launchApp) until the login screen shows.
+#   Row 2: login until the home screen's "Start" shows. Timed around the
+#          whole flows/common/login.yaml call, so it includes a few seconds
+#          of typing - fine against a budget, worth knowing when comparing
+#          to a hand-timed number.
+# scripts/extract_flow_timings.py reports each start_timer -> stop_timer gap
+# (top-level steps, so their timestamps are in the command log) under the
+# assertTrue label that follows it. First live run (2026-10-02, Galaxy S26):
+# row 1 3.6 s, row 2 ~114 s (includes the initial restore and typing).
+# Partial: Perf 1-2 (install on CommCare 2.21, then update to the release)
+# aren't done here - 2.21 doesn't install on BrowserStack's Android 10+
+# devices, so this measures the current release directly.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_LARGE_APP}
+- stopApp
+- runScript:
+    file: ../common/assets/start_timer.js
+- launchApp:
+    appId: org.commcare.dalvik
+    stopApp: false
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/edit_username"
+    timeout: 180000
+- runScript:
+    file: ../common/assets/stop_timer.js
+- assertTrue:
+    condition: ${output.elapsedMs < Number(LOGIN_SCREEN_BUDGET_MS)}
+    label: "TIMING Perf row 1 (cold start to login screen)"
+- runScript:
+    file: ../common/assets/start_timer.js
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_LARGE_APP_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- runFlow:
+    file: ../common/dismiss_pin_prompt_if_shown.yaml
+- runScript:
+    file: ../common/assets/stop_timer.js
+- assertTrue:
+    condition: ${output.elapsedMs < Number(HOME_SCREEN_BUDGET_MS)}
+    label: "TIMING Perf row 2 (login to home screen)"

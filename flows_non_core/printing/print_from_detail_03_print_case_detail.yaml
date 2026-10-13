@@ -1,0 +1,43 @@
+appId: org.commcare.dalvik
+tags:
+  - printing
+  - partial
+---
+# Master Mobile Plan (2026) > Printing > Print from Detail 3.
+# CommCare only offers "Print Case Detail" (menu.print.detail) when the case
+# detail has a print template (EntityDetailActivity.java, detail.isPrintEnabled(),
+# commcare-android read-only). The current [Master] Basic Tests top build no
+# longer references its template, so this installs the pinned v1133 build
+# that does (APP_CODE_BT_PRINT_DETAIL - see scripts/app_registry.py), opens a
+# Case Tests > Update a Case detail, and checks Android's print UI opens.
+# Partial: Print from Detail 4 (the PDF's contents) stays manual.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_BT_PRINT_DETAIL}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+- tapOn: "Start"
+- tapOn: "Case Tests"
+- tapOn: "Update a Case"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/screen_entity_select_list"
+    timeout: 15000
+- tapOn:
+    id: "org.commcare.dalvik:id/screen_entity_select_list"
+- extendedWaitUntil:
+    visible: "Name"
+    timeout: 15000
+- tapOn: "More options"
+- tapOn: "Print Case Detail"
+- extendedWaitUntil:
+    visible:
+      text: "(?i).*(save as pdf|select a printer|all printers|print).*"
+    timeout: 30000

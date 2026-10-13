@@ -1,0 +1,11 @@
+appId: org.commcare.dalvik
+---
+# Same as dismiss_pin_prompt_if_shown.yaml, without waiting for "Start" -
+# for apps whose post-login screen isn't the standard home screen (e.g. the
+# root-menu-as-home-screen app).
+- tapOn:
+    text: "No, and don't ask again"
+    optional: true
+- tapOn:
+    text: "OK"
+    optional: true
