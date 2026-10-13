@@ -815,10 +815,62 @@ def _run_hq_teardown(hq_teardown_path, client, apk_commcare_version):
                   f"may need manual fixup on HQ: {exc}")
 
 
+_MAX_VERSION_TAG = re.compile(r"^commcare_max_(\d+)_(\d+)$")
+
+
+def _version_tuple(text):
+    match = re.match(r"^\s*(\d+)\.(\d+)", text or "")
+    return (int(match.group(1)), int(match.group(2))) if match else None
+
+
+def _apply_version_gate(flow_files, apk_path, apk_commcare_version, device):
+    """Skip flows whose feature no longer exists in the CommCare under test.
+
+    A flow tagged `commcare_max_<major>_<minor>` (e.g. commcare_max_2_64) only applies up to that
+    CommCare version; on a newer APK it is not dispatched and is reported as skipped with the
+    reason instead. Example: flows_non_core/advanced_settings/custom_properties_15_* - 2.65
+    deleted root-menu-as-home-screen (commcare-android 568e15b6d), but 2.64 is still the current
+    release. The version comes from the release tag, else the APK's own manifest; if neither is
+    readable, every flow runs as before. Returns (flow_files_to_run, skipped_results)."""
+    version = _version_tuple(apk_commcare_version)
+    if version is None:
+        try:
+            version = _version_tuple(apk_info.read_manifest_attrs(apk_path).get("versionName"))
+        except Exception:  # noqa: BLE001 - unreadable APK: gate nothing
+            version = None
+    if version is None:
+        return flow_files, []
+    kept, skipped = [], []
+    for f in flow_files:
+        if f.parent.name == "common":
+            kept.append(f)
+            continue
+        with open(f, encoding="utf-8") as fh:
+            tags = set((next(yaml.safe_load_all(fh)) or {}).get("tags") or [])
+        limits = [tuple(map(int, m.groups())) for m in map(_MAX_VERSION_TAG.match, tags) if m]
+        limit = min(limits) if limits else None
+        if limit and version > limit:
+            reason = (f"Skipped: only applies up to CommCare {limit[0]}.{limit[1]} (tag "
+                      f"commcare_max_{limit[0]}_{limit[1]}); the APK under test is "
+                      f"{version[0]}.{version[1]}. See the flow's header for what changed.")
+            print(f"  {f.relative_to(REPO_ROOT)}: {reason}")
+            skipped.append(report_generator.TestResult(
+                name=f"{f.parent.name}/{f.stem}", workflow=f.parent.name, status="skipped",
+                device=device, error=reason, failed_step=reason))
+        else:
+            kept.append(f)
+    return kept, skipped
+
+
 def _dispatch_and_report(args, apk_path, apk_commcare_version, prior_build_by_app_id):
     flow_files = select_flow_files(tags=args.tags, explicit_flows=args.flows)
     if not flow_files:
         raise SystemExit("No matching flow files found for the given --tag/--flow filters.")
+    flow_files, version_skipped = _apply_version_gate(flow_files, apk_path, apk_commcare_version, args.devices)
+    if not any(f.parent.name != "common" for f in flow_files):
+        print("Every selected flow is skipped for this CommCare version - nothing to dispatch.")
+        report_generator.generate_report(f"version-skipped-{int(time.time())}", version_skipped, enrich=False)
+        return
     print(f"Selected {len(flow_files)} flow file(s):")
     for f in flow_files:
         print(f"  {f.relative_to(REPO_ROOT)}")
@@ -922,6 +974,9 @@ def _dispatch_and_report(args, apk_path, apk_commcare_version, prior_build_by_ap
                                                         build_name=retry_build_name, deadline=deadline)
                 if retry_test_results:
                     test_results = report_generator.merge_rerun(test_results, retry_test_results)
+
+        # Version-gated flows (see _apply_version_gate) show up as skipped, with the reason.
+        test_results = test_results + version_skipped
 
         # UPDATE (2026-08-25), confirmed live in CI (a real merged-report
         # run showing only 88 of the ~139 unique flows this exact dispatch

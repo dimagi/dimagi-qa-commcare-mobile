@@ -2,7 +2,14 @@ appId: org.commcare.dalvik
 tags:
   - advanced_settings
   - automatable
+  - commcare_max_2_64
 ---
+# CommCare 2.64 and earlier only. 2.65 deleted RootMenuHomeActivity and the
+# cc-use-root-menu-as-home-screen setting (commcare-android 568e15b6d,
+# "CCCT-2881 Delete RootMenuHomeActivity"): Home always opens the standard
+# home screen, so this row can't pass there by design. The commcare_max_2_64
+# tag makes scripts/run_suite.py report it as skipped (with this reason) on a
+# 2.65+ APK and still run it on 2.64 - the current GitHub release.
 # Master Mobile Plan (2026) > Advanced Settings > Custom Properties 15
 # (cc-use-root-menu-as-home-screen=yes on the "Root menu as Home screen"
 # app). After login CommCare opens RootMenuHomeActivity: the module list

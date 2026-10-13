@@ -40,6 +40,11 @@ Some rows need more than a plain Maestro run, and have their own runners:
 Flows tagged `blocked_app_config` (Graphing 20/22) are skipped until the
 HQ-side problem in their header is fixed.
 
+A flow tagged `commcare_max_<major>_<minor>` only applies up to that CommCare
+version. On a newer APK, `run_suite.py` doesn't dispatch it and reports it as
+skipped with the reason. Custom Properties 15 is tagged `commcare_max_2_64`
+because 2.65 removed root-menu-as-home-screen.
+
 Per-row status for every non-core tab is in the Master Mobile Plan's columns
 I/J/K, the same columns the core tabs use.
 
