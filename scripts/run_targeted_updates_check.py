@@ -38,6 +38,7 @@ import subprocess
 import sys
 import time
 
+import requests
 from dotenv import load_dotenv
 
 sys.path.insert(0, os.path.dirname(__file__))
@@ -101,7 +102,12 @@ def _prepare(client, app_id, module_id, scenario):
         _cut_build(client, app_id, f"Maestro {tag} newer", release=False)
         target = None
     code = client.get_app_install_code(app_id, saved_app_id=base_id, release_first=False)
-    expected_update = f"Update to version {target} & log out" if target else "Sync to update"
+    # "Update to version N & log out" (updates.staged.version) as a regex
+    # without the "&": BrowserStack's Maestro build API rejects env values
+    # containing "&" with a 422 (confirmed 2026-10-23 - CP14's "Sync to
+    # update" ran, CP11-13 got 422 on every retry). Maestro matches text: as
+    # a regex, so this still matches, and taps, the same button.
+    expected_update = f"Update to version {target}.*" if target else "Sync to update"
     print(f"{scenario}: base v{base_version} installed via code; expecting {expected_update!r}")
     return code, expected_update, str(target or "")
 
@@ -142,7 +148,18 @@ def main():
     failures = 0
     try:
         for scenario in args.scenarios or sorted(FLOWS):
-            code, expected_update, expected_version = _prepare(client, app_id, module_id, scenario)
+            for attempt in range(3):
+                # HQ occasionally drops a connection mid-setup (seen live
+                # 2026-10-23 on set_custom_properties); every step here is
+                # safe to repeat - it only re-sets the props and cuts fresh builds.
+                try:
+                    code, expected_update, expected_version = _prepare(client, app_id, module_id, scenario)
+                    break
+                except requests.exceptions.ConnectionError as exc:
+                    if attempt == 2:
+                        raise
+                    print(f"{scenario}: HQ connection dropped during setup ({exc}); retrying")
+                    time.sleep(10)
             cmd = [sys.executable, str(REPO_ROOT / "scripts" / "run_suite.py"), "--flows-root", "flows_non_core",
                    "--flow", FLOWS[scenario], "--devices", args.devices,
                    "--build-name", f"{args.build_name}-{scenario}",

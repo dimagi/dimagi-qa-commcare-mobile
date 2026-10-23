@@ -1,0 +1,67 @@
+appId: org.commcare.dalvik
+tags:
+  - database_change
+  - partial
+---
+# Master Mobile Plan (2026) > Database Change > Database Change 13 (Share 1,
+# Gmail): from Data Change Logs, Share > Gmail opens a Gmail draft with
+# "CommCare Data Change Logs.txt" attached.
+#
+# DataChangeLogsActivity's Share is a ShareActionProvider (menu_share.xml,
+# string "Share") whose intent is ACTION_SEND_MULTIPLE, text/plain, the log
+# file(s) as EXTRA_STREAM and EXTRA_SUBJECT = "CommCare Data Change Logs"
+# (commcare_logs). The flow checks steps 1-3 (Share > Gmail opens Gmail).
+# Partial: BrowserStack's Gmail has no signed-in account, so the draft and
+# its attachment (step 4) are only checked if one ever appears; sending,
+# receiving and comparing the logs (steps 5-7) stay manual.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_BASIC_TESTS}
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/edit_username"
+    timeout: 60000
+- tapOn: "More options"
+- tapOn: "Go To App Manager"
+- tapOn: "More options"
+- tapOn: "Advanced"
+- scrollUntilVisible:
+    element:
+      text: "Data Change Logs"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Data Change Logs"
+- extendedWaitUntil:
+    visible:
+      text: "(?s).*App installed.*"
+    timeout: 15000
+
+- tapOn: "(?i)Share.*"
+# The provider's drop-down lists recent targets, with "See all..." for the
+# rest; Gmail may be in either.
+- tapOn:
+    text: "(?i)See all.*"
+    optional: true
+- scrollUntilVisible:
+    element:
+      text: "Gmail"
+    direction: DOWN
+    timeout: 10000
+    optional: true
+- tapOn: "Gmail"
+# Step 3: CommCare hands off to Gmail. BrowserStack's devices have no Google
+# account, so Gmail opens on its first-run "Welcome to Gmail" screen rather
+# than a draft (confirmed live 2026-10-23, Galaxy S26 / Android 16).
+- extendedWaitUntil:
+    visible:
+      text: "(?i)(Welcome to Gmail|CommCare Data Change Logs)"
+    timeout: 30000
+# Step 4 (the draft's subject and .txt attachment) only when a signed-in
+# Gmail actually shows the draft.
+- runFlow:
+    when:
+      visible: "CommCare Data Change Logs"
+    commands:
+      - assertVisible:
+          text: "(?i).*\\.txt.*"

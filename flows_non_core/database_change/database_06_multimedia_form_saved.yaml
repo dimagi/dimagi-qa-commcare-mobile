@@ -1,0 +1,107 @@
+appId: org.commcare.dalvik
+tags:
+  - database_change
+  - partial
+---
+# Master Mobile Plan (2026) > Database Change > Database 6 (Form with
+# Multimedia): Start > Basic Form Tests > "Multimedia Only", add multimedia,
+# submit, then Saved shows the form and its media is still attached.
+#
+# Partial:
+#   - Only the generic image (q_image) and video (q_video) questions get
+#     real media, picked from the gallery (assets/ pushed with addMedia - the
+#     same fixtures as flows/multimedia/). Audio has no fixture in this repo,
+#     and the signature / "acquire-only" tiles (broadcast-* appearances,
+#     modules-0/forms-10.xml) need a companion capture app. None is required.
+#   - Runs on the CommCare under test only. The row's "Final steps 1-4"
+#     (upgrade CommCare, then check the data) are covered for an incomplete
+#     form by scripts/run_appium_non_core_upgrade_suite.py; this flow checks
+#     the saved multimedia record itself.
+#   - "Play the multimedia" is checked as far as the saved record, reopened
+#     from Saved, still listing the attached image and video files.
+- addMedia:
+    - "./assets/sample_image.png"
+    - "./assets/yourvideo.mp4"
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_BASIC_TESTS}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+- tapOn: "Start"
+- tapOn: "Basic Form Tests"
+- scrollUntilVisible:
+    element:
+      text: "Multimedia Only"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Multimedia Only"
+
+# Image: page forward to q_image ("take a picture or choose ...").
+- repeat:
+    times: 12
+    while:
+      notVisible: "Choose Image"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/nav_btn_next"
+- tapOn: "Choose Image"
+- runFlow:
+    file: ../common/pick_first_gallery_image.yaml
+- extendedWaitUntil:
+    visible: "Remove Image"
+    timeout: 15000
+
+# Video: page forward to q_video.
+- repeat:
+    times: 6
+    while:
+      notVisible: "Choose Video"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/nav_btn_next"
+- tapOn: "Choose Video"
+- runFlow:
+    file: ../common/pick_first_gallery_image.yaml
+- extendedWaitUntil:
+    visible: "Play Video"
+    timeout: 15000
+
+- repeat:
+    times: 6
+    while:
+      notVisible:
+        id: "org.commcare.dalvik:id/nav_btn_finish"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/nav_btn_next"
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 60000
+
+# Saved (home.forms.saved) lists this device's completed records only.
+- tapOn: "Saved"
+- extendedWaitUntil:
+    visible: "Multimedia Only"
+    timeout: 15000
+- tapOn: "Multimedia Only"
+# A saved record opens read-only as "Form Hierarchy", each answered question
+# listing its attachment's file name (confirmed live 2026-10-23).
+- extendedWaitUntil:
+    visible: "Form Hierarchy"
+    timeout: 20000
+- assertVisible:
+    text: ".*\\.(png|jpe?g)"
+- scrollUntilVisible:
+    element:
+      text: ".*\\.(mp4|3gp)"
+    direction: DOWN
+    timeout: 15000

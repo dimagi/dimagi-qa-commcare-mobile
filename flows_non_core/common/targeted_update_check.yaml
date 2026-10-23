@@ -9,9 +9,10 @@ appId: org.commcare.dalvik
 # build, an "In Test" build, or just an unsaved draft change), then runs
 # the matching custom_properties_1N_*.yaml flow (which runs this) with:
 #   APP_CODE_TARGETED_BASE - install code for that base build
-#   EXPECTED_UPDATE        - what Update App must offer: "Update to version
-#                            <N> & log out" (updates.staged.version) for
-#                            11-13, or "Sync to update"
+#   EXPECTED_UPDATE        - what Update App must offer, as a regex:
+#                            "Update to version <N>.*" ("... & log out",
+#                            updates.staged.version - no "&", BrowserStack
+#                            422s on it) for 11-13, or "Sync to update"
 #                            (updates.staged.version.sync.required) for 14
 #   EXPECTED_VERSION       - the app version About CommCare must show after
 #                            the update (11-13); empty for 14

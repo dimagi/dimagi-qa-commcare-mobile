@@ -76,7 +76,9 @@ def _save_incomplete_form(driver, module, form):
 def _incomplete_form_listed(driver, form):
     """Final 2: the incomplete form from before the upgrade is still there."""
     s._wait_out_progress_dialogs(driver)
-    h.tap_by_text(driver, "Incomplete")
+    # The home tile carries the count once there's one: "Incomplete (1)"
+    # (confirmed live 2026-10-23 on 2.65.0).
+    h.tap_by_text(driver, r"Incomplete( \(\d+\))?", regex=True)
     h.wait_visible_text(driver, form, timeout=20)
     h.back(driver)
     h.wait_visible_text(driver, "Start", timeout=10)
