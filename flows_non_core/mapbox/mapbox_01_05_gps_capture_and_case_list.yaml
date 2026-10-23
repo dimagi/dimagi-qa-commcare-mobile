@@ -113,8 +113,15 @@ tags:
     visible:
       id: "org.commcare.dalvik:id/screen_entity_select_list"
     timeout: 15000
-- scrollUntilVisible:
-    element:
+# Search for this run's case instead of scrolling: every run adds a
+# "Maestro Map <suffix>" case to this shared list and none are closed, so a
+# scroll eventually outgrows any timeout (CI run 39940355689: the case was
+# there, but past the 20 s scroll). Same search box as
+# flows/case_filters/fuzzy_search_01_03.yaml.
+- tapOn:
+    id: "org.commcare.dalvik:id/search_action_bar"
+- inputText: "${output.runSuffix}"
+- extendedWaitUntil:
+    visible:
       text: "Maestro Map ${output.runSuffix}"
-    direction: DOWN
-    timeout: 20000
+    timeout: 15000
