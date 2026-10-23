@@ -1,0 +1,17 @@
+appId: org.commcare.dalvik
+tags:
+  - advanced_settings
+  - partial
+---
+# Master Mobile Plan (2026) > Advanced Settings > Settings 1. The module
+# screen must be the grid layout: R.id.grid_menu_grid in grid_menu_layout.xml
+# (commcare-android, read-only). Partial: "no UI quirks" is a visual check.
+- runFlow:
+    file: ../common/login_advanced_settings.yaml
+- tapOn: "Start"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/grid_menu_grid"
+    timeout: 15000
+- assertVisible: "Case List"
+- assertVisible: "No space error"

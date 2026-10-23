@@ -1,0 +1,40 @@
+appId: org.commcare.dalvik
+tags:
+  - developer_options
+  - automatable
+---
+# Master Mobile Plan (2026) > Developer Options > DO3.
+# Mirrors commcare-android's DeveloperOptionsTests.testImageAboveText
+# (read-only reference): R.id.image isAbove the "Enter a Name" label. The
+# label/image come from [Master] Basic Tests > Basic Form Tests > Basic Form
+# (itext enter_a_name-label = "Enter a Name! [English]" + an image form,
+# checked in the app's current released CCZ). media_layout.xml holds the
+# label (id/text) and the image (id/image).
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_BASIC_TESTS}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+- runFlow:
+    file: ../common/set_developer_option.yaml
+    env:
+      OPTION_TITLE: "Image Above Question Text Enabled"
+      OPTION_VALUE: "Enabled"
+- tapOn: "Start"
+- tapOn: "Basic Form Tests"
+- tapOn: "Basic Form"
+- extendedWaitUntil:
+    visible:
+      text: "Enter a Name!.*"
+    timeout: 15000
+- assertVisible:
+    id: "org.commcare.dalvik:id/image"
+    above:
+      text: "Enter a Name!.*"

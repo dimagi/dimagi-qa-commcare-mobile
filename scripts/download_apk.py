@@ -23,9 +23,13 @@ import re
 import urllib.request
 
 GITHUB_API = "https://api.github.com/repos/dimagi/commcare-android"
-# Matches "app-commcare-release.apk" and "commcare-2.63.1-release.apk" alike;
-# excludes lts/staging/connect variants which are separate build flavors.
-APK_PATTERN = re.compile(r"^(app-)?commcare[-_].*release\.apk$", re.IGNORECASE)
+# Matches the main CommCare APK under every naming seen so far:
+#   app-commcare-release.apk, commcare-2.63.1-release.apk, commcare-2.63.2.apk,
+#   app-commcare-release_2.64.1.apk (2.64.1 puts the version AFTER "release" - the
+#   old pattern required a trailing "release.apk", so "latest" silently fell back to
+#   2.64.0 and an explicit --tag commcare_2.64.1 failed outright).
+# Excludes lts/staging/connect variants, which are separate build flavors.
+APK_PATTERN = re.compile(r"^(app-)?commcare[-_](?!.*(lts|staging|connect)).*\.apk$", re.IGNORECASE)
 MAX_RELEASES_TO_SCAN = 15
 
 

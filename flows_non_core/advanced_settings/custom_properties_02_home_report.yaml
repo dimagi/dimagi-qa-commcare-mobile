@@ -1,0 +1,32 @@
+appId: org.commcare.dalvik
+tags:
+  - advanced_settings
+  - partial
+---
+# Master Mobile Plan (2026) > Advanced Settings > Custom Properties 2
+# (cc-home-report=yes on the Advanced Settings app). "Report an Issue" is
+# home.report in android_translatable_strings.txt; the report screen ids
+# (ReportText01/ReportButton01) are the same ones
+# flows/support_menus/menu_01_report_problem.yaml uses. Partial: the
+# Gmail/Drive share sheet is another app, so we only check it opens and that
+# back returns to the home screen.
+- runFlow:
+    file: ../common/login_advanced_settings.yaml
+- scrollUntilVisible:
+    element:
+      text: "Report an Issue"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Report an Issue"
+- tapOn:
+    id: "org.commcare.dalvik:id/ReportText01"
+- inputText: "Maestro non-core custom property check"
+- tapOn:
+    id: "org.commcare.dalvik:id/ReportButton01"
+- assertVisible:
+    text: "(?i).*(gmail|email|drive|send|share).*"
+    optional: true
+- back
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 15000

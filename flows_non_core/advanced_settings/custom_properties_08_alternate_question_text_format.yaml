@@ -1,0 +1,27 @@
+appId: org.commcare.dalvik
+tags:
+  - advanced_settings
+  - automatable
+---
+# Master Mobile Plan (2026) > Advanced Settings > Custom Properties 8
+# (cc-alternate-question-text-format=yes) - the HQ-side switch for the same
+# "Image Above Question Text Enabled" behaviour Developer Options > DO3
+# checks. Registration Form's first question is name-label = "Name" plus an
+# image form (from the app's released CCZ); media_layout.xml holds id/image.
+- runFlow:
+    file: ../common/login_advanced_settings.yaml
+- tapOn: "Start"
+- tapOn: "Case List"
+- tapOn: "Registration Form"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/image"
+    timeout: 15000
+- assertVisible:
+    id: "org.commcare.dalvik:id/image"
+    above:
+      text: "Name.*"
+- runFlow:
+    file: ../common/fill_advanced_settings_registration.yaml
+    env:
+      CASE_NAME: "Maestro CP8"

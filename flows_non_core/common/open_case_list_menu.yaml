@@ -1,0 +1,19 @@
+appId: org.commcare.dalvik
+---
+# Non-core helper: from a CommCare home screen, open Start > MENU and wait
+# for FORM to be tappable. The caller then times the FORM tap itself - the
+# timed steps must be TOP-LEVEL steps of the flow, because BrowserStack's
+# Maestro command log only records top-level commands (with their own
+# timestamps), never the steps inside a runFlow (confirmed live 2026-10-02).
+# scripts/extract_flow_timings.py reads those timestamps back out.
+# Params: MENU, FORM.
+- tapOn: "Start"
+- scrollUntilVisible:
+    element:
+      text: "${MENU}"
+    direction: DOWN
+    timeout: 20000
+- tapOn: "${MENU}"
+- extendedWaitUntil:
+    visible: "${FORM}"
+    timeout: 15000

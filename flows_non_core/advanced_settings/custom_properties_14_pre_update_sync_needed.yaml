@@ -1,0 +1,15 @@
+appId: org.commcare.dalvik
+tags:
+  - advanced_settings
+  - partial
+  - needs_dedicated_runner
+---
+# Master Mobile Plan (2026) > Advanced Settings > Custom Properties 14.
+# pre-update-sync-needed = "yes": Update App must offer "Sync to update" instead of updating straight away.
+# Run ONLY via scripts/run_targeted_updates_check.py --scenario cp14: it
+# prepares the Targeted Updates App on HQ, passes APP_CODE_TARGETED_BASE /
+# EXPECTED_UPDATE / EXPECTED_VERSION, and restores the app afterwards (see
+# ../common/targeted_update_check.yaml). Excluded from plain tag runs by the
+# needs_dedicated_runner tag.
+- runFlow:
+    file: ../common/targeted_update_check.yaml

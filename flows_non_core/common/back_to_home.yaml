@@ -1,0 +1,16 @@
+appId: org.commcare.dalvik
+---
+# Non-core helper: press back until the home screen's "Start" shows. Menu
+# depth differs per app (confirmed live 2026-10-02: on "cache and index
+# configuration" two backs only reached the module list), so this loops on
+# the screen rather than a fixed count - and stops before backing out of
+# the app.
+- repeat:
+    times: 4
+    while:
+      notVisible: "Start"
+    commands:
+      - back
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 15000

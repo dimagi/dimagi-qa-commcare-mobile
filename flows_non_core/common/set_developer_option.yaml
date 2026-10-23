@@ -1,0 +1,28 @@
+appId: org.commcare.dalvik
+---
+# Non-core helper: unlock Developer Options (4x About CommCare > OK, same as
+# flows/common/enable_pin_login_option.yaml) and set one ListPreference in it.
+# Params: OPTION_TITLE (android:title from app/res/xml/preferences_developer.xml),
+# OPTION_VALUE ("Enabled"/"Disabled", @array/pref_enabled_labels).
+# Starts and ends on the app home screen.
+- repeat:
+    times: 4
+    commands:
+      - tapOn: "More options"
+      - tapOn: "About CommCare"
+      - tapOn: "OK"
+- tapOn: "More options"
+- tapOn: "Settings"
+- tapOn: "Developer Options"
+- scrollUntilVisible:
+    element:
+      text: "${OPTION_TITLE}"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "${OPTION_TITLE}"
+- tapOn: "${OPTION_VALUE}"
+- back
+- back
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 10000
