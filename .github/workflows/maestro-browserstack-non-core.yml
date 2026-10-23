@@ -106,8 +106,8 @@ jobs:
             # Split by each tag's real measured test time from the live runs
             # (2026-10-02, Galaxy S26 / Android 16; the 2nd-round flows -
             # Graphing 7-22, CP1, Database Change, Personal ID, Third Party
-            # Scanner, Print from Detail 3 - estimated at ~4 min each until
-            # a CI run measures them):
+            # Scanner - estimated at ~4 min each until a CI run measures
+            # them; Print from Detail was dropped 2026-10-23, deprecated):
             #   group-a: advanced_settings ~41 + text_to_speech 9.8 +
             #            graphing ~26                         = ~77 min
             #   group-b: case_list_optimization 31.9 + developer_options

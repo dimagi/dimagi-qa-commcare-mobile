@@ -313,15 +313,6 @@ APP_REGISTRY = {
     # as of 2026-10-02 (v1141 is the top). Already released, so
     # release_first=False never touches it.
     "BASIC_TESTS_PREV": ("qateam", "cdfa6c85eb594b23b0c08729cd2beff1", "872e99dc68b6403d9605a4db79af8d51", False),
-    # Printing tab, Print from Detail 3. Only some Basic Tests builds attach a
-    # print template to the Case Tests case detail: v1133 (released, CC
-    # 2.58.0, build comment "Updated 'Case Tests' case details printing
-    # template - 2.58 version") does - its suite.xml m3_case_long references
-    # the template - while the current top build (v1141) still ships the
-    # template file but no longer references it, so CommCare hides "Print
-    # Case Detail" there (EntityDetailActivity, detail.isPrintEnabled()).
-    # Checked 2026-10-02 in both builds' CCZs.
-    "BT_PRINT_DETAIL": ("qateam", "cdfa6c85eb594b23b0c08729cd2beff1", "4821760e4faf4e2cb17151f072ea5a8e", False),
     # Advanced Settings tab, Custom Properties 11-14 ("Targeted Updates App",
     # confirmed via /apps/api/list_apps/). Only read by
     # scripts/run_targeted_updates_check.py, which cuts its own builds and
