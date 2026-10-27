@@ -37,13 +37,15 @@ Some rows need more than a plain Maestro run, and have their own runners:
 - `scripts/run_appium_non_core_upgrade_suite.py`: Database Change and
   Performance rows that upgrade CommCare mid-test (2.45 → release, Appium).
 
-Flows tagged `blocked_app_config` (Graphing 20/22) are skipped until the
-HQ-side problem in their header is fixed.
+A flow tagged `blocked_app_config` is left out of runs until the HQ-side
+problem in its header is fixed (none at the moment).
 
 A flow tagged `commcare_max_<major>_<minor>` only applies up to that CommCare
-version. On a newer APK, `run_suite.py` doesn't dispatch it and reports it as
-skipped with the reason. Custom Properties 15 is tagged `commcare_max_2_64`
-because 2.65 removed root-menu-as-home-screen.
+version. On a newer APK, `run_suite.py` doesn't dispatch it and leaves it out
+of the report and its totals (it is only logged as not applicable), so it never
+shows up as a skipped test. Custom Properties 15 is tagged `commcare_max_2_64`
+because 2.65 removed root-menu-as-home-screen for good (confirmed by the mobile
+team 2026-10-27).
 
 Per-row status for every non-core tab is in the Master Mobile Plan's columns
 I/J/K, the same columns the core tabs use.

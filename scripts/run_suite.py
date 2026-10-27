@@ -823,15 +823,16 @@ def _version_tuple(text):
     return (int(match.group(1)), int(match.group(2))) if match else None
 
 
-def _apply_version_gate(flow_files, apk_path, apk_commcare_version, device):
+def _apply_version_gate(flow_files, apk_path, apk_commcare_version):
     """Skip flows whose feature no longer exists in the CommCare under test.
 
     A flow tagged `commcare_max_<major>_<minor>` (e.g. commcare_max_2_64) only applies up to that
-    CommCare version; on a newer APK it is not dispatched and is reported as skipped with the
-    reason instead. Example: flows_non_core/advanced_settings/custom_properties_15_* - 2.65
+    CommCare version; on a newer APK it is not dispatched and is left out of the report entirely
+    (only logged here) - it is not applicable, so it must not show up as a skipped test or count
+    toward the run's total. Example: flows_non_core/advanced_settings/custom_properties_15_* - 2.65
     deleted root-menu-as-home-screen (commcare-android 568e15b6d), but 2.64 is still the current
     release. The version comes from the release tag, else the APK's own manifest; if neither is
-    readable, every flow runs as before. Returns (flow_files_to_run, skipped_results)."""
+    readable, every flow runs as before. Returns (flow_files_to_run, excluded_flow_files)."""
     version = _version_tuple(apk_commcare_version)
     if version is None:
         try:
@@ -850,13 +851,10 @@ def _apply_version_gate(flow_files, apk_path, apk_commcare_version, device):
         limits = [tuple(map(int, m.groups())) for m in map(_MAX_VERSION_TAG.match, tags) if m]
         limit = min(limits) if limits else None
         if limit and version > limit:
-            reason = (f"Skipped: only applies up to CommCare {limit[0]}.{limit[1]} (tag "
-                      f"commcare_max_{limit[0]}_{limit[1]}); the APK under test is "
-                      f"{version[0]}.{version[1]}. See the flow's header for what changed.")
-            print(f"  {f.relative_to(REPO_ROOT)}: {reason}")
-            skipped.append(report_generator.TestResult(
-                name=f"{f.parent.name}/{f.stem}", workflow=f.parent.name, status="skipped",
-                device=device, error=reason, failed_step=reason))
+            print(f"  Not applicable, not run: {f.relative_to(REPO_ROOT)} - only applies up to "
+                  f"CommCare {limit[0]}.{limit[1]} (tag commcare_max_{limit[0]}_{limit[1]}); the APK "
+                  f"under test is {version[0]}.{version[1]}. See the flow's header for what changed.")
+            skipped.append(f)
         else:
             kept.append(f)
     return kept, skipped
@@ -866,10 +864,9 @@ def _dispatch_and_report(args, apk_path, apk_commcare_version, prior_build_by_ap
     flow_files = select_flow_files(tags=args.tags, explicit_flows=args.flows)
     if not flow_files:
         raise SystemExit("No matching flow files found for the given --tag/--flow filters.")
-    flow_files, version_skipped = _apply_version_gate(flow_files, apk_path, apk_commcare_version, args.devices)
+    flow_files, _ = _apply_version_gate(flow_files, apk_path, apk_commcare_version)
     if not any(f.parent.name != "common" for f in flow_files):
-        print("Every selected flow is skipped for this CommCare version - nothing to dispatch.")
-        report_generator.generate_report(f"version-skipped-{int(time.time())}", version_skipped, enrich=False)
+        print("No selected flow applies to this CommCare version - nothing to dispatch.")
         return
     print(f"Selected {len(flow_files)} flow file(s):")
     for f in flow_files:
@@ -974,9 +971,6 @@ def _dispatch_and_report(args, apk_path, apk_commcare_version, prior_build_by_ap
                                                         build_name=retry_build_name, deadline=deadline)
                 if retry_test_results:
                     test_results = report_generator.merge_rerun(test_results, retry_test_results)
-
-        # Version-gated flows (see _apply_version_gate) show up as skipped, with the reason.
-        test_results = test_results + version_skipped
 
         # UPDATE (2026-08-25), confirmed live in CI (a real merged-report
         # run showing only 88 of the ~139 unique flows this exact dispatch
