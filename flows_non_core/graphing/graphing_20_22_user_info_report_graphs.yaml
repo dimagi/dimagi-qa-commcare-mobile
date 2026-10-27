@@ -2,22 +2,18 @@ appId: org.commcare.dalvik
 tags:
   - graphing
   - partial
-  - blocked_app_config
 ---
-# BLOCKED (confirmed live 2026-10-02, BrowserStack Galaxy S26 / CommCare
-# 2.64.0): the Add Details form submits fine, but opening "User Info Reports"
-# raises CommCare's own error "Unable to find lookup table
-# jr://fixture/commcare:reports. Make sure it exists and this user has access
-# to it." - the Graphing app's mobile report (UCR) fixture isn't being
-# restored to the test user, so the report graphs can't load at all, manually
-# or automated. Needs fixing on HQ (the app's mobile UCR / report config).
-# Excluded from default runs by the blocked_app_config tag (see
-# scripts/run_suite.py); run it with --flow once HQ is fixed.
+# Runs on "Graphing - Maestro Reports [DO NOT DELETE]" (APP_CODE_GRAPHING_
+# REPORTS, see scripts/app_registry.py), not the Graphing app itself: the
+# original's report graphs read the removed v1 report fixture and fail with
+# "Unable to find lookup table jr://fixture/commcare:reports" (confirmed
+# live 2026-10-02; diagnosed 2026-10-27 - custom series data paths on
+# instance('reports')). The copy points them at the v2 fixtures.
 # Master Mobile Plan (2026) > Graphing > Graphing 20 and 22 (partial).
 # Graphing 20: User Info > Add Details (name required, age, weight - from
 # the Graphing app's CCZ), then User Info Reports > "User Info Graph [DO NOT
-# DELETE OR EDIT]" shows a stacked bar graph whose legend has Age / Weight
-# and axis titles Name / Details (m3.6bcb8f49...graph.* in app_strings.txt).
+# DELETE OR EDIT]" shows a stacked bar graph whose legend has Age, and
+# axis titles Name / Details (m3.6bcb8f49...graph.* in app_strings.txt).
 # Graphing 22: the "No Axes Graph" report renders.
 # Reports come from HQ's UCR data at last sync, so the bar for the user
 # added here may only appear after HQ processes it - the checks are on the
@@ -27,7 +23,7 @@ tags:
 - runFlow:
     file: ../common/install_app_by_code.yaml
     env:
-      APP_CODE: ${APP_CODE_GRAPHING}
+      APP_CODE: ${APP_CODE_GRAPHING_REPORTS}
 - runFlow:
     file: ../common/login.yaml
     env:
@@ -97,10 +93,12 @@ tags:
     timeout: 20000
 - tapOn:
     text: "User Info Graph.*"
+# Step 6: the legend shows Age only - the Weight series is configured with
+# is-data false() (out of the legend), as the sheet's step 6 describes.
 - extendedWaitUntil:
     visible: "Age"
     timeout: 20000
-- assertVisible: "Weight"
+- assertVisible: "Name"
 - assertVisible: "Details"
 
 # Graphing 22 - the no-axes report graph renders.

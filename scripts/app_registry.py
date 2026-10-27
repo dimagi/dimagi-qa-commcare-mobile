@@ -299,6 +299,15 @@ APP_REGISTRY = {
     "ROOT_MENU_HOME": ("qateam", "5d433764b62d29e47e776407a3cbd742"),
     # Graphing tab (its Domain link).
     "GRAPHING": ("qateam", "633b6c82c4b044a1b44964f9dc0e3d2d"),
+    # Graphing tab, Graphing 20/22 only: "Graphing - Maestro Reports [DO NOT
+    # DELETE]", a copy of GRAPHING made 2026-10-27 for automation. The
+    # original's two report graphs have custom series data paths on the
+    # removed v1 report fixture (instance('reports') =
+    # jr://fixture/commcare:reports), which devices no longer receive, so
+    # they fail with "Unable to find lookup table". This copy points them at
+    # the v2 fixtures (instance('commcare-reports:<report_slug>')); the
+    # original app is left as it is.
+    "GRAPHING_REPORTS": ("qateam", "f24cee83fcc04fd7bf2f8a37aa01d15d"),
     # Mapbox tab ("Mapbox Tests").
     "MAPBOX_TESTS": ("qateam", "782d45f72add02307b2d4c3ede87a99d"),
     # Performance Tests tab ("Large App").
