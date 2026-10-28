@@ -192,6 +192,10 @@ def select_flow_files(tags=None, explicit_flows=None, commcare_version=None):
             flow_tags = set((doc or {}).get("tags") or [])
             if (flow_tags & OPT_IN_ONLY_TAGS) - set(tags or ()):
                 continue
+            if tags and not flow_tags & set(tags):
+                continue
+            # After the tag match, so only flows this run would otherwise have
+            # selected are logged as not applicable.
             limit = _max_commcare_version(flow_tags)
             if commcare_version and limit and commcare_version > limit:
                 print(f"  Not applicable, not run: {path.relative_to(REPO_ROOT)} - only applies up to "
@@ -199,11 +203,7 @@ def select_flow_files(tags=None, explicit_flows=None, commcare_version=None):
                       f"under test is {commcare_version[0]}.{commcare_version[1]}. See the flow's "
                       f"header for what changed.")
                 continue
-            if not tags:
-                selected.add(path)
-                continue
-            if flow_tags & set(tags):
-                selected.add(path)
+            selected.add(path)
 
     # common/ is always needed for runFlow references
     for path in common_flow_files():
