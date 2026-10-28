@@ -1,0 +1,83 @@
+appId: org.commcare.dalvik
+---
+# Non-core helper: on the Graphing app's home screen, create a graphing case
+# named CASE_NAME and add one point (x=5, y=5, radius=2) to it. Ends back on
+# the Graphing module's form list.
+# Forms/labels from the Graphing app's released CCZ:
+#   Graphing > Create Case: graph_name ("Enter a name for this case:", required)
+#   Graphing > Add a Point: x (int 0-10, required), y (int 0-10),
+#     radius (int 1-5), datetime (optional) - all on one field-list page.
+# "Continue" is m0_select_text in the app's app_strings.txt.
+- tapOn: "Start"
+- tapOn: "Graphing"
+- tapOn: "Create Case"
+- extendedWaitUntil:
+    visible: "Enter a name for this case:"
+    timeout: 15000
+- inputText: "${CASE_NAME}"
+- repeat:
+    times: 3
+    while:
+      notVisible:
+        id: "org.commcare.dalvik:id/nav_btn_finish"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/nav_btn_next"
+          optional: true
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"
+# Graphing > End Form 1: back on the form list.
+- extendedWaitUntil:
+    visible: "Add a Point"
+    timeout: 20000
+- assertVisible: "Create Case"
+
+- tapOn: "Add a Point"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/screen_entity_select_list"
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: "${CASE_NAME}"
+    direction: DOWN
+    timeout: 20000
+- tapOn: "${CASE_NAME}"
+- tapOn: "Continue"
+- extendedWaitUntil:
+    visible:
+      text: "Enter an x value.*"
+    timeout: 15000
+# All four questions are one field-list page (group /data/questions,
+# appearance="field-list" in the app's CCZ) - confirmed live 2026-10-02 when
+# a one-question-per-screen version submitted after x alone. Each id-less
+# EditText is tapped as the first element under its own label.
+- tapOn:
+    below:
+      text: "Enter an x value.*"
+    index: 0
+- inputText: "5"
+- tapOn:
+    below:
+      text: "Enter a y value.*"
+    index: 0
+- inputText: "5"
+- tapOn:
+    below:
+      text: "Enter a value for a radius.*"
+    index: 0
+- inputText: "2"
+- repeat:
+    times: 3
+    while:
+      notVisible:
+        id: "org.commcare.dalvik:id/nav_btn_finish"
+    commands:
+      - tapOn:
+          id: "org.commcare.dalvik:id/nav_btn_next"
+          optional: true
+- tapOn:
+    id: "org.commcare.dalvik:id/nav_btn_finish"
+- extendedWaitUntil:
+    visible: "Add a Point"
+    timeout: 20000

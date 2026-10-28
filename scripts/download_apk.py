@@ -23,9 +23,17 @@ import re
 import urllib.request
 
 GITHUB_API = "https://api.github.com/repos/dimagi/commcare-android"
-# Matches "app-commcare-release.apk" and "commcare-2.63.1-release.apk" alike;
-# excludes lts/staging/connect variants which are separate build flavors.
-APK_PATTERN = re.compile(r"^(app-)?commcare[-_].*release\.apk$", re.IGNORECASE)
+# Matches the main CommCare APK under every naming seen so far:
+#   app-commcare-release.apk, commcare-2.63.1-release.apk, commcare-2.63.2.apk,
+#   app-commcare-release_2.64.1.apk (2.64.1 puts the version AFTER "release" - the
+#   old pattern required a trailing "release.apk", so "latest" silently fell back to
+#   2.64.0 and an explicit --tag commcare_2.64.1 failed outright), commcare_2.61.5.apk.
+# A positive match - "release" and/or a bare version, nothing else - so lts/staging/
+# connect flavors and test/debug builds never match: commcare-android's draft
+# commcare_2.61.5test (asset commcare_2.61.5test.apk) and names like
+# app-commcare-debug.apk / app-commcare-qaAutomation-release.apk are rejected.
+APK_PATTERN = re.compile(
+    r"^(app-)?commcare[-_](release([-_]\d+(\.\d+)+)?|\d+(\.\d+)+([-_]release)?)\.apk$", re.IGNORECASE)
 MAX_RELEASES_TO_SCAN = 15
 
 
@@ -68,6 +76,10 @@ def resolve(tag=None):
         return release, asset
 
     for release in list_releases():
+        # Drafts and pre-releases are never "latest": a token that can see drafts (a
+        # commcare-android collaborator's) lists the draft commcare_2.61.5test first.
+        if release.get("draft") or release.get("prerelease"):
+            continue
         asset = find_asset(release)
         if asset:
             return release, asset

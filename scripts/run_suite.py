@@ -35,6 +35,40 @@ from browserstack_client import BrowserStackClient
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 FLOWS_DIR = REPO_ROOT / "flows"
+# Selectable flow trees for --flows-root. "flows" is the core CommCare Mobile
+# suite (the Inventory sheet's "CommCare Mobile" tab); "flows_non_core" holds
+# the Master Mobile Plan tabs listed on the "CommCare Mobile - Non-Core" tab
+# instead, kept in a separate tree so a core run's tag/"All" selection can
+# never pick them up (and vice versa) - see flows_non_core/README.md.
+FLOWS_ROOTS = {
+    "flows": REPO_ROOT / "flows",
+    "flows_non_core": REPO_ROOT / "flows_non_core",
+}
+# Shared runFlow subflows (login, install_app_by_code, ...) always come from
+# the core tree's common/, whichever root is selected - non-core flows
+# reference them as ../common/<file>.yaml exactly like core flows do, and
+# build_flows_zip() places them at the zip's common/ either way. A non-core-
+# only helper can live in flows_non_core/common/; it's merged into the same
+# zip common/ folder (a filename clash with core common/ is an error).
+CORE_COMMON_DIR = REPO_ROOT / "flows" / "common"
+
+
+def common_dirs():
+    """The common/ subflow folders for the currently selected FLOWS_DIR."""
+    dirs = [CORE_COMMON_DIR]
+    own = FLOWS_DIR / "common"
+    if own != CORE_COMMON_DIR and own.is_dir():
+        dirs.append(own)
+    return dirs
+
+
+def common_flow_files():
+    files = [p for d in common_dirs() for p in d.glob("*.yaml")]
+    names = [p.name for p in files]
+    clashes = sorted({n for n in names if names.count(n) > 1})
+    if clashes:
+        raise SystemExit(f"common/ subflow name clash between {[str(d) for d in common_dirs()]}: {clashes}")
+    return files
 
 # Whitelist of vars flows may reference via ${VAR} - passed to BrowserStack's
 # setEnvVariables so it can do the substitution server-side (this isn't a
@@ -45,10 +79,68 @@ FLOW_ENV_VARS = [
     "HQ_DOMAIN",
     "HQ_MOBILE_WORKER_USERNAME", "HQ_MOBILE_WORKER_PASSWORD",
     "HQ_WEB_USER_EMAIL", "HQ_WEB_USER_PASSWORD",
+    # flows_non_core/ only: Case List Optimization and Performance Tests users
+    # (their password is the same as test1's, so they reuse CC_TEST_PASSWORD).
+    "CC_CASELIST_USERNAME", "CC_LARGE_APP_USERNAME",
 ]
 
 
-def select_flow_files(tags=None, explicit_flows=None):
+# Flows carrying any of these tags are left out of tag-based runs (including
+# "All") unless that tag itself is requested, or the flow is named via --flow.
+OPT_IN_ONLY_TAGS = {
+    # An addMedia reference to a local file that doesn't exist yet: BrowserStack
+    # rejects the WHOLE build's parse if one addMedia target is missing (see
+    # select_flow_files' docstring).
+    "blocked_missing_asset",
+    # cc_reinstall_needed_01 / cc_update_needed_01_trigger_on_old_client need a
+    # different CommCare binary (resources/commcare_2.45_release.apk, via --apk)
+    # than every other recovery_measures flow.
+    "requires_old_client_apk",
+    # offline_06/offline_08/offline_reinstall_update_app_flow/reinstall_update_05_06
+    # can't push a .ccz onto the device; covered by scripts/
+    # appium_offline_ccz_scenarios.py instead (kept on disk for reference).
+    "superseded_by_appium",
+    # Documented Not Automatable in the Master Mobile Plan, e.g.
+    # retry_recovery_02_network_toggle_retry (needs a 2.45-2.54 client). Kept on
+    # disk for reference.
+    "not_automatable",
+    # Written and correct, but can't pass until something is fixed on HQ's side
+    # (app config / data, not the client or this repo). None at the moment.
+    "blocked_app_config",
+    # Only makes sense once a dedicated runner has prepared HQ state and passes
+    # --env values (scripts/run_targeted_updates_check.py for flows_non_core/
+    # advanced_settings/custom_properties_11_14_*); swept into a plain tag run
+    # it would fail on a missing ${...} variable.
+    "needs_dedicated_runner",
+}
+
+_MAX_VERSION_TAG = re.compile(r"^commcare_max_(\d+)_(\d+)$")
+
+
+def _version_tuple(text):
+    match = re.match(r"^\s*(\d+)\.(\d+)", text or "")
+    return (int(match.group(1)), int(match.group(2))) if match else None
+
+
+def _max_commcare_version(flow_tags):
+    """Lowest commcare_max_<major>_<minor> limit among a flow's tags, or None."""
+    limits = [tuple(map(int, m.groups())) for m in map(_MAX_VERSION_TAG.match, flow_tags) if m]
+    return min(limits) if limits else None
+
+
+def _commcare_version(apk_path, apk_commcare_version):
+    """(major, minor) of the APK under test: from the release tag, else the APK's own
+    manifest; None if neither is readable (then no flow is version-gated)."""
+    version = _version_tuple(apk_commcare_version)
+    if version is None and apk_path:
+        try:
+            version = _version_tuple(apk_info.read_manifest_attrs(apk_path).get("versionName"))
+        except Exception:  # noqa: BLE001 - unreadable APK: gate nothing
+            version = None
+    return version
+
+
+def select_flow_files(tags=None, explicit_flows=None, commcare_version=None):
     """Return the set of flow .yaml files to run, always including flows/common/
     (needed by runFlow references) regardless of tag filtering.
 
@@ -75,7 +167,19 @@ def select_flow_files(tags=None, explicit_flows=None):
     blocked_missing_asset itself is one of the requested tags (or the flow
     was named explicitly via --flow, which always bypasses tag filtering
     entirely - a direct request to run a specific file should never be
-    silently dropped)."""
+    silently dropped).
+
+    The other opt-in-only tags work the same way - see OPT_IN_ONLY_TAGS.
+
+    `commcare_version` ((major, minor) of the APK under test, or None): a flow
+    tagged `commcare_max_<major>_<minor>` (e.g. commcare_max_2_64) only applies
+    up to that CommCare version, so on a newer APK it is left out - not run, and
+    not in the report or its totals (it is not applicable, so it must not show
+    up as a skipped test). Logged here instead. Example: flows_non_core/
+    advanced_settings/custom_properties_15_* - 2.65 deleted
+    root-menu-as-home-screen for good (commcare-android 568e15b6d). A flow named
+    via --flow is never gated, same as the opt-in tags: it runs and fails
+    visibly rather than vanishing."""
     if explicit_flows:
         selected = {pathlib.Path(f).resolve() for f in explicit_flows}
     else:
@@ -86,52 +190,23 @@ def select_flow_files(tags=None, explicit_flows=None):
             with open(path, encoding="utf-8") as fh:
                 doc = next(yaml.safe_load_all(fh))
             flow_tags = set((doc or {}).get("tags") or [])
-            if "blocked_missing_asset" in flow_tags and (not tags or "blocked_missing_asset" not in tags):
+            if (flow_tags & OPT_IN_ONLY_TAGS) - set(tags or ()):
                 continue
-            # UPDATE (2026-08-25): same exclusion pattern as
-            # blocked_missing_asset above - cc_reinstall_needed_01/
-            # cc_update_needed_01_trigger_on_old_client.yaml need a
-            # completely different CommCare BINARY (resources/
-            # commcare_2.45_release.apk, via --apk) than every other
-            # recovery_measures flow, which runs against the normal
-            # current-release build. Without this, --tag recovery_measures
-            # would sweep them into the same build as everything else,
-            # testing them against the wrong (current, not old) binary.
-            if "requires_old_client_apk" in flow_tags and (not tags or "requires_old_client_apk" not in tags):
+            if tags and not flow_tags & set(tags):
                 continue
-            # UPDATE (2026-08-25): same exclusion pattern again -
-            # offline_06_select_ccz_via_picker/offline_08_move_ccz_to_
-            # downloads/offline_reinstall_update_app_flow/reinstall_update_05_
-            # 06_chooser_and_ccz are all structurally blocked (Maestro can't
-            # push a .ccz file onto the device) and now have real, passing
-            # coverage via scripts/appium_offline_ccz_scenarios.py instead
-            # (see each file's own UPDATE header) - dispatching them
-            # alongside their Appium replacements would just show 4
-            # permanent, misleading "failures" in every recovery_measures
-            # report. Kept on disk (not deleted) for reference; still
-            # runnable directly via --flow or --tag superseded_by_appium.
-            if "superseded_by_appium" in flow_tags and (not tags or "superseded_by_appium" not in tags):
+            # After the tag match, so only flows this run would otherwise have
+            # selected are logged as not applicable.
+            limit = _max_commcare_version(flow_tags)
+            if commcare_version and limit and commcare_version > limit:
+                print(f"  Not applicable, not run: {path.relative_to(REPO_ROOT)} - only applies up to "
+                      f"CommCare {limit[0]}.{limit[1]} (tag commcare_max_{limit[0]}_{limit[1]}); the APK "
+                      f"under test is {commcare_version[0]}.{commcare_version[1]}. See the flow's "
+                      f"header for what changed.")
                 continue
-            # UPDATE (2026-08-27): same exclusion pattern again -
-            # retry_recovery_02_network_toggle_retry.yaml is structurally
-            # blocked (its precondition needs a CommCare-client version
-            # range, 2.45-2.54, that's below the current release under
-            # test) and was permanently failing in every recovery_measures
-            # report despite being documented Not Automatable in the
-            # Master Mobile Plan - its own flow tag just never matched
-            # that documentation until now. Kept on disk (not deleted) for
-            # reference; still runnable directly via --flow or
-            # --tag not_automatable.
-            if "not_automatable" in flow_tags and (not tags or "not_automatable" not in tags):
-                continue
-            if not tags:
-                selected.add(path)
-                continue
-            if flow_tags & set(tags):
-                selected.add(path)
+            selected.add(path)
 
     # common/ is always needed for runFlow references
-    for path in (FLOWS_DIR / "common").glob("*.yaml"):
+    for path in common_flow_files():
         selected.add(path)
     return sorted(selected)
 
@@ -168,7 +243,9 @@ def build_flows_zip(flow_files, out_dir):
     if staging.exists():
         shutil.rmtree(staging)
     for f in flow_files:
-        rel = f.relative_to(FLOWS_DIR)
+        # common/ subflows may come from the core tree even when FLOWS_DIR is
+        # flows_non_core (see CORE_COMMON_DIR) - always land them at common/.
+        rel = pathlib.Path("common", f.name) if f.parent.name == "common" else f.relative_to(FLOWS_DIR)
         dest = staging / rel
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(f, dest)
@@ -260,7 +337,7 @@ def run_all_builds(bs, flow_files, app_url, args, env_variables, other_app_urls,
     (synthesized as "failed" with a clear reason) rather than risking the
     open-ended retry/fallback chain that caused the 6-hour hang above."""
     non_common_files = [f for f in flow_files if f.parent.name != "common"]
-    common_files = list((FLOWS_DIR / "common").glob("*.yaml"))
+    common_files = common_flow_files()
     chunks = chunk_flows_by_execute_length(non_common_files, FLOWS_DIR)
 
     def synthesize_missing(files, reason):
@@ -621,7 +698,20 @@ def main():
                               "flows and merge the result - a test that passes on retry is reported as "
                               "'rerun' (flaky) instead of 'failed'. Relies on report_generator.match_flow_files' "
                               "name-matching heuristic - see its docstring caveat.")
+    parser.add_argument("--env", action="append", dest="extra_env", default=[], metavar="KEY=VALUE",
+                         help="Extra flow variable (repeatable), passed to BrowserStack alongside the "
+                              "FLOW_ENV_VARS / APP_CODE_* ones and overriding them - for a caller that "
+                              "prepares HQ state itself and must hand the flow a value only it knows "
+                              "(e.g. scripts/run_targeted_updates_check.py's install code for the build "
+                              "it just cut). Never use it for secrets that belong in FLOW_ENV_VARS.")
+    parser.add_argument("--flows-root", choices=sorted(FLOWS_ROOTS), default="flows",
+                         help="Which flow tree --tag/--flow selection runs against: the core suite "
+                              "(flows/, default) or the non-core one (flows_non_core/). Shared "
+                              "common/ subflows come from flows/common/ either way.")
     args = parser.parse_args()
+
+    global FLOWS_DIR
+    FLOWS_DIR = FLOWS_ROOTS[args.flows_root]
 
     load_dotenv(REPO_ROOT / ".env")
 
@@ -748,9 +838,13 @@ def _run_hq_teardown(hq_teardown_path, client, apk_commcare_version):
 
 
 def _dispatch_and_report(args, apk_path, apk_commcare_version, prior_build_by_app_id):
-    flow_files = select_flow_files(tags=args.tags, explicit_flows=args.flows)
+    flow_files = select_flow_files(tags=args.tags, explicit_flows=args.flows,
+                                   commcare_version=_commcare_version(apk_path, apk_commcare_version))
     if not flow_files:
         raise SystemExit("No matching flow files found for the given --tag/--flow filters.")
+    if not any(f.parent.name != "common" for f in flow_files):
+        print("No selected flow applies to this CommCare version - nothing to dispatch.")
+        return
     print(f"Selected {len(flow_files)} flow file(s):")
     for f in flow_files:
         print(f"  {f.relative_to(REPO_ROOT)}")
@@ -818,6 +912,12 @@ def _dispatch_and_report(args, apk_path, apk_commcare_version, prior_build_by_ap
                 {k: _registry_entry(k) for k in unfiltered_keys},
             ))
 
+        for item in args.extra_env:
+            key, sep, value = item.partition("=")
+            if not sep or not key:
+                raise SystemExit(f"--env expects KEY=VALUE, got {item!r}")
+            env_variables[key] = value
+
         # See DEFAULT_WALL_CLOCK_BUDGET_SECONDS's own comment - computed once
         # here so it covers the WHOLE run (main pass + --retry-failed pass),
         # not reset per call.
@@ -831,7 +931,12 @@ def _dispatch_and_report(args, apk_path, apk_commcare_version, prior_build_by_ap
 
         failed = [r for r in test_results if r.status == "failed"]
         if args.retry_failed and failed:
-            retry_files = report_generator.match_flow_files(failed, flow_files, FLOWS_DIR)
+            # Only this run's own flows: common/ subflows can come from the core tree even
+            # when FLOWS_DIR is flows_non_core (see CORE_COMMON_DIR), so relative_to(FLOWS_DIR)
+            # would raise for them - confirmed live, non-core CI run 37325239305 crashed here
+            # and lost group-a's whole report. run_all_builds re-adds common/ to every build.
+            retry_files = report_generator.match_flow_files(
+                failed, [f for f in flow_files if f.parent.name != "common"], FLOWS_DIR)
             if not retry_files:
                 print("No flow files matched the failed test names - skipping retry "
                       "(see report_generator.match_flow_files' name-matching caveat).")

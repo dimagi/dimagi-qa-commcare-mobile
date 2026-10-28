@@ -1,0 +1,27 @@
+appId: org.commcare.dalvik
+tags:
+  - advanced_settings
+  - automatable
+---
+# Master Mobile Plan (2026) > Advanced Settings > Custom Properties 5
+# (cc-show-update-target-options=yes). "Update Options" is
+# menu.update.options; "Update App" is home.menu.update
+# (android_translatable_strings.txt). The update-target choices
+# ("Latest saved state" etc.) are what DeveloperOptionsTests.testUpdateOptions
+# (commcare-android, read-only) asserts once that screen is open.
+- runFlow:
+    file: ../common/login_advanced_settings.yaml
+- tapOn: "More options"
+- tapOn: "Settings"
+- scrollUntilVisible:
+    element:
+      text: "Update Options"
+    direction: DOWN
+    timeout: 15000
+- back
+- tapOn: "More options"
+- tapOn: "Update App"
+- tapOn: "More options"
+- assertVisible: "Update Options"
+- tapOn: "Update Options"
+- assertVisible: "Latest saved state"

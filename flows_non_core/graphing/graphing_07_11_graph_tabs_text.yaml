@@ -1,0 +1,93 @@
+appId: org.commcare.dalvik
+tags:
+  - graphing
+  - partial
+---
+# Master Mobile Plan (2026) > Graphing > Graphing 7, 8, 9, 10, 11 (text parts).
+# Same WebView-text technique graphing_06 proved live (2026-10-02): the c3/d3
+# SVG text inside each graph is in the accessibility tree Maestro reads.
+# The case detail's tabs and graphs (from the Graphing app's suite.xml /
+# app_strings.txt, m0_case_long):
+#   "Graph 1" - Bubble Graph: axis titles X Values / Y Values, annotation TOP   (Graphing 7)
+#   "Graph 2" - Time Graph: DateTime / Y Values, annotation JUNE                 (Graphing 8)
+#               Fill Graph (same tab): no axis titles                            (Graphing 9)
+#   "Graph 3" - Bar Graph: Number One / Number Two, legend number2               (Graphing 10)
+#   "Graph 4" - Bar Horizontal Graph                                             (Graphing 11)
+# Partial: tick ranges, colours, translucency, bar orientation and the
+# "rotate the device" steps are visual and stay manual.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_GRAPHING}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+- runScript:
+    file: assets/generate_run_suffix.js
+- runFlow:
+    file: ../common/graphing_create_case_with_point.yaml
+    env:
+      CASE_NAME: "Maestro Tabs ${output.runSuffix}"
+- runFlow:
+    file: ../common/graphing_open_case_detail.yaml
+    env:
+      CASE_NAME: "Maestro Tabs ${output.runSuffix}"
+
+# Graphing 7 - bubble graph.
+- tapOn: "Graph 1"
+- extendedWaitUntil:
+    visible: "Bubble Graph"
+    timeout: 15000
+- extendedWaitUntil:
+    visible: "TOP"
+    timeout: 15000
+- assertVisible:
+    text: "(?i)x values"
+- assertVisible:
+    text: "(?i)y values"
+
+# Graphing 8 - time graph; Graphing 9 - fill graph (same tab, below it).
+- tapOn: "Graph 2"
+- extendedWaitUntil:
+    visible: "Time Graph"
+    timeout: 15000
+- extendedWaitUntil:
+    visible: "DateTime"
+    timeout: 15000
+- assertVisible: "JUNE"
+- scrollUntilVisible:
+    element:
+      text: "Fill Graph"
+    direction: DOWN
+    timeout: 15000
+
+# Graphing 10 - bar graph from a lookup table.
+- tapOn: "Graph 3"
+- extendedWaitUntil:
+    visible: "Bar Graph"
+    timeout: 15000
+- extendedWaitUntil:
+    visible: "Number One"
+    timeout: 15000
+- assertVisible: "Number Two"
+- assertVisible: "number2"
+
+# Graphing 11 - horizontal bar graph renders.
+- tapOn: "Graph 4"
+- extendedWaitUntil:
+    visible: "Bar Horizontal Graph"
+    timeout: 15000
+
+- runFlow:
+    file: ../common/back_to_home.yaml
+- tapOn: "Start"
+- tapOn: "Graphing"
+- runFlow:
+    file: ../common/graphing_remove_case.yaml
+    env:
+      CASE_NAME: "Maestro Tabs ${output.runSuffix}"

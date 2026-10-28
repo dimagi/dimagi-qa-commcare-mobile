@@ -1,0 +1,51 @@
+appId: org.commcare.dalvik
+tags:
+  - text_to_speech
+  - partial
+---
+# Master Mobile Plan (2026) > Text to Speech > TTS 1-2.
+# "Enable Text To Speech" is cc-enable-tts in app/res/xml/main_preferences.xml
+# (commcare-android, read-only). With it on, MediaLayout.showTtsButton makes
+# R.id.tts_button visible next to a question label that has no audio of its
+# own. Form: [Master] Basic Tests > Basic Form Tests > Text to Speech, first
+# question "Hello, how are you?" (from the app's released CCZ).
+# Partial: we tap the button but can't check that speech actually plays.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_BASIC_TESTS}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+- tapOn: "More options"
+- tapOn: "Settings"
+- scrollUntilVisible:
+    element:
+      text: "Enable Text To Speech"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "Enable Text To Speech"
+- tapOn: "Enabled"
+- back
+- tapOn: "Start"
+- tapOn: "Basic Form Tests"
+- scrollUntilVisible:
+    element:
+      text: "Text to Speech"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "Text to Speech"
+- extendedWaitUntil:
+    visible: "Hello, how are you?"
+    timeout: 15000
+- assertVisible:
+    id: "org.commcare.dalvik:id/tts_button"
+- tapOn:
+    id: "org.commcare.dalvik:id/tts_button"
+- assertNotVisible:
+    text: "(?i)Text-To-Speech feature will not work.*"

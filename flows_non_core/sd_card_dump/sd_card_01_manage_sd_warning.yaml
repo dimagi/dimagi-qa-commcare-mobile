@@ -1,0 +1,45 @@
+appId: org.commcare.dalvik
+tags:
+  - sd_card_dump
+  - automatable
+---
+# Master Mobile Plan (2026) > SD Card Dump > SD Card 1 - the only row of this
+# tab that needs one phone and no physical SD card. Advanced > "Manage SD"
+# (home.menu.formdump) must show the "Form Dump" warning (bulk.form.alert.title
+# / bulk.form.warning) and, after OK, the dump screen with its "Dump Forms" /
+# "Submit Forms" buttons (bulk.form.dump / bulk.form.submit; android_
+# translatable_strings.txt). The rest of the tab moves a real SD card
+# between two phones - not automatable.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_BASIC_TESTS}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+- tapOn: "More options"
+- tapOn: "Advanced"
+- assertVisible: "CommCare > Advanced"
+- scrollUntilVisible:
+    element:
+      text: "Manage SD"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Manage SD"
+- extendedWaitUntil:
+    visible: "Form Dump"
+    timeout: 10000
+- assertVisible:
+    text: "Do not use this feature unless you have been trained to do so.*"
+- tapOn: "OK"
+- extendedWaitUntil:
+    visible:
+      text: "Dump Forms.*"
+    timeout: 10000
+- assertVisible:
+    text: "Submit Forms.*"

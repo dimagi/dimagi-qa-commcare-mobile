@@ -1,0 +1,45 @@
+appId: org.commcare.dalvik
+tags:
+  - advanced_settings
+  - automatable
+---
+# Master Mobile Plan (2026) > Advanced Settings > Custom Properties 7
+# (cc-allow-space-in-select-choices=no). The "No space error > Survey" form's
+# only question (select_country, itemset from the "country" lookup table) has
+# choice values with spaces, so opening it must raise an error. The exact
+# text comes from commcare-core (not checked out here), so it's matched
+# loosely on "space". Then a normal form (Case List > Registration Form) must
+# still submit.
+- runFlow:
+    file: ../common/login_advanced_settings.yaml
+- tapOn: "Start"
+- tapOn: "No space error"
+- tapOn: "Survey"
+- extendedWaitUntil:
+    visible:
+      text: "(?i).*space.*"
+    timeout: 20000
+- tapOn:
+    text: "(?i)ok"
+    optional: true
+# Confirmed live (2026-10-02): three fixed backs here went one too far and
+# left the app for the Android launcher - go back only until home shows.
+- repeat:
+    times: 3
+    while:
+      notVisible: "Start"
+    commands:
+      - back
+      - tapOn:
+          text: "EXIT WITHOUT SAVING"
+          optional: true
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 15000
+- tapOn: "Start"
+- tapOn: "Case List"
+- tapOn: "Registration Form"
+- runFlow:
+    file: ../common/fill_advanced_settings_registration.yaml
+    env:
+      CASE_NAME: "Maestro CP7"
