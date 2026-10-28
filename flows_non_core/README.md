@@ -33,17 +33,24 @@ Some rows need more than a plain Maestro run, and have their own runners:
   Properties 11-14. It sets the Targeted Updates App's custom properties on
   HQ, cuts the builds each row needs, runs the matching flow, then restores
   the app. Those flows are tagged `needs_dedicated_runner`, so plain tag runs
-  skip them.
+  skip them. In CI it only runs on a manual dispatch with
+  `run_targeted_updates` ticked (tag All or advanced_settings), never on the
+  Saturday schedule: each run cuts ~9 builds on HQ, which can't be deleted.
+  Two such runs never overlap (the workflow's `concurrency` group).
 - `scripts/run_appium_non_core_upgrade_suite.py`: Database Change and
   Performance rows that upgrade CommCare mid-test (2.45 → release, Appium).
+  Runs in group-b of every full run, or a database_change /
+  performance_tests dispatch.
 
-A flow tagged `blocked_app_config` is left out of runs until the HQ-side
-problem in its header is fixed (none at the moment).
+Flows tagged with one of `run_suite.py`'s `OPT_IN_ONLY_TAGS` (e.g.
+`needs_dedicated_runner`, `blocked_app_config`, `not_automatable`) are left out
+of tag runs unless that tag is requested or the flow is named with `--flow`.
 
 A flow tagged `commcare_max_<major>_<minor>` only applies up to that CommCare
 version. On a newer APK, `run_suite.py` doesn't dispatch it and leaves it out
 of the report and its totals (it is only logged as not applicable), so it never
-shows up as a skipped test. Custom Properties 15 is tagged `commcare_max_2_64`
+shows up as a skipped test. Naming the flow with `--flow` bypasses this, so it
+runs (and fails) rather than silently vanishing. Custom Properties 15 is tagged `commcare_max_2_64`
 because 2.65 removed root-menu-as-home-screen for good (confirmed by the mobile
 team 2026-10-27).
 

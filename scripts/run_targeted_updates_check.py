@@ -19,9 +19,12 @@ opposite of what these rows need). So per scenario this script:
      edit_module_attr on the module's internal `comment` field),
   4. runs the matching flows_non_core/advanced_settings/custom_properties_1N_*.yaml
      through scripts/run_suite.py, passing the base build's install code and
-     what Update App must offer via --env,
+     what Update App must offer via --env.
 
-and ALWAYS (finally) restores the original custom properties and module
+A scenario whose HQ setup fails (after 3 tries for a dropped connection)
+gets a failed row with the setup error in reports/latest_results.json and the
+next scenario still runs - so a setup error never just drops CP11-14 from the
+report. It ALWAYS (finally) restores the original custom properties and module
 comment, then cuts + releases one build with those original settings, so
 the app ends where it started. Builds can't be deleted on HQ, so each run
 leaves its builds (commented "Maestro CP1N ...") in the release history -
@@ -32,6 +35,7 @@ Usage:
     python scripts/run_targeted_updates_check.py --scenario cp11 --release-tag commcare_2.64.0
 """
 import argparse
+import json
 import os
 import pathlib
 import subprocess
@@ -43,6 +47,7 @@ from dotenv import load_dotenv
 
 sys.path.insert(0, os.path.dirname(__file__))
 import hq_client as hq_client_module
+import report_generator
 from app_registry import APP_REGISTRY
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -112,6 +117,38 @@ def _prepare(client, app_id, module_id, scenario):
     return code, expected_update, str(target or "")
 
 
+def _prepare_with_retry(client, app_id, module_id, scenario):
+    for attempt in range(3):
+        # HQ occasionally drops a connection mid-setup (seen live 2026-10-23 on
+        # set_custom_properties); every step here is safe to repeat - it only
+        # re-sets the props and cuts fresh builds.
+        try:
+            return _prepare(client, app_id, module_id, scenario)
+        except requests.exceptions.ConnectionError as exc:
+            if attempt == 2:
+                raise
+            print(f"{scenario}: HQ connection dropped during setup ({exc}); retrying")
+            time.sleep(10)
+
+
+def _record_setup_failure(scenario, device, exc):
+    """Add a failed row for a scenario whose HQ setup failed, under the same name
+    run_suite.py gives the flow's own result, to this job's
+    reports/latest_results.json (merged by name, like the Appium runners do)."""
+    flow = REPO_ROOT / FLOWS[scenario]
+    error = f"HQ setup failed before the flow could run: {type(exc).__name__}: {exc}"
+    result = report_generator.TestResult(
+        name=f"{flow.parent.name}/{flow.stem}", workflow=flow.parent.name, status="failed",
+        device=device, error=error, failed_step=f"{flow.stem} - {error}")
+    results = [result]
+    existing_path = REPO_ROOT / "reports" / "latest_results.json"
+    if existing_path.exists():
+        existing = json.loads(existing_path.read_text(encoding="utf-8"))
+        results = [report_generator.TestResult(**i) for i in existing if i["name"] != result.name] + results
+    (REPO_ROOT / "reports").mkdir(exist_ok=True)
+    report_generator.generate_report(f"targeted-updates-{int(time.time())}", results, enrich=False)
+
+
 def _restore(client, app_id, module_id, original_props, original_comment):
     for attempt in range(3):
         try:
@@ -148,18 +185,13 @@ def main():
     failures = 0
     try:
         for scenario in args.scenarios or sorted(FLOWS):
-            for attempt in range(3):
-                # HQ occasionally drops a connection mid-setup (seen live
-                # 2026-10-23 on set_custom_properties); every step here is
-                # safe to repeat - it only re-sets the props and cuts fresh builds.
-                try:
-                    code, expected_update, expected_version = _prepare(client, app_id, module_id, scenario)
-                    break
-                except requests.exceptions.ConnectionError as exc:
-                    if attempt == 2:
-                        raise
-                    print(f"{scenario}: HQ connection dropped during setup ({exc}); retrying")
-                    time.sleep(10)
+            try:
+                code, expected_update, expected_version = _prepare_with_retry(client, app_id, module_id, scenario)
+            except Exception as exc:  # noqa: BLE001 - report it and go on to the next scenario
+                print(f"::error::{scenario}: HQ setup failed: {type(exc).__name__}: {exc}")
+                _record_setup_failure(scenario, args.devices, exc)
+                failures += 1
+                continue
             cmd = [sys.executable, str(REPO_ROOT / "scripts" / "run_suite.py"), "--flows-root", "flows_non_core",
                    "--flow", FLOWS[scenario], "--devices", args.devices,
                    "--build-name", f"{args.build_name}-{scenario}",

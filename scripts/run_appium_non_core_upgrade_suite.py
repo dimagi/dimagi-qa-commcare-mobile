@@ -211,9 +211,13 @@ def main():
         except Exception as exc:  # noqa: BLE001 - tools missing / signing failed: skip, don't fail
             skip_reason += f" (Repackaging the pair for the test was not possible: {exc})"
 
-    bs = AppiumBrowserStackClient()
-    old_app_url = bs.upload_app(str(old_apk_to_use))["app_url"]
-    new_app_url = bs.upload_app(str(new_apk_to_use))["app_url"]
+    # Skipping: no session will start, so don't upload the two APKs either (two large
+    # uploads that can themselves fail transiently).
+    bs = old_app_url = new_app_url = None
+    if not skip_reason:
+        bs = AppiumBrowserStackClient()
+        old_app_url = bs.upload_app(str(old_apk_to_use))["app_url"]
+        new_app_url = bs.upload_app(str(new_apk_to_use))["app_url"]
     password = os.environ["CC_TEST_PASSWORD"]
 
     perf_timings = {}

@@ -83,11 +83,25 @@ on:
         description: "Comma-separated BrowserStack device names - overrides android_version when set."
         required: false
         default: ""
+      run_targeted_updates:
+        description: "Also run Advanced Settings > Custom Properties 11-14 (scripts/run_targeted_updates_check.py) - only with tag All or advanced_settings. Off by default: each run changes the Targeted Updates App on HQ and cuts ~9 builds there, which HQ can't delete."
+        required: false
+        type: boolean
+        default: false
   # Weekly, Saturdays 01:00 UTC, against the latest commcare-android release.
   # A full non-core run takes ~85-90 min on its 2 parallel sessions (see the
   # prepare job), so it's done well before the core suite's 03:00 UTC run.
   schedule:
     - cron: "0 1 * * 6"
+
+# Runs that change HQ's Targeted Updates App (run_targeted_updates) never
+# overlap: a second run would snapshot the first one's test properties as the
+# app's "original" settings and restore those, leaving the app misconfigured,
+# and both would race on its newest build. Queued, not cancelled; every other
+# run gets its own group, so plain runs are never held up.
+concurrency:
+  group: ${{ github.event.inputs.run_targeted_updates == 'true' && 'non-core-targeted-updates-hq' || format('non-core-{0}', github.run_id) }}
+  cancel-in-progress: false
 
 jobs:
   prepare:
@@ -225,9 +239,11 @@ jobs:
       # the Targeted Updates App's custom properties, cuts the builds each row
       # needs, runs the flow through run_suite.py (results merge into this
       # job's reports/latest_results.json) and always restores the app.
-      # Runs in group-a (advanced_settings) or a single advanced_settings dispatch.
+      # Manual dispatches only, with run_targeted_updates ticked (never the
+      # Saturday schedule - each run cuts ~9 builds HQ can't delete): runs in
+      # group-a (advanced_settings) or a single advanced_settings dispatch.
       - name: Run targeted-updates checks (Custom Properties 11-14)
-        if: ${{ !cancelled() && (matrix.name == 'group-a' || (matrix.name == 'single' && github.event.inputs.tag == 'advanced_settings')) }}
+        if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && github.event.inputs.run_targeted_updates == 'true' && (matrix.name == 'group-a' || (matrix.name == 'single' && github.event.inputs.tag == 'advanced_settings')) }}
         env:
           BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
           BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}

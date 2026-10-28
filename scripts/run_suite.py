@@ -85,7 +85,62 @@ FLOW_ENV_VARS = [
 ]
 
 
-def select_flow_files(tags=None, explicit_flows=None):
+# Flows carrying any of these tags are left out of tag-based runs (including
+# "All") unless that tag itself is requested, or the flow is named via --flow.
+OPT_IN_ONLY_TAGS = {
+    # An addMedia reference to a local file that doesn't exist yet: BrowserStack
+    # rejects the WHOLE build's parse if one addMedia target is missing (see
+    # select_flow_files' docstring).
+    "blocked_missing_asset",
+    # cc_reinstall_needed_01 / cc_update_needed_01_trigger_on_old_client need a
+    # different CommCare binary (resources/commcare_2.45_release.apk, via --apk)
+    # than every other recovery_measures flow.
+    "requires_old_client_apk",
+    # offline_06/offline_08/offline_reinstall_update_app_flow/reinstall_update_05_06
+    # can't push a .ccz onto the device; covered by scripts/
+    # appium_offline_ccz_scenarios.py instead (kept on disk for reference).
+    "superseded_by_appium",
+    # Documented Not Automatable in the Master Mobile Plan, e.g.
+    # retry_recovery_02_network_toggle_retry (needs a 2.45-2.54 client). Kept on
+    # disk for reference.
+    "not_automatable",
+    # Written and correct, but can't pass until something is fixed on HQ's side
+    # (app config / data, not the client or this repo). None at the moment.
+    "blocked_app_config",
+    # Only makes sense once a dedicated runner has prepared HQ state and passes
+    # --env values (scripts/run_targeted_updates_check.py for flows_non_core/
+    # advanced_settings/custom_properties_11_14_*); swept into a plain tag run
+    # it would fail on a missing ${...} variable.
+    "needs_dedicated_runner",
+}
+
+_MAX_VERSION_TAG = re.compile(r"^commcare_max_(\d+)_(\d+)$")
+
+
+def _version_tuple(text):
+    match = re.match(r"^\s*(\d+)\.(\d+)", text or "")
+    return (int(match.group(1)), int(match.group(2))) if match else None
+
+
+def _max_commcare_version(flow_tags):
+    """Lowest commcare_max_<major>_<minor> limit among a flow's tags, or None."""
+    limits = [tuple(map(int, m.groups())) for m in map(_MAX_VERSION_TAG.match, flow_tags) if m]
+    return min(limits) if limits else None
+
+
+def _commcare_version(apk_path, apk_commcare_version):
+    """(major, minor) of the APK under test: from the release tag, else the APK's own
+    manifest; None if neither is readable (then no flow is version-gated)."""
+    version = _version_tuple(apk_commcare_version)
+    if version is None and apk_path:
+        try:
+            version = _version_tuple(apk_info.read_manifest_attrs(apk_path).get("versionName"))
+        except Exception:  # noqa: BLE001 - unreadable APK: gate nothing
+            version = None
+    return version
+
+
+def select_flow_files(tags=None, explicit_flows=None, commcare_version=None):
     """Return the set of flow .yaml files to run, always including flows/common/
     (needed by runFlow references) regardless of tag filtering.
 
@@ -112,7 +167,19 @@ def select_flow_files(tags=None, explicit_flows=None):
     blocked_missing_asset itself is one of the requested tags (or the flow
     was named explicitly via --flow, which always bypasses tag filtering
     entirely - a direct request to run a specific file should never be
-    silently dropped)."""
+    silently dropped).
+
+    The other opt-in-only tags work the same way - see OPT_IN_ONLY_TAGS.
+
+    `commcare_version` ((major, minor) of the APK under test, or None): a flow
+    tagged `commcare_max_<major>_<minor>` (e.g. commcare_max_2_64) only applies
+    up to that CommCare version, so on a newer APK it is left out - not run, and
+    not in the report or its totals (it is not applicable, so it must not show
+    up as a skipped test). Logged here instead. Example: flows_non_core/
+    advanced_settings/custom_properties_15_* - 2.65 deleted
+    root-menu-as-home-screen for good (commcare-android 568e15b6d). A flow named
+    via --flow is never gated, same as the opt-in tags: it runs and fails
+    visibly rather than vanishing."""
     if explicit_flows:
         selected = {pathlib.Path(f).resolve() for f in explicit_flows}
     else:
@@ -123,59 +190,14 @@ def select_flow_files(tags=None, explicit_flows=None):
             with open(path, encoding="utf-8") as fh:
                 doc = next(yaml.safe_load_all(fh))
             flow_tags = set((doc or {}).get("tags") or [])
-            if "blocked_missing_asset" in flow_tags and (not tags or "blocked_missing_asset" not in tags):
+            if (flow_tags & OPT_IN_ONLY_TAGS) - set(tags or ()):
                 continue
-            # UPDATE (2026-08-25): same exclusion pattern as
-            # blocked_missing_asset above - cc_reinstall_needed_01/
-            # cc_update_needed_01_trigger_on_old_client.yaml need a
-            # completely different CommCare BINARY (resources/
-            # commcare_2.45_release.apk, via --apk) than every other
-            # recovery_measures flow, which runs against the normal
-            # current-release build. Without this, --tag recovery_measures
-            # would sweep them into the same build as everything else,
-            # testing them against the wrong (current, not old) binary.
-            if "requires_old_client_apk" in flow_tags and (not tags or "requires_old_client_apk" not in tags):
-                continue
-            # UPDATE (2026-08-25): same exclusion pattern again -
-            # offline_06_select_ccz_via_picker/offline_08_move_ccz_to_
-            # downloads/offline_reinstall_update_app_flow/reinstall_update_05_
-            # 06_chooser_and_ccz are all structurally blocked (Maestro can't
-            # push a .ccz file onto the device) and now have real, passing
-            # coverage via scripts/appium_offline_ccz_scenarios.py instead
-            # (see each file's own UPDATE header) - dispatching them
-            # alongside their Appium replacements would just show 4
-            # permanent, misleading "failures" in every recovery_measures
-            # report. Kept on disk (not deleted) for reference; still
-            # runnable directly via --flow or --tag superseded_by_appium.
-            if "superseded_by_appium" in flow_tags and (not tags or "superseded_by_appium" not in tags):
-                continue
-            # UPDATE (2026-08-27): same exclusion pattern again -
-            # retry_recovery_02_network_toggle_retry.yaml is structurally
-            # blocked (its precondition needs a CommCare-client version
-            # range, 2.45-2.54, that's below the current release under
-            # test) and was permanently failing in every recovery_measures
-            # report despite being documented Not Automatable in the
-            # Master Mobile Plan - its own flow tag just never matched
-            # that documentation until now. Kept on disk (not deleted) for
-            # reference; still runnable directly via --flow or
-            # --tag not_automatable.
-            if "not_automatable" in flow_tags and (not tags or "not_automatable" not in tags):
-                continue
-            # Same exclusion pattern: a flow that is written and correct but
-            # can't pass until something is fixed on HQ's side (app config /
-            # data, not the client or this repo) - e.g. flows_non_core/graphing/
-            # graphing_20_22 (the app's mobile reports fixture isn't restored
-            # to the test user). Run it on purpose with --flow or
-            # --tag blocked_app_config once the HQ side is fixed.
-            if "blocked_app_config" in flow_tags and (not tags or "blocked_app_config" not in tags):
-                continue
-            # Same exclusion pattern: a flow that only makes sense when a
-            # dedicated runner has prepared HQ state for it and passes it
-            # --env values (e.g. scripts/run_targeted_updates_check.py for
-            # flows_non_core/advanced_settings/custom_properties_11_14_*) -
-            # swept into a plain tag run it would just fail on a missing
-            # ${...} variable. Run it through its runner.
-            if "needs_dedicated_runner" in flow_tags and (not tags or "needs_dedicated_runner" not in tags):
+            limit = _max_commcare_version(flow_tags)
+            if commcare_version and limit and commcare_version > limit:
+                print(f"  Not applicable, not run: {path.relative_to(REPO_ROOT)} - only applies up to "
+                      f"CommCare {limit[0]}.{limit[1]} (tag commcare_max_{limit[0]}_{limit[1]}); the APK "
+                      f"under test is {commcare_version[0]}.{commcare_version[1]}. See the flow's "
+                      f"header for what changed.")
                 continue
             if not tags:
                 selected.add(path)
@@ -815,56 +837,11 @@ def _run_hq_teardown(hq_teardown_path, client, apk_commcare_version):
                   f"may need manual fixup on HQ: {exc}")
 
 
-_MAX_VERSION_TAG = re.compile(r"^commcare_max_(\d+)_(\d+)$")
-
-
-def _version_tuple(text):
-    match = re.match(r"^\s*(\d+)\.(\d+)", text or "")
-    return (int(match.group(1)), int(match.group(2))) if match else None
-
-
-def _apply_version_gate(flow_files, apk_path, apk_commcare_version):
-    """Skip flows whose feature no longer exists in the CommCare under test.
-
-    A flow tagged `commcare_max_<major>_<minor>` (e.g. commcare_max_2_64) only applies up to that
-    CommCare version; on a newer APK it is not dispatched and is left out of the report entirely
-    (only logged here) - it is not applicable, so it must not show up as a skipped test or count
-    toward the run's total. Example: flows_non_core/advanced_settings/custom_properties_15_* - 2.65
-    deleted root-menu-as-home-screen (commcare-android 568e15b6d), but 2.64 is still the current
-    release. The version comes from the release tag, else the APK's own manifest; if neither is
-    readable, every flow runs as before. Returns (flow_files_to_run, excluded_flow_files)."""
-    version = _version_tuple(apk_commcare_version)
-    if version is None:
-        try:
-            version = _version_tuple(apk_info.read_manifest_attrs(apk_path).get("versionName"))
-        except Exception:  # noqa: BLE001 - unreadable APK: gate nothing
-            version = None
-    if version is None:
-        return flow_files, []
-    kept, skipped = [], []
-    for f in flow_files:
-        if f.parent.name == "common":
-            kept.append(f)
-            continue
-        with open(f, encoding="utf-8") as fh:
-            tags = set((next(yaml.safe_load_all(fh)) or {}).get("tags") or [])
-        limits = [tuple(map(int, m.groups())) for m in map(_MAX_VERSION_TAG.match, tags) if m]
-        limit = min(limits) if limits else None
-        if limit and version > limit:
-            print(f"  Not applicable, not run: {f.relative_to(REPO_ROOT)} - only applies up to "
-                  f"CommCare {limit[0]}.{limit[1]} (tag commcare_max_{limit[0]}_{limit[1]}); the APK "
-                  f"under test is {version[0]}.{version[1]}. See the flow's header for what changed.")
-            skipped.append(f)
-        else:
-            kept.append(f)
-    return kept, skipped
-
-
 def _dispatch_and_report(args, apk_path, apk_commcare_version, prior_build_by_app_id):
-    flow_files = select_flow_files(tags=args.tags, explicit_flows=args.flows)
+    flow_files = select_flow_files(tags=args.tags, explicit_flows=args.flows,
+                                   commcare_version=_commcare_version(apk_path, apk_commcare_version))
     if not flow_files:
         raise SystemExit("No matching flow files found for the given --tag/--flow filters.")
-    flow_files, _ = _apply_version_gate(flow_files, apk_path, apk_commcare_version)
     if not any(f.parent.name != "common" for f in flow_files):
         print("No selected flow applies to this CommCare version - nothing to dispatch.")
         return
