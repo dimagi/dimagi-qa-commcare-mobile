@@ -91,6 +91,13 @@ on:
   schedule:
     # Weekdays (Mon-Fri) at 00:30 UTC against whatever the latest commcare-android release is.
     - cron: "30 0 * * 1-5"
+  # After each successful HQ deploy. commcare-cloud sends deploy_success only to
+  # dimagi/dimagi-qa, which forwards it here with the same client_payload
+  # {component, environment}. Only commcare deploys to production run the suite
+  # (the prepare job's `if`); formplayer deploys and other environments are skipped.
+  # Runs start straight away, even mid-day (agreed with the dev team, 2026-10-21).
+  repository_dispatch:
+    types: [deploy_success]
 
 jobs:
   # Computes the matrix maestro-tests fans out over. A specific --tag pick
@@ -101,6 +108,12 @@ jobs:
   # roughly-balanced groups so the full suite doesn't have to run serially -
   # see the tag lists below for why they're split this way.
   prepare:
+    # deploy_success: only commcare deploys to production. Skipping this job skips
+    # every job after it (see the needs.prepare checks on the always() jobs below).
+    if: >-
+      github.event_name != 'repository_dispatch' ||
+      (github.event.client_payload.component == 'commcare' &&
+       github.event.client_payload.environment == 'production')
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
@@ -1372,7 +1385,7 @@ jobs:
     # Keep `always() &&` HERE (not `!cancelled() &&`): with the latter this job was never created in run
     # 37625535703 (group-b had failed), so update/check_for_new_build was missing and the run reported 153
     # results instead of 154. A cancelled run posts nothing to Slack anyway (see slack_notify.py).
-    if: always() && (github.event.inputs.tag == '' || github.event.inputs.tag == 'All' || github.event.inputs.tag == 'update')
+    if: always() && needs.maestro-tests.result != 'skipped' && (github.event.inputs.tag == '' || github.event.inputs.tag == 'All' || github.event.inputs.tag == 'update')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -1405,7 +1418,7 @@ jobs:
 
   merge-reports:
     needs: [prepare, maestro-tests, update-content-check]
-    if: always()
+    if: always() && needs.prepare.result != 'skipped'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -1499,7 +1512,7 @@ jobs:
 
       # Which Slack channel gets this run's report (and the AI analysis thread). Same scheme as
       # dimagi-qa-sureadhere: scheduled runs and manual runs on main -> the main channel
-      # (SLACK_CHANNEL_ID); manual runs on any other branch -> the branch test channel
+      # (SLACK_CHANNEL_ID), as do post-deploy (deploy_success) runs; manual runs on any other branch -> the branch test channel
       # (SLACK_CHANNEL_ID_BRANCH_TEST). A manual run can override this with the slack_channel input,
       # e.g. to run on main without posting to the main channel.
       - name: Set slack channel
@@ -1520,8 +1533,8 @@ jobs:
             const ids = {main: MAIN_CHANNEL, branch: BRANCH_CHANNEL}
             const names = {main: 'SLACK_CHANNEL_ID', branch: 'SLACK_CHANNEL_ID_BRANCH_TEST'}
             let target
-            if (CC_EVENT === 'schedule') {
-              target = 'main'
+            if (CC_EVENT === 'schedule' || CC_EVENT === 'repository_dispatch') {
+              target = 'main'  // nightly and post-deploy (deploy_success) runs
             } else if (CC_EVENT === 'workflow_dispatch') {
               if (choice === 'main channel') target = 'main'
               else if (choice === 'branch test channel') target = 'branch'

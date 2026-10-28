@@ -219,7 +219,7 @@ def main():
         release, asset = download_apk.resolve(args.release_tag or None)
         apk_path = f"apks/{asset['name']}"
         print(f"Downloading {asset['name']} from {release['tag_name']} ...")
-        download_apk.download(asset["browser_download_url"], apk_path)
+        download_apk.download(asset["browser_download_url"], apk_path, release=release)
         apk_commcare_version = release["tag_name"].removeprefix("commcare_")
 
     app_id = _basic_tests_app_id()
