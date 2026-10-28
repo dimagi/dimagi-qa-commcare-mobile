@@ -1,0 +1,16 @@
+appId: org.commcare.dalvik
+---
+# Non-core helper: install the Advanced Settings app (qateam, see
+# scripts/app_registry.py ADVANCED_SETTINGS), log in as the standard test
+# user, and clear the PIN offer. Ends on the home screen.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_ADVANCED_SETTINGS}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- runFlow:
+    file: dismiss_pin_prompt_if_shown.yaml

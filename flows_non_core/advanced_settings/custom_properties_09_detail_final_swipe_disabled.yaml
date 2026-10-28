@@ -1,0 +1,30 @@
+appId: org.commcare.dalvik
+tags:
+  - advanced_settings
+  - partial
+---
+# Master Mobile Plan (2026) > Advanced Settings > Custom Properties 9
+# (cc-detail-final-swipe-enabled=no). On the case detail screen a left swipe
+# must not move into the form; the "Continue" button (m0_select_text in the
+# app's app_strings.txt) must. Partial: "swipe did nothing" is checked as
+# "still on the detail screen with Continue showing" - there is no direct
+# signal for an ignored gesture.
+- runFlow:
+    file: ../common/login_advanced_settings.yaml
+- runFlow:
+    file: ../common/open_advanced_settings_followup_case_list.yaml
+- tapOn:
+    id: "org.commcare.dalvik:id/screen_entity_select_list"
+- extendedWaitUntil:
+    visible: "Continue"
+    timeout: 10000
+- swipe:
+    direction: LEFT
+- assertVisible: "Continue"
+- assertNotVisible:
+    text: "City.*"
+- tapOn: "Continue"
+- extendedWaitUntil:
+    visible:
+      text: "City.*"
+    timeout: 15000

@@ -1,0 +1,57 @@
+appId: org.commcare.dalvik
+tags:
+  - graphing
+  - partial
+---
+# Master Mobile Plan (2026) > Graphing > Graphing 1-5, End Form 1, Graphing 19.
+# Install + log in (1-2), create a case (3), add a point (4), open
+# "View Cases & Graphs" (case_lists.m0 in the app's app_strings.txt) and its
+# case detail (5), then close the case again with Remove Case (19) so the
+# shared test user's case list doesn't keep growing.
+# Partial: Graphing 5 also asks that the graph "looks right" - here we only
+# check the case and a graph view are on screen. Axis text is checked
+# separately by graphing_06_xy_axis_labels.yaml.
+- runFlow:
+    file: ../common/install_app_by_code.yaml
+    env:
+      APP_CODE: ${APP_CODE_GRAPHING}
+- runFlow:
+    file: ../common/login.yaml
+    env:
+      USERNAME: ${CC_TEST_USERNAME}
+      PASSWORD: ${CC_TEST_PASSWORD}
+- extendedWaitUntil:
+    visible: "Start"
+    timeout: 20000
+- runScript:
+    file: assets/generate_run_suffix.js
+- runFlow:
+    file: ../common/graphing_create_case_with_point.yaml
+    env:
+      CASE_NAME: "Maestro Graph ${output.runSuffix}"
+
+- tapOn: "View Cases & Graphs"
+- extendedWaitUntil:
+    visible:
+      id: "org.commcare.dalvik:id/screen_entity_select_list"
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: "Maestro Graph ${output.runSuffix}"
+    direction: DOWN
+    timeout: 20000
+- tapOn: "Maestro Graph ${output.runSuffix}"
+# "View Cases & Graphs" is a view-only case list, so its detail screen's
+# button is "DONE", not the "Continue" of a form's case selection
+# (confirmed live 2026-10-02).
+- extendedWaitUntil:
+    visible: "(?i)done"
+    timeout: 15000
+- assertVisible: "XY Graph"
+- back
+- back
+
+- runFlow:
+    file: ../common/graphing_remove_case.yaml
+    env:
+      CASE_NAME: "Maestro Graph ${output.runSuffix}"
