@@ -27,6 +27,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import urllib.request
 
 GITHUB_API = "https://api.github.com/repos/dimagi/commcare-android"
@@ -44,6 +45,9 @@ APK_PATTERN = re.compile(
 MAX_RELEASES_TO_SCAN = 15
 # commcare_2.65.0 -> (2, 65, 0). Anything else (commcare_2.61.5test) isn't a release.
 TAG_VERSION = re.compile(r"^commcare_(\d+(?:\.\d+)*)$")
+# Seconds a GitHub request may sit with no data before it fails, so a hung
+# connection stops the run instead of stalling the job until its timeout.
+HTTP_TIMEOUT = 60
 
 
 def tag_version(tag):
@@ -65,7 +69,7 @@ def _get_json(url):
     token = os.environ.get("GITHUB_TOKEN")
     if token:
         req.add_header("Authorization", f"Bearer {token}")
-    with urllib.request.urlopen(req) as resp:
+    with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT) as resp:
         return json.load(resp)
 
 
@@ -153,7 +157,8 @@ def download(url, out_path, expected_size=None, release=None):
         print(f"{out_path} already matches the expected {expected_size} bytes - skipping download.")
     else:
         os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
-        urllib.request.urlretrieve(url, out_path)
+        with urllib.request.urlopen(url, timeout=HTTP_TIMEOUT) as resp, open(out_path, "wb") as out:
+            shutil.copyfileobj(resp, out)
     if release is not None:
         check_version(out_path, release)
 
