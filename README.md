@@ -84,6 +84,7 @@ The **Maestro BrowserStack QA** workflow's *Run workflow* form picks the APK:
 |---|---|
 | `GitHub Releases` (default) | The latest `commcare-android` release APK, or the one named by `release_tag`. Scheduled runs always use this. |
 | `Internal latest APK` | The newest dev build from a successful, manually dispatched `commcare-android PR CI` run on **any branch** (the branch changes every build). Type a branch in `commcare_android_branch` to restrict it. The chosen run, branch and commit are printed in the job log. |
+| `Dev build (master)` | commcare-android's `master` as it stands: `scripts/dev_build.py` reuses a build of master's current commit or dispatches one (about 30 minutes, with commcare-core's `master` as `commcare_core_sha`), then downloads it with `fetch_apk.py`. Falls back to an older master build, and says so in the job summary, if the newest one failed. Needs the `COMMCARE_ANDROID_TOKEN` secret, a token that can read commcare-android's artifacts and run its workflows (A1 interrupt ticket). This is the only place the repo writes to commcare-android. |
 | `resources/*.apk` | A committed APK, e.g. `app-commcare-qaAutomation.apk` (the 2.65 prod dev build). The list is static: a new `resources/*.apk` needs a matching option added to the workflow by hand (`*.apk` is gitignored, so add it with `git add -f`). |
 
 `commcare_android_run` (a run id or URL) overrides all of the above, and `commcare_android_artifact`
