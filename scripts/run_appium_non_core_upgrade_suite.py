@@ -194,7 +194,7 @@ def main():
     if not apk_path:
         release, asset = download_apk.resolve(args.release_tag or None)
         apk_path = f"apks/{asset['name']}"
-        download_apk.download(asset["browser_download_url"], apk_path, expected_size=asset["size"])
+        download_apk.download(asset["browser_download_url"], apk_path, expected_size=asset["size"], release=release)
 
     # Same as scripts/run_appium_suite.py: a dev/PR build (versionCode 1, e.g. the 2.65
     # qaAutomation APK) can't install over the 2.45 binary, so repackage the pair (both re-signed
