@@ -47,13 +47,14 @@ on:
         required: false
         default: "commcare-release-apk"
       apk_source:
-        description: "APK to test. 'GitHub Releases' uses release_tag above (or latest if blank) - the normal path. 'Internal latest APK' tests the newest dev build from a successful manually dispatched commcare-android 'PR CI' run on ANY branch (before it is released). Any other option tests that committed resources/*.apk file directly instead (e.g. a build not yet published as a release). NOTE: this list is a static snapshot - a newly-added resources/*.apk needs a matching option added here by hand, workflow_dispatch choices can't be generated from the repo at trigger time."
+        description: "APK to test. 'GitHub Releases' uses release_tag above (or latest if blank) - the normal path. 'Internal latest APK' tests the newest dev build from a successful manually dispatched commcare-android 'PR CI' run on ANY branch (before it is released). 'Dev build (master)' tests commcare-android's master as it stands now: it reuses a build of master's current commit, or dispatches one (about 30 minutes) - needs the COMMCARE_ANDROID_TOKEN secret. Any other option tests that committed resources/*.apk file directly instead (e.g. a build not yet published as a release). NOTE: this list is a static snapshot - a newly-added resources/*.apk needs a matching option added here by hand, workflow_dispatch choices can't be generated from the repo at trigger time."
         required: false
         type: choice
         default: "GitHub Releases"
         options:
           - "GitHub Releases"
           - "Internal latest APK"
+          - "Dev build (master)"
           - "resources/app-commcare-release-Android16.apk"
           - "resources/app-commcare-qaAutomation.apk"
           - "resources/commcare_2.45_release.apk"
@@ -237,6 +238,18 @@ jobs:
 
       - name: Install dependencies
         run: pip install -r requirements.txt
+
+      # apk_source = "Dev build (master)" (QA Plan B1): the dev build of commcare-android's
+      # master, dispatched by dev_build.py when master has moved since the last build. That
+      # is the one place this repo writes to commcare-android, agreed with the dev team;
+      # fetch_apk.py, which does the download, stays read-only. An explicit
+      # commcare_android_run still wins (the step below).
+      - name: Fetch dev build of commcare-android master (apk_source = Dev build (master))
+        if: ${{ github.event.inputs.commcare_android_run == '' && github.event.inputs.apk_source == 'Dev build (master)' }}
+        env:
+          COMMCARE_ANDROID_TOKEN: ${{ secrets.COMMCARE_ANDROID_TOKEN }}
+          ARTIFACT_INPUT: ${{ github.event.inputs.commcare_android_artifact }}
+        run: python scripts/dev_build.py --artifact "${ARTIFACT_INPUT:-commcare-release-apk}" --github-env
 
       - name: Fetch APK from commcare-android Actions (commcare_android_run set, or apk_source = Internal latest APK)
         if: ${{ github.event.inputs.commcare_android_run != '' || github.event.inputs.apk_source == 'Internal latest APK' }}
