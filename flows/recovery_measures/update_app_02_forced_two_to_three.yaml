@@ -187,6 +187,27 @@ tags:
 # UPDATE (2026-10-08): 20s was too tight for the Home screen after a re-login in this flow (HQ
 # restore is sometimes slow; local re-runs landed back on the login screen at this wait).
 # Waits up to 2 minutes - version-independent, and no slower when the Home screen appears quickly.
+#
+# UPDATE (2026-11-26), from the 17 Nov and 20 Nov scheduled runs: this login can land back
+# on the login screen ("Welcome back! Please log in.", empty password) instead of Home, so
+# the wait for "Start" ran out after 2 minutes on the first try and on the retry. That is the
+# recovery measure's own auto-logout firing on THIS login rather than the earlier one (the
+# loop above stops as soon as the login screen shows, whichever way it got there). So wait
+# for either screen, and if it is the login screen, log in once more. The version check
+# below still proves the device ended on Test Three.
+- extendedWaitUntil:
+    visible: "Start|Welcome back.*"
+    timeout: 120000
+- runFlow:
+    when:
+      visible:
+        id: "org.commcare.dalvik:id/edit_username"
+    commands:
+      - runFlow:
+          file: ../common/login.yaml
+          env:
+            USERNAME: ${CC_TEST_USERNAME}
+            PASSWORD: ${CC_TEST_PASSWORD}
 - extendedWaitUntil:
     visible: "Start"
     timeout: 120000
