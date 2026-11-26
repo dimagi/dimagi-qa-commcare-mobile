@@ -438,8 +438,15 @@ jobs:
       # (matrix.name is "single" there, matching neither group-b nor
       # group-c) so `--tag prompted_updates` ad-hoc runs still cover both
       # in that one job, same as before.
+      # UPDATE (2026-11-26): both scenarios now run in group-c, one after the other.
+      # In separate groups they could run at the SAME time against the same HQ app:
+      # on 20 Nov group-b's scenario_01 (04:03-04:12 UTC) set Prompt Updates to the
+      # optional prompt while group-c's scenario_02 (03:53-04:14) was waiting for the
+      # forced one, so scenario_02 saw "New version ... is available" for 6 minutes and
+      # failed on both tries. On days they did not overlap (17, 26 Nov) both passed.
+      # They stay separate steps, so still separate BrowserStack sessions.
       - name: Run Appium suite on BrowserStack (prompted_updates scenario_01_optional_ccz_update)
-        if: ${{ !cancelled() && (matrix.name == 'group-b' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'prompted_updates'))) }}
+        if: ${{ !cancelled() && (matrix.name == 'group-c' || (matrix.name != 'group-a' && matrix.name != 'group-b' && matrix.name != 'group-c' && contains(matrix.tags, 'prompted_updates'))) }}
         env:
           BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
           BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
