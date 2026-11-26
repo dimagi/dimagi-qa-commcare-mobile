@@ -171,6 +171,27 @@ def test_a_build_that_fails_again_after_its_rerun_is_not_rerun_twice():
     assert gh.reruns == [9]
 
 
+def test_a_successful_build_whose_artifact_expired_is_built_again():
+    def add_run(gh):
+        gh.runs.insert(0, _run(9, status="queued"))
+        gh.pending = {9}
+
+    old = _run(5)
+    old["conclusion"] = "success"
+    gh = FakeGitHub([old], on_dispatch=add_run)
+    run, *_ = find_build(gh, ARTIFACT)
+    assert (run["id"], gh.dispatched) == (9, 1)
+
+
+def test_an_expired_build_is_not_rebuilt_when_dispatching_is_off():
+    old = _run(5)
+    old["conclusion"] = "success"
+    gh = FakeGitHub([old])
+    with pytest.raises(DevBuildError):
+        find_build(gh, ARTIFACT, can_dispatch=False)
+    assert gh.dispatched == 0
+
+
 def test_gives_up_when_the_build_never_uploads(monkeypatch):
     clock = iter(range(0, 10**6, 3600))
     monkeypatch.setattr(dev_build.time, "monotonic", lambda: next(clock))

@@ -176,11 +176,15 @@ def find_build(gh, artifact_name, can_dispatch=True, wait_minutes=DEFAULT_WAIT_M
     if running:
         print(f"Run {running['id']} is already building {head[:10]}; waiting for it")
         run_id = running["id"]
-    elif at_head:
+    elif at_head and not (can_dispatch and any(run.get("conclusion") == "success" for run in at_head)):
         run_id = None
         print(f"The build of {head[:10]} (run {at_head[0]['id']}) finished without {artifact_name}; "
               "not dispatching again")
     elif can_dispatch:
+        # Either nothing has built this commit yet, or a build succeeded but its artifact
+        # is gone: GitHub drops expired artifacts from the list (kept 3 days), and a
+        # successful build always uploads it. Re-trigger rather than rely on retention
+        # (Shubham, CI-1069). A failed build is not retried here, so this cannot loop.
         run_id = dispatch(gh)
         print(f"Dispatched run {run_id} to build {head[:10]}")
     else:
