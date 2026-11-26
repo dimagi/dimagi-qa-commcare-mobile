@@ -32,6 +32,7 @@ class FakeGitHub:
         self.on_dispatch = on_dispatch
         self.dispatched = 0
         self.sleeps = 0
+        self.reruns = []
 
     def get(self, path, **_params):
         if path == "commits/master":
@@ -50,6 +51,10 @@ class FakeGitHub:
         return {"sha": "c" * 40}
 
     def post(self, path, payload):
+        if path.endswith("/rerun-failed-jobs"):
+            self.reruns.append(int(path.split("/")[2]))
+            self.on_rerun(self)
+            return
         assert payload == {"ref": "master", "inputs": {"commcare_core_sha": "c" * 40}}
         self.dispatched += 1
         self.on_dispatch(self)
@@ -63,6 +68,7 @@ class FakeGitHub:
                 run["status"] = "completed"
 
     pending = ()
+    on_rerun = None
 
 
 def test_uses_an_existing_build_of_master_head_without_dispatching():
@@ -121,6 +127,69 @@ def test_a_build_cancelled_by_a_second_dispatch_hands_over_to_the_replacement():
     gh = Replaced([_run(7, status="in_progress")])
     run, current = find_build(gh, ARTIFACT)
     assert (run["id"], current, gh.dispatched) == (8, True, 0)
+
+
+def test_a_failed_dispatched_build_is_rerun_once_before_falling_back():
+    def add_run(gh):
+        gh.runs.insert(0, _run(9, status="queued"))
+
+    def back_to_running(gh):
+        gh.runs[0].update(status="in_progress", conclusion=None)
+        gh.pending = {9}
+
+    class FailsFirst(FakeGitHub):
+        def sleep(self, _seconds):
+            run = next(r for r in self.runs if r["id"] == 9)
+            if not self.reruns and run["status"] != "completed":
+                run.update(status="completed", conclusion="failure")
+                return
+            super().sleep(_seconds)
+
+    gh = FailsFirst([], on_dispatch=add_run)
+    gh.on_rerun = back_to_running
+    run, current = find_build(gh, ARTIFACT)
+    assert (run["id"], current, gh.dispatched, gh.reruns) == (9, True, 1, [9])
+
+
+def test_a_build_that_fails_again_after_its_rerun_is_not_rerun_twice():
+    def add_run(gh):
+        gh.runs.insert(0, _run(9, status="queued"))
+
+    class AlwaysFails(FakeGitHub):
+        def sleep(self, _seconds):
+            for run in self.runs:
+                if run["status"] != "completed":
+                    run.update(status="completed", conclusion="failure")
+
+    def back_to_running(gh):
+        gh.runs[0].update(status="in_progress", conclusion=None)
+
+    gh = AlwaysFails([], on_dispatch=add_run)
+    gh.on_rerun = back_to_running
+    with pytest.raises(DevBuildError):
+        find_build(gh, ARTIFACT)
+    assert gh.reruns == [9]
+
+
+def test_a_successful_build_whose_artifact_expired_is_built_again():
+    def add_run(gh):
+        gh.runs.insert(0, _run(9, status="queued"))
+        gh.pending = {9}
+
+    old = _run(5)
+    old["conclusion"] = "success"
+    gh = FakeGitHub([old], on_dispatch=add_run)
+    run, *_ = find_build(gh, ARTIFACT)
+    assert (run["id"], gh.dispatched) == (9, 1)
+
+
+def test_an_expired_build_is_not_rebuilt_when_dispatching_is_off():
+    old = _run(5)
+    old["conclusion"] = "success"
+    gh = FakeGitHub([old])
+    with pytest.raises(DevBuildError):
+        find_build(gh, ARTIFACT, can_dispatch=False)
+    assert gh.dispatched == 0
 
 
 def test_gives_up_when_the_build_never_uploads(monkeypatch):

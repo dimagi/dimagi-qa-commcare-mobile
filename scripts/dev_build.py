@@ -146,6 +146,21 @@ def replacement_build(gh, head, run_id):
     return None
 
 
+def rerun_failed_jobs(gh, run_id):
+    """Re-run a failed build's failed jobs, and wait until GitHub shows it running again.
+
+    Master's unit tests flake (26 Nov: three Connect view tests failed on d41d534f, which
+    built cleanly that morning), and a failed Build job uploads no APK. With test builds
+    kept only 3 days there is often no older build to fall back to, so one re-run is
+    worth the extra half hour."""
+    gh.post(f"actions/runs/{run_id}/rerun-failed-jobs", {})
+    for _ in range(12):
+        if gh.get(f"actions/runs/{run_id}")["status"] != "completed":
+            return True
+        gh.sleep(10)
+    return False
+
+
 def find_build(gh, artifact_name, can_dispatch=True, wait_minutes=DEFAULT_WAIT_MINUTES):
     """(run, current) for master's dev build; current is False on a fallback."""
     head = master_head(gh)
@@ -161,11 +176,15 @@ def find_build(gh, artifact_name, can_dispatch=True, wait_minutes=DEFAULT_WAIT_M
     if running:
         print(f"Run {running['id']} is already building {head[:10]}; waiting for it")
         run_id = running["id"]
-    elif at_head:
+    elif at_head and not (can_dispatch and any(run.get("conclusion") == "success" for run in at_head)):
         run_id = None
         print(f"The build of {head[:10]} (run {at_head[0]['id']}) finished without {artifact_name}; "
               "not dispatching again")
     elif can_dispatch:
+        # Either nothing has built this commit yet, or a build succeeded but its artifact
+        # is gone: GitHub drops expired artifacts from the list (kept 3 days), and a
+        # successful build always uploads it. Re-trigger rather than rely on retention
+        # (Shubham, CI-1069). A failed build is not retried here, so this cannot loop.
         run_id = dispatch(gh)
         print(f"Dispatched run {run_id} to build {head[:10]}")
     else:
@@ -175,12 +194,18 @@ def find_build(gh, artifact_name, can_dispatch=True, wait_minutes=DEFAULT_WAIT_M
     # Two runs can dispatch at once (the matrix legs, or the Connect suite); the
     # workflow's concurrency group then cancels the first build in favour of the
     # second. A waiter whose build was cancelled moves on to the replacement.
+    rerun = set()
     for _ in range(3):
         if not run_id:
             break
         if wait_for_artifact(gh, run_id, artifact_name, wait_minutes):
             return gh.get(f"actions/runs/{run_id}"), True
         print(f"Run {run_id} finished without {artifact_name}")
+        if gh.get(f"actions/runs/{run_id}").get("conclusion") == "failure" and run_id not in rerun:
+            rerun.add(run_id)
+            print(f"Run {run_id} failed; re-running its failed jobs once")
+            if rerun_failed_jobs(gh, run_id):
+                continue
         run_id = replacement_build(gh, head, run_id)
 
     for run in builds:
